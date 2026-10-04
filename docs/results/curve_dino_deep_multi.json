@@ -1,0 +1,54 @@
+{
+  "note": "ORACLE sweep on test; for trade-off visualisation only",
+  "views": 3,
+  "curve": [
+    {
+      "target_fmr_new_trees": 0.01,
+      "threshold": 0.7605,
+      "known_accuracy": 0.3874,
+      "false_match_rate_new_trees": 0.0141,
+      "false_new_rate": 0.5995,
+      "precision_existing": 0.9216
+    },
+    {
+      "target_fmr_new_trees": 0.02,
+      "threshold": 0.7392,
+      "known_accuracy": 0.448,
+      "false_match_rate_new_trees": 0.0217,
+      "false_new_rate": 0.5296,
+      "precision_existing": 0.8947
+    },
+    {
+      "target_fmr_new_trees": 0.05,
+      "threshold": 0.7274,
+      "known_accuracy": 0.5296,
+      "false_match_rate_new_trees": 0.0528,
+      "false_new_rate": 0.4427,
+      "precision_existing": 0.8392
+    },
+    {
+      "target_fmr_new_trees": 0.1,
+      "threshold": 0.6963,
+      "known_accuracy": 0.6377,
+      "false_match_rate_new_trees": 0.1018,
+      "false_new_rate": 0.3123,
+      "precision_existing": 0.7683
+    },
+    {
+      "target_fmr_new_trees": 0.2,
+      "threshold": 0.6633,
+      "known_accuracy": 0.7365,
+      "false_match_rate_new_trees": 0.2064,
+      "false_new_rate": 0.1607,
+      "precision_existing": 0.653
+    },
+    {
+      "target_fmr_new_trees": 0.3,
+      "threshold": 0.627,
+      "known_accuracy": 0.8248,
+      "false_match_rate_new_trees": 0.3082,
+      "false_new_rate": 0.054,
+      "precision_existing": 0.599
+    }
+  ]
+}

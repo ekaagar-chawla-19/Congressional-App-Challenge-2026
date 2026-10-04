@@ -68,7 +68,11 @@ Cheap per-view checks with a message the user can act on:
 * blur (Laplacian variance)
 * exposure (mean luminance, clipped fraction)
 * "no tree structure" (edge density)
-* duplicate view (embedding cosine > 0.985 to an earlier view)
+* **compass**: consecutive rotation views must differ by ≥ 30° of heading
+* duplicate view (embedding cosine to an earlier view): reject above 0.97, warn above the calibrated 0.886
+
+On bark, re-shoots and genuine next views overlap in embedding similarity
+(E-duplicate), so the compass does the reliable part.
 
 Blur and texture thresholds were derived from real BarkNet images against
 blurred copies (E-quality). Sharpness also sets a soft weight for multi-view
@@ -80,6 +84,11 @@ Faces are detected with OpenCV's YuNet (227 KB, MIT) and blurred **before
 anything is stored**. Original bytes are stored only when no face was found. No
 user identity is attached to observations. If the detector is missing, views
 are tagged `faces_blurred = -1` so unscreened images can be found later.
+
+**Decoding.** Each JPEG is decoded once, directly at reduced scale (libjpeg DCT
+scaling to short side ≥ 640 px). That is the same scale the training cache used,
+so there is no train/serve skew, and it is 2× faster and lighter for 12 MP
+photos (E-deploy, E-efficiency).
 
 ## 4. Shared backbone: DINOv2-S/14 → GeM → BatchNorm (`reid/`)
 
@@ -133,7 +142,7 @@ needed at site scale.
 
 ## 8. Local and structural matching (`reid/local_matching.py`)
 
-* **Bark keypoints.** RootSIFT (500 keypoints at 640 px) + ratio test + RANSAC homography, run only against the top-k global candidates. Descriptors are cached as uint8 npz (~54 KB/view).
+* **Bark keypoints.** RootSIFT (500 keypoints at 640 px) + ratio test + RANSAC homography, run only against the top-k global candidates. Descriptors are cached as uint8 npz (~54 KB/view). **Off by default:** it added nothing over the fine-tuned global embedding on BarkNet (E-local).
 * **Trunk structure from depth.** Back-projects the depth map, isolates the trunk, fits circles per 10 cm slice to get a stem diameter profile, and compares two profiles within a tolerance while searching a vertical offset (after Yrttimaa et al.'s TLS stem-profile fingerprints).
 
 Each signal enters the decision only through a calibrated fuser fitted on data

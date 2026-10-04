@@ -1,0 +1,39 @@
+{
+  "protocol": "hemlock val/test, 3-view observations, top-5 candidates, 5 enrolments; fuser fitted on val, evaluated on test",
+  "val_pairs": {
+    "n": 980,
+    "n_genuine": 99,
+    "local_genuine_median": 1.5404450409471488,
+    "local_impostor_median": 0.8472978603872036,
+    "auc_local_only": 0.7692,
+    "auc_global_only": 0.9263,
+    "match_ms_per_pair_median": 29.8
+  },
+  "test_pairs": {
+    "n": 2250,
+    "n_genuine": 181,
+    "local_genuine_median": 0.9808292530117263,
+    "local_impostor_median": 0.8472978603872036,
+    "auc_local_only": 0.6654,
+    "auc_global_only": 0.8847,
+    "match_ms_per_pair_median": 30.55
+  },
+  "fused_global+gap+agreement": {
+    "test_auc": 0.8922,
+    "coef": [
+      1.093,
+      2.399,
+      -0.202
+    ]
+  },
+  "fused_global+gap+agreement+local": {
+    "test_auc": 0.8901,
+    "coef": [
+      0.91,
+      2.293,
+      -0.188,
+      0.943
+    ]
+  },
+  "local_extract_ms_median": 42.0
+}

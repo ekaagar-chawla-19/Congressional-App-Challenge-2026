@@ -58,14 +58,36 @@ hemlock-app --model hemlock.onnx --calibration calibration.json \
 
 ## 3. Measured cost (development machine; see docs/experiments.md E-efficiency)
 
-These are filled from `runs/bench/*.json` and copied into experiments.md. See
-that file for the actual numbers and how they were produced.
+Measured on x86-64, 4 vCPU, no GPU, ONNX Runtime 1.30, each runtime in a fresh process:
+
+| Production model: DINOv2-S/14 FP32 ONNX | 4 threads | 1 thread |
+|---|---|---|
+| Model file | 87 MB | 87 MB |
+| Model load | 0.30 s | 0.26 s |
+| JPEG decode, 12 MP phone photo (DCT-scaled to 1008×756) | 45 ms | – |
+| Preprocess (resize + crop + normalise) | 4 ms | 5 ms |
+| Inference per view | 75 ms | 234 ms |
+| Per view total (BarkNet 2220×3830 photo) | 117 ms | 278 ms |
+| 3 views / 5 views | 0.35 s / 0.58 s | 0.83 s / 1.39 s |
+| Peak RSS (whole process) | 273 MB | 272 MB |
+| Gallery search, 1,000 trees × 4 observations | 0.43 ms | – |
+| Index RAM, 1,000 trees | 6 MB | – |
+| SQLite per 3-view observation (excl. JPEGs) | ~5 KB | – |
+
+**Expectations for a Raspberry Pi 5.** These are not measured. The Pi 5's 4×Cortex-A76 is typically several times slower than one modern x86 core for FP32 ViT inference, so expect on the order of 0.5–1.5 s per view with 4 threads. Measure on the device with:
+
+```bash
+python benchmarks/bench_inference.py --runtime onnx --model hemlock.onnx --threads 4 \
+    --images <a few phone JPEGs> --out pi5.json
+```
+
+and record the result in docs/experiments.md. Each view is embedded right after capture while the user walks to the next position, so the user mostly waits only for retrieval and the decision (milliseconds).
 
 ## 4. What dominates, and what to do on a Pi
 
 * **Image inference dominates.** Everything else (quality checks, retrieval, decision, DB write) is milliseconds. The Pi 5 is several times slower than a modern x86 core for this workload, so expect seconds per view. The UI hides most of it: each view is embedded right after capture while the user walks to the next position, so "Identify" only runs retrieval and the decision.
 * **Levers, in order of safety:**
   1. Lower input resolution (e.g. 256): cost scales roughly with pixel count. Re-validate accuracy, because bark texture needs resolution.
-  2. INT8 quantisation: only after the FP32 model is validated, and only if retrieval metrics on the validation split stay within noise (E-quantisation).
+  2. INT8 quantisation: only after the FP32 model is validated, and only if retrieval metrics on the validation split stay within noise. Post-training static INT8 of the earlier EfficientNetV2-M model lost 11–20 % mAP (E-quantisation), so FP32 ships. INT8 for DINOv2-S has not been evaluated; try quantisation-aware training before shipping it.
   3. A smaller backbone: only via a new controlled comparison. The current results do not support swapping casually.
-* **Memory.** One model instance is loaded once per process and shared by all requests. Views are decoded once, and the decoded array is dropped after embedding. Only embeddings and the original JPEG bytes are kept until commit. The in-RAM index is about 8.6 KB per stored observation (float32).
+* **Memory.** One model instance is loaded once per process and shared by all requests. JPEGs are decoded once, directly at reduced scale (DCT scaling), and the decoded array is dropped after embedding. Only embeddings and the original JPEG bytes are kept until commit. The in-RAM index is 1.5 KB per stored observation (384-d float32).

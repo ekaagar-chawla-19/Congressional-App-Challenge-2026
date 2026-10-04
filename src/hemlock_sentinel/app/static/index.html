@@ -174,7 +174,8 @@ async function sendView(blob) {
   if (!res.ok) { feedback(j.detail || "Upload failed", "bad"); $("shoot").disabled = false; return; }
   if (j.view.accepted) {
     accepted = j.accepted_views;
-    feedback(`View accepted (${accepted} so far).`, "ok");
+    const warn = (j.view.warnings || []).join("; ");
+    feedback(`View accepted (${accepted} so far).${warn ? " <b>Note:</b> " + warn : ""}`, "ok");
   } else {
     feedback(`<b>Retake this view:</b> ${j.view.problems.join("; ")}`, "bad");
   }

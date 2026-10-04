@@ -1,0 +1,29 @@
+{
+  "runtime": "torch",
+  "model": "runs/export/hemlock.pt",
+  "threads": 4,
+  "machine": "x86_64",
+  "processor": "x86_64",
+  "model_file_mb": 87.0,
+  "load_seconds": 2.493,
+  "decode_ms_median": 38.3,
+  "preprocess_ms_median": 3.9,
+  "inference_ms_median": 65.7,
+  "inference_ms_p90": 70.2,
+  "per_view_total_ms": 108.0,
+  "three_views_total_ms": 324.0,
+  "five_views_total_ms": 539.9,
+  "rss_before_load_mb": 41.3,
+  "rss_after_load_mb": 525.3,
+  "peak_rss_mb": 535.7,
+  "source_image_px": [
+    3830,
+    2220
+  ],
+  "decoded_px": [
+    1915,
+    1110
+  ],
+  "n_images": 5,
+  "full_decode": false
+}

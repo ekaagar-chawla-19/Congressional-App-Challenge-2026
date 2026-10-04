@@ -17,6 +17,42 @@ the commands in the README). If an experiment could not be run, it says so.
 * **Thresholds** are fitted on **val** and applied unchanged to test. Test trees are never used for training, selection or calibration. The exception is curves explicitly labelled *oracle*.
 * **Uncertainty.** The test set has 14 trees. 95 % CIs bootstrap over trees (queries of one tree are correlated), and they are wide.
 
+## Headline: the production model (`runs/reid/dino_deep_multi`)
+
+**Configuration.**
+* DINOv2-S/14 at 322 px: blocks 0–7 frozen (cached, 4 augmentations per training image); blocks 8–11, final norm, GeM (p learned) and BN (384-d) fine-tuned.
+* Sub-center ArcFace (k=3, dynamic margins 0.2–0.5, s=30) on the 116 multispecies training identities.
+* 4 epochs, P×K = 16×4, Adam (1e-4 backbone / 1e-3 head), warm-up + cosine. Best hemlock val mAP 0.652 (epoch 4).
+* Training took 102 min on 4 vCPU (CPU only, sharing the machine with other jobs).
+
+Results on hemlock **test** trees (14 trees, never used for training, selection or calibration):
+
+| Metric | EfficientNetV2-M deep (2 ep), the MiewID baseline | **DINOv2-S production** |
+|---|---|---|
+| Image one-vs-all top-1 / mAP | 0.696 / 0.428 | **0.832 / 0.581** |
+| 3-view closed-set top-1 [95 % CI by tree] / top-5 (~7-tree gallery) | 0.769 [0.60, 0.88] / 0.970 | **0.860 [0.71, 0.97] / 0.997** |
+| 5-view top-1 [CI] | 0.798 [0.63, 0.95] | **0.941 [0.88, 1.00]** |
+| 1-view top-1 | 0.499 | 0.600 |
+| Strict no-overlap regime top-1 | 0.743 | **0.817** |
+| Queries from a different capture event (n=54, 3 trees) | 0.50 | **1.00** |
+| All-pairs ROC-AUC / best-wrong-tree AUC | 0.921 / 0.734 | **0.975 / 0.883** |
+| AUC vs same-phone / cross-phone impostors | 0.803 / 0.902 | **0.912 / 0.948** |
+| Other species' test trees (pooled), image top-1 / mAP | 0.865 / 0.546 | **0.941 / 0.678** |
+| Calibrated `decide()`, 1 % target (all-species val): returning trees auto-accepted | 7.5 % | **43.0 %** |
+| … false-match rate (all queries / new trees) | 0.0 % / 0.0 % | **0.33 % / 0.57 %** (precision 98.2 %) |
+| … returning trees routed to "uncertain → take more views" | 7.0 % | 26.2 % |
+| Species: closed-set accuracy / macro-F1 | 0.930 / 0.932 | **0.934 / 0.938** |
+| Species: hemlock precision / recall | 0.948 / 0.911 | **0.990 / 0.990** |
+| Species: red spruce (never seen) rejected / called hemlock | 89.0 % / 5 of 236 | **97.0 % / 1 of 236** |
+| ONNX file / peak RAM / inference per view (dev CPU, 4 threads) | 204 MB / 482 MB / 54 ms | **87 MB / 273 MB / 75 ms** |
+
+**Real-model end-to-end run** (`tests/end_to_end/test_real_model.py`, through the app's HTTP API with the exported ONNX model and calibration):
+* Enrolled 5 test hemlocks as H-001…H-005.
+* Revisiting them with three different photos gave 4 auto-recognised (P = 0.90–0.99). One fell below the threshold and was registered as a duplicate (H-006); its true tree was the top candidate, so one-tap correction fixes it.
+* 3 never-enrolled hemlocks → new IDs.
+* 3 red spruces → "unknown, retake / not supported".
+* No wrong existing ID was ever assigned.
+
 ## E-overlap: data-leakage audit (`scripts/analyze_overlap.py`)
 
 **Hypothesis.** Different BarkNet images of one tree are different bark regions, so no near-duplicates exist.
@@ -48,7 +84,7 @@ Same architecture (EfficientNetV2-M → GeM → BN, 320 px). The first row is pr
 * Pretrained features mainly encode the **camera**: same-device AUC is 0.52, i.e. chance.
 * The fine-tuned model still benefits from shared camera and lighting (same-device AUC 0.80 vs 0.90). A query from a different capture event is much harder (0.50 vs 0.79). **Real repeat visits with different phones and seasons will be harder than these numbers.**
 
-## E-views: does multi-view actually help? (`evaluate_reid.py`, aggregation ablation, fine-tuned 2 ep)
+## E-views: does multi-view actually help? (`evaluate_reid.py`, aggregation ablation; EfficientNetV2-M 2 ep, production numbers in the headline)
 
 | Query/gallery construction | Test top-1 [95 % CI] | All-pairs AUC |
 |---|---|---|
@@ -63,8 +99,10 @@ given false-match rate on new trees:
 
 | FMR on new trees | 1 % | 2 % | 5 % | 10 % | 20 % |
 |---|---|---|---|---|---|
-| 3 views | 0.13 | 0.19 | 0.30 | 0.36 | 0.55 |
-| 5 views | 0.25 | 0.25 | **0.47** | 0.52 | 0.65 |
+| EffNetV2-M, 3 views | 0.13 | 0.19 | 0.30 | 0.36 | 0.55 |
+| EffNetV2-M, 5 views | 0.25 | 0.25 | 0.47 | 0.52 | 0.65 |
+| **DINOv2-S (production), 3 views** | 0.39 | 0.45 | 0.53 | 0.64 | 0.74 |
+| **DINOv2-S (production), 5 views** | **0.67** | 0.67 | **0.69** | **0.90** | 0.94 |
 
 **Conclusion.** Multi-view aggregation is real and large: 1→3 views gives +0.28 top-1. The mean beats late fusion. Five trunk views raise open-set acceptance substantially. **Decision:** when an identification is uncertain, the app asks for *extra trunk views* (not the branching/canopy views).
 
@@ -81,7 +119,15 @@ steps) and evaluated on test.
 
 The transformer accepted 40 % of returning trees at the val-fitted threshold, but at an 11 % test false-match rate; the target was 1 %. That is a threshold-transfer artefact, not a better trade-off.
 
-**Decision:** keep the mean. Neither learned aggregator justifies its parameters.
+Repeated on the production DINOv2-S embeddings:
+
+| Aggregator | Params | Test top-1 | Val top-1 | Best-wrong AUC (test) | Latency/obs |
+|---|---|---|---|---|---|
+| **Mean** | 0 | 0.860 | **0.959** | **0.883** | ~0 |
+| Attention pooling | 49 k | 0.885 | 0.939 | 0.867 | 0.07 ms |
+| 2-layer transformer | 1.25 M | 0.874 | 0.957 | 0.848 | 0.46 ms |
+
+**Decision:** keep the mean. On test, attention pooling is +0.025 top-1, well inside the CI. But it is worse on validation, which is where model selection happens, and worse on AUC (the open-set decision). Neither learned aggregator justifies its parameters.
 
 ## E-backbone (zero-shot): which pretrained features are most individual-discriminative? (`zero_shot_backbones.py`)
 
@@ -149,7 +195,14 @@ anywhere. Decisions are per 3-view observation.
 | Red spruce observations called **hemlock** | 43 / 236 | **5 / 236** |
 | Hemlock precision / recall | 0.575 / 0.723 | **0.948 / 0.911** |
 
-Validated threshold: 0.617 (validation: Thuja rejection 92.2 %). Confusions that
+With the production DINOv2-S embedding, the test numbers are:
+* closed-set accuracy 0.934, macro-F1 0.938
+* accuracy with rejection 0.894; 7.8 % of known-species observations rejected
+* red spruce rejected **97.0 %**, called hemlock **1 / 236**
+* hemlock precision / recall **0.990 / 0.990**
+* threshold 0.669; Thuja rejection on validation 96.1 %
+
+EfficientNetV2-M table above: validated threshold 0.617 (validation: Thuja rejection 92.2 %). Confusions that
 remain are mostly red maple → beech (25 of 171 red-maple observations).
 
 **Conclusion.** One shared backbone serves both tasks, with no second network. The
@@ -166,7 +219,12 @@ Pairs are (query, top-5 global candidate), with 5 enrolments. A logistic fuser w
 | Fused: global + gap + agreement | **0.892** |
 | Fused: global + gap + agreement + local | 0.890 |
 
-Cost on the dev machine: 42 ms extraction per view and 30 ms per view-pair match (≈1.4 s per identification for top-5 × 9 pairs), plus 54 KB per view of stored descriptors.
+Repeated on the production DINOv2-S embeddings:
+* global alone: test AUC 0.959
+* fused without local: **0.9674**
+* fused with local: 0.9677
+
+Cost on the dev machine (EfficientNet run): 42 ms extraction per view and 30 ms per view-pair match (≈1.4 s per identification for top-5 × 9 pairs), plus 54 KB per view of stored descriptors.
 
 **Decision:** local matching is **off by default**. It adds no information over the
 fine-tuned embedding on this data, where the views of one tree are mostly
@@ -184,11 +242,19 @@ Thresholds and the logistic fuser (global, gap, agreement) were fitted on val at
 | Hemlock val only (9 trees) | 17.0 % | 2.5 % | 4.3 % | 13.3 % |
 | All species' val trees (5,620 trials) | 7.5 % | 0.0 % | 0.0 % | 7.0 % |
 | Global cosine only, hemlock val | 7.8 % | 0.0 % | 0.0 % | – |
+| **DINOv2-S production**, all species' val (shipped `calibration.json`) | **43.0 %** | **0.33 %** | **0.57 %** | 26.2 % (new trees: 11.4 %) |
+| DINOv2-S, hemlock val only | 53.1 % | 3.2 % | 5.2 % | 17.5 % |
+| DINOv2-S, global cosine only, gallery-size-aware threshold | 41.4 % | 1.5 % | 1.7 % | – |
+| DINOv2-S, global cosine only, best-wrong-tree threshold | 53.8 % | 4.2 % | 5.3 % | – |
+
+The first three rows are the EfficientNetV2-M (2 ep) model.
 
 **Conclusions.**
-* With 9 validation hemlocks, a 1 % operating point cannot be estimated reliably. The hemlock-only calibration overshot (4.3 % FMR on new trees).
+* The DINOv2-S model with the logistic fuser and all-species calibration is the shipped configuration. It holds the false-match rate at 0.33 % on test, close to the 1 % target and on the safe side, while auto-accepting 43 % of returning trees.
+* The *gallery-size-aware* threshold transfers better than the plain best-wrong-tree threshold: 1.7 % vs 5.3 % FMR on new trees, for a 1 % target.
+* For the EfficientNetV2-M model: with 9 validation hemlocks, a 1 % operating point cannot be estimated reliably. The hemlock-only calibration overshot (4.3 % FMR on new trees).
 * Pooling all species' validation trees gives a conservative threshold that held the FMR at 0 on test.
-* At a true ~1 % FMR, the current model auto-recognises only **5–17 %** of returning trees, even though their top-1 / top-5 ranking accuracy is 77 % / 97 %.
+* At a true ~1 % FMR, the EfficientNetV2-M model auto-recognised only **5–17 %** of returning trees (top-1/top-5 77 % / 97 %). DINOv2-S raised this to 43 %.
 
 **Decision:** run as **assisted identification**.
 * Auto-accept only above the calibrated threshold.
@@ -254,15 +320,73 @@ The deployed path uses PIL full-resolution decode, the app's resize and ONNX Run
 
 Per-image cosine between the two paths: median 0.990, min 0.806.
 
-**Conclusion.** The metrics reproduce within noise. The decode difference is a small train/serve skew, documented here; future caches should use `preprocessing.decode_image`.
+**Conclusion.** The metrics reproduce within noise. The decode difference was a small train/serve skew.
 
-## E-efficiency
+**Fix applied for production.** `decode_image` now decodes JPEGs with libjpeg DCT scaling (Pillow `draft`) to the smallest 1/2ⁿ scale with short side ≥ 640 px. That is the same scale the training cache used. For the DINOv2-S production model through the deployed path:
 
-See the section filled from `runs/bench/` below.
+| | Test img top-1 / mAP | Test 3-view top-1 | All-pairs AUC |
+|---|---|---|---|
+| Training-cache embeddings | 0.832 / 0.581 | 0.860 | 0.975 |
+| Deployed ONNX path | 0.829 / 0.581 | 0.858 | 0.975 |
+
+Per-image cosine between the two paths is now median 1.000, min 0.977 (it was min 0.806 before the fix). Torch vs ONNX parity: min cosine 0.99999994.
+
+## E-efficiency (`benchmarks/`)
+
+Dev machine: x86-64 cloud container, 4 vCPU, no GPU. **Not a Raspberry Pi** (none was available); see deployment.md for how to measure on the device. Each runtime runs in a fresh process; peak RSS includes the Python runtime. Medians are over 5 BarkNet photos (2220×3830 JPEG) × 3 repeats.
+
+| Runtime (threads) | Model file | Load | Decode | Preprocess | Inference | **Per view** | 3 views | Peak RSS |
+|---|---|---|---|---|---|---|---|---|
+| **DINOv2-S ONNX FP32 (4) — production** | 87 MB | 0.30 s | 37 ms | 4 ms | 75 ms | **117 ms** | 0.35 s | **273 MB** |
+| DINOv2-S ONNX FP32 (1) | 87 MB | 0.26 s | 39 ms | 5 ms | 234 ms | 278 ms | 0.83 s | 272 MB |
+| DINOv2-S Torch (4) | 87 MB | 2.49 s | 38 ms | 4 ms | 66 ms | 108 ms | 0.32 s | 536 MB |
+| EfficientNetV2-M ONNX FP32 (4) | 204 MB | 0.55 s | 30 ms | 4 ms | 54 ms | 88 ms | 0.26 s | 482 MB |
+| EfficientNetV2-M ONNX FP32 (1) | 204 MB | 0.49 s | 31 ms | 5 ms | 187 ms | 222 ms | 0.67 s | 480 MB |
+
+**12 MP phone photo (4032×3024)**, DINOv2-S ONNX (4 threads):
+
+| Decode | Decoded size | Decode | Per view | Peak RSS |
+|---|---|---|---|---|
+| Full resolution (before) | 4032×3024 | 164 ms | 259 ms | 425 MB |
+| **DCT-scaled (production)** | 1008×756 | **45 ms** | **129 ms** | **229 MB** |
+
+**Gallery search + storage** (`bench_retrieval.py`; 4 observations per tree, 3 views + aggregate per query):
+
+| Gallery | 100 trees | 1,000 trees | 5,000 trees |
+|---|---|---|---|
+| 384-d (production): search / RAM | 0.09 ms / 0.6 MB | 0.43 ms / 6.1 MB | 2.1 ms / 31 MB |
+| 2152-d (EffNet): search / RAM | 0.22 ms / 3.4 MB | 1.6 ms / 34 MB | 9.2 ms / 172 MB |
+
+The first index version (fp16 in RAM + `np.maximum.at`) needed 40 ms for 400 observations. It was replaced by an fp32 matrix + `reduceat`.
+
+Storage per 3-view observation: about 5 KB in SQLite (fp16 embeddings + metadata), plus the original JPEGs, stored once and content-addressed. Local keypoints, if enabled, add 54 KB per view.
+
+**Conclusions.**
+* Image inference dominates. Retrieval and the decision are milliseconds even at 5,000 trees.
+* On this x86 CPU, DINOv2-S is *not* faster than EfficientNetV2-M (75 vs 54 ms with 4 threads). Its advantages are accuracy, a 2.3× smaller file and 43 % less RAM.
+* JPEG decode was the largest avoidable cost for phone photos. DCT-scaled decode halved per-view time and RAM with no accuracy change (E-deploy).
+
+## E-duplicate: detecting re-shot views (`scripts/calibrate_duplicate.py`)
+
+Production model. Re-shoots were simulated with small camera jitter on 116 training trees; "next views" are other photos of the same tree.
+
+| | p1 | p5 | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+| Re-shoot cosine | 0.718 | 0.777 | 0.891 | | | |
+| Next-view cosine | | | 0.645 | 0.820 | 0.886 | 0.915 |
+
+The two distributions **overlap**, so embedding similarity cannot reliably detect re-shoots on bark. The first attempt rejected views above the 99th percentile of next views. That wrongly rejected a genuine view in the real-model end-to-end test, which became a regression test.
+
+**Decision:**
+* **Reject** only near-identical captures (cosine > 0.97, above the maximum genuine value of 0.915).
+* **Warn** above 0.886 ("did you move?").
+* Use the **compass**: consecutive rotation views must differ by ≥ 30° of heading, otherwise the view is rejected with "walk a quarter-turn around the tree". This is cheap and explainable, and it catches what the embedding cannot.
 
 ## Open blockers / not done
 
 * **No temporal data.** Same-tree / later-session and cross-season re-identification cannot be measured with any open dataset we found. The app stores everything needed to build this dataset from field visits.
 * **No canopy/branching training data** with individual labels. Those views are stored but excluded from identity.
 * **No Raspberry Pi or depth camera was available.** All latencies are from the dev machine, and the device adapters (`acquisition/devices.py`) are untested on hardware.
-* **Training budget.** CPU only, so stages 0–4 stay frozen. End-to-end fine-tuning on a GPU is the obvious next experiment.
+* **Training budget.** CPU only, so DINOv2 blocks 0–7 stay frozen, and the loss/identity ablations used the cheaper last-block regime with 1–2 seeds. End-to-end fine-tuning on a GPU, with more seeds, is the obvious next experiment.
+* **Small test set.** 14 test hemlocks. CIs on observation top-1 are about ±0.13.
+* **INT8 for DINOv2-S** has not been evaluated; INT8 was only tested on EfficientNetV2-M, where it lost accuracy.

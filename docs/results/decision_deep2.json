@@ -1,0 +1,96 @@
+{
+  "calibration": {
+    "species_threshold": 0.6169351697709264,
+    "match_threshold": 0.7269412413660292,
+    "global_threshold": 0.6211858987808229,
+    "target_fmr": 0.01,
+    "view_contradiction_margin": 0.20472324669361175,
+    "view_match_threshold": 0.46600681543350225,
+    "fusers": {
+      "global+gap+agreement": {
+        "feature_names": [
+          "global",
+          "gap",
+          "agreement"
+        ],
+        "coef": [
+          1.0890873381682218,
+          2.2551681059306143,
+          -0.120146199363353
+        ],
+        "intercept": -4.453138186173122,
+        "mean": [
+          0.2029374314532069,
+          -0.14672895525558377,
+          0.25000000000000083
+        ],
+        "scale": [
+          0.17884411005254,
+          0.22347958707690227,
+          0.34027633261801105
+        ]
+      }
+    },
+    "provenance": {
+      "fitted_on": "hemlock val trees (identity-disjoint from train/test)",
+      "n_val_queries": 980,
+      "n_val_candidate_pairs": 3920,
+      "embeddings": "runs/reid/abl_subcenter/embeddings.npy",
+      "date": "2026-10-04"
+    }
+  },
+  "decide_with_view_checks": {
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.17,
+    "new_accuracy": 0.9566,
+    "false_match_rate": 0.0253,
+    "false_match_rate_new_trees": 0.0434,
+    "false_new_rate": 0.83,
+    "precision_existing": 0.7371,
+    "recall_existing": 0.17,
+    "uncertain_rate_known": 0.1331,
+    "uncertain_rate_new": 0.0236
+  },
+  "decide_without_view_checks": {
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.17,
+    "new_accuracy": 0.9566,
+    "false_match_rate": 0.0253,
+    "false_match_rate_new_trees": 0.0434,
+    "false_new_rate": 0.83,
+    "precision_existing": 0.7371,
+    "recall_existing": 0.17,
+    "uncertain_rate_known": 0.0,
+    "uncertain_rate_new": 0.0
+  },
+  "global_threshold_gallery_aware": {
+    "threshold": 0.6212,
+    "n_gallery": 7,
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.0777,
+    "new_accuracy": 1.0,
+    "false_match_rate": 0.0,
+    "false_match_rate_new_trees": 0.0,
+    "false_new_rate": 0.9223,
+    "precision_existing": 1.0,
+    "recall_existing": 0.0777
+  },
+  "global_threshold_max_impostor": {
+    "threshold": 0.6212,
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.0777,
+    "new_accuracy": 1.0,
+    "false_match_rate": 0.0,
+    "false_match_rate_new_trees": 0.0,
+    "false_new_rate": 0.9223,
+    "precision_existing": 1.0,
+    "recall_existing": 0.0777
+  },
+  "pair_impostor_scores_val": {
+    "n": 3527
+  }
+}

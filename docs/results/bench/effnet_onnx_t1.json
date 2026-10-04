@@ -1,0 +1,29 @@
+{
+  "runtime": "onnx",
+  "model": "runs/export_effnet/hemlock.onnx",
+  "threads": 1,
+  "machine": "x86_64",
+  "processor": "x86_64",
+  "model_file_mb": 204.0,
+  "load_seconds": 0.494,
+  "decode_ms_median": 31.1,
+  "preprocess_ms_median": 4.5,
+  "inference_ms_median": 186.6,
+  "inference_ms_p90": 197.6,
+  "per_view_total_ms": 222.2,
+  "three_views_total_ms": 666.7,
+  "five_views_total_ms": 1111.1,
+  "rss_before_load_mb": 41.4,
+  "rss_after_load_mb": 472.4,
+  "peak_rss_mb": 479.5,
+  "source_image_px": [
+    3830,
+    2220
+  ],
+  "decoded_px": [
+    1915,
+    1110
+  ],
+  "n_images": 5,
+  "full_decode": false
+}

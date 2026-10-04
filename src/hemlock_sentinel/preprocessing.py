@@ -13,14 +13,31 @@ IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
-def decode_image(data: bytes) -> np.ndarray:
-    """JPEG/PNG bytes -> RGB uint8 (H, W, 3). Applies EXIF orientation via Pillow."""
+DECODE_MIN_SIDE = 640  # enough for quality checks (512 px), keypoints (640 px) and the network (322 px)
+
+
+def decode_image(data: bytes, min_side: int | None = DECODE_MIN_SIDE) -> np.ndarray:
+    """JPEG/PNG bytes -> RGB uint8 (H, W, 3), EXIF-oriented.
+
+    For JPEGs, ``min_side`` lets libjpeg decode directly at 1/2, 1/4 or 1/8 scale
+    (DCT scaling, Pillow ``draft``) while keeping the short side >= min_side.
+    A 12 MP phone photo then decodes several times faster (E-efficiency), and
+    the result matches the reduced-resolution decode used to build the training
+    cache. ``min_side=None`` decodes at full resolution.
+    """
     import io
 
     from PIL import Image, ImageOps
 
-    im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
-    return np.asarray(im)
+    im = Image.open(io.BytesIO(data))
+    if min_side is not None and im.format == "JPEG":
+        w, h = im.size
+        scale = 1
+        while scale < 8 and min(w, h) // (scale * 2) >= min_side:
+            scale *= 2
+        if scale > 1:
+            im.draft("RGB", (w // scale, h // scale))
+    return np.asarray(ImageOps.exif_transpose(im).convert("RGB"))
 
 
 def resize_short_center_crop(rgb: np.ndarray, size: int) -> np.ndarray:

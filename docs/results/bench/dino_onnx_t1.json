@@ -1,0 +1,29 @@
+{
+  "runtime": "onnx",
+  "model": "runs/export/hemlock.onnx",
+  "threads": 1,
+  "machine": "x86_64",
+  "processor": "x86_64",
+  "model_file_mb": 87.1,
+  "load_seconds": 0.256,
+  "decode_ms_median": 38.9,
+  "preprocess_ms_median": 4.9,
+  "inference_ms_median": 233.8,
+  "inference_ms_p90": 244.9,
+  "per_view_total_ms": 277.6,
+  "three_views_total_ms": 832.9,
+  "five_views_total_ms": 1388.2,
+  "rss_before_load_mb": 41.3,
+  "rss_after_load_mb": 195.4,
+  "peak_rss_mb": 272.1,
+  "source_image_px": [
+    3830,
+    2220
+  ],
+  "decoded_px": [
+    1915,
+    1110
+  ],
+  "n_images": 5,
+  "full_decode": false
+}

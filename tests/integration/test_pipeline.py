@@ -65,3 +65,26 @@ def test_local_matching_off_by_default(tmp_path):
     app.identify(capture(app, [tree_view(2, v) for v in range(3)]))
     r = app.identify(capture(app, [tree_view(2, v, jitter_seed=3) for v in range(3)]))
     assert "local" not in r.decision.candidates[0]
+
+
+def test_view_without_rotation_is_rejected_by_compass(tmp_path):
+    import time
+
+    from hemlock_sentinel.acquisition.interfaces import Frame
+
+    app = build(tmp_path)
+    v0 = app.process_view(Frame(tree_view(8, 0), time.time(), heading_deg=0.0), 0)
+    v1 = app.process_view(Frame(tree_view(8, 1), time.time(), heading_deg=12.0), 1, previous=[v0])
+    assert v0.accepted and not v1.accepted and any("quarter-turn" in p for p in v1.quality.problems)
+    v1 = app.process_view(Frame(tree_view(8, 1), time.time(), heading_deg=92.0), 1, previous=[v0])
+    assert v1.accepted
+
+
+def test_similar_view_warns_but_is_accepted(tmp_path):
+    from hemlock_sentinel.reid.calibration import Calibration
+
+    cal = Calibration(species_threshold=0.6, global_threshold=0.8, duplicate_cosine=0.3, duplicate_hard_cosine=0.999)
+    app = build(tmp_path, cal=cal)
+    views = capture(app, [tree_view(9, 0), tree_view(9, 0, jitter_seed=4)])
+    assert views[1].accepted and views[1].quality.warnings
+    assert app.cfg.quality.max_duplicate_cosine == 0.999

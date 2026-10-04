@@ -105,7 +105,8 @@ class Calibration:
     view_match_threshold: float | None = None
     # Embedding cosine above which a new view is treated as a re-shoot of an earlier
     # view (scripts/calibrate_duplicate.py). Model-specific, so it lives here.
-    duplicate_cosine: float | None = None
+    duplicate_cosine: float | None = None  # soft: warn ("did you move?")
+    duplicate_hard_cosine: float | None = None  # hard: reject as a re-shoot
     fusers: dict[str, LogisticCalibrator] = field(default_factory=dict)  # key: "+".join(features)
     provenance: dict = field(default_factory=dict)  # split, n pairs, date — for honesty
 

@@ -31,7 +31,12 @@ class QualityThresholds:
     min_mean_luma: float = 35.0
     max_mean_luma: float = 225.0
     min_edge_density: float = 0.06
-    max_duplicate_cosine: float = 0.985
+    # Duplicate views (embedding cosine to an earlier view). On bark, re-shoots and genuine
+    # next views overlap, so only near-identical captures are rejected; the calibrated soft
+    # threshold only warns. Both are overridden by the Calibration file.
+    max_duplicate_cosine: float = 0.97  # hard: reject
+    warn_duplicate_cosine: float = 0.9  # soft: accept with a warning
+    min_heading_change_deg: float = 30.0  # rotation views must differ by at least this
     analysis_side: int = 512
 
 
@@ -40,6 +45,7 @@ class QualityReport:
     ok: bool
     metrics: dict[str, float] = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)  # shown to the user; view still accepted
     weight: float = 1.0  # used for quality-weighted multi-view aggregation
 
 
@@ -65,4 +71,26 @@ def assess(rgb: np.ndarray, th: QualityThresholds = QualityThresholds()) -> Qual
         problems.append("no tree structure visible: frame the trunk or branches")
     # Soft weight in [0.25, 1]: sharper views count more in the aggregate.
     weight = float(np.clip(np.log1p(lap) / np.log1p(4 * th.min_laplacian_var), 0.25, 1.0))
-    return QualityReport(not problems, m, problems, weight)
+    return QualityReport(ok=not problems, metrics=m, problems=problems, weight=weight)
+
+
+ROTATION_SEQUENCE = ("trunk_north", "trunk_right", "trunk_right2", "trunk_right3")
+
+
+def heading_problem(view_key: str, heading: float | None, previous: dict[str, float | None],
+                    th: QualityThresholds = QualityThresholds()) -> str | None:
+    """Protocol check from the compass: consecutive rotation views (quarter-turns around
+    the trunk) must differ in heading. Cheap and explainable; it covers the re-shoot
+    case that embedding similarity cannot separate on bark (docs/experiments.md E-duplicate)."""
+    if heading is None or view_key not in ROTATION_SEQUENCE:
+        return None
+    i = ROTATION_SEQUENCE.index(view_key)
+    if i == 0:
+        return None
+    prev = previous.get(ROTATION_SEQUENCE[i - 1])
+    if prev is None:
+        return None
+    d = abs((heading - prev + 180.0) % 360.0 - 180.0)
+    if d < th.min_heading_change_deg:
+        return f"you are still facing the same side ({d:.0f} deg turn): walk a quarter-turn around the tree"
+    return None

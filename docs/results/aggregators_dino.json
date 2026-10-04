@@ -1,0 +1,88 @@
+{
+  "protocol": "aggregators trained on train trees only; evaluated on hemlock val/test (identity-disjoint)",
+  "mean": {
+    "closed_set_test": {
+      "top1": 0.8603425559947299,
+      "top5": 0.997364953886693,
+      "mean_rank": 1.2411067193675889,
+      "n_known_queries": 759
+    },
+    "closed_set_val": {
+      "top1": 0.9592875318066157,
+      "top5": 1.0,
+      "mean_rank": 1.0407124681933841,
+      "n_known_queries": 393
+    },
+    "roc_auc_test": 0.8832,
+    "val_fmr_0.01": {
+      "n_known": 759,
+      "n_new": 1061,
+      "known_accuracy": 0.6298,
+      "new_accuracy": 0.9057,
+      "false_match_rate": 0.0758,
+      "false_match_rate_new_trees": 0.0943,
+      "false_new_rate": 0.3202,
+      "precision_existing": 0.776,
+      "recall_existing": 0.6298
+    },
+    "params": 0
+  },
+  "attention_pool": {
+    "closed_set_test": {
+      "top1": 0.8853754940711462,
+      "top5": 0.997364953886693,
+      "mean_rank": 1.2121212121212122,
+      "n_known_queries": 759
+    },
+    "closed_set_val": {
+      "top1": 0.9389312977099237,
+      "top5": 1.0,
+      "mean_rank": 1.0610687022900764,
+      "n_known_queries": 393
+    },
+    "roc_auc_test": 0.8669,
+    "val_fmr_0.01": {
+      "n_known": 759,
+      "n_new": 1061,
+      "known_accuracy": 0.5283,
+      "new_accuracy": 0.9255,
+      "false_match_rate": 0.0516,
+      "false_match_rate_new_trees": 0.0745,
+      "false_new_rate": 0.4519,
+      "precision_existing": 0.8101,
+      "recall_existing": 0.5283
+    },
+    "params": 49409,
+    "train_seconds": 2.0,
+    "latency_ms_per_observation": 0.074
+  },
+  "transformer_2x256": {
+    "closed_set_test": {
+      "top1": 0.8735177865612648,
+      "top5": 1.0,
+      "mean_rank": 1.144927536231884,
+      "n_known_queries": 759
+    },
+    "closed_set_val": {
+      "top1": 0.9567430025445293,
+      "top5": 1.0,
+      "mean_rank": 1.0432569974554708,
+      "n_known_queries": 393
+    },
+    "roc_auc_test": 0.8484,
+    "val_fmr_0.01": {
+      "n_known": 759,
+      "n_new": 1061,
+      "known_accuracy": 0.6482,
+      "new_accuracy": 0.8473,
+      "false_match_rate": 0.1132,
+      "false_match_rate_new_trees": 0.1527,
+      "false_new_rate": 0.2938,
+      "precision_existing": 0.7049,
+      "recall_existing": 0.6482
+    },
+    "params": 1251712,
+    "train_seconds": 6.1,
+    "latency_ms_per_observation": 0.463
+  }
+}

@@ -105,3 +105,39 @@ def test_face_is_detected_and_blurred():
     from hemlock_sentinel.acquisition.privacy import detect_faces
 
     assert detect_faces(out) == []  # blurred face is no longer detectable
+
+
+def test_heading_check_requires_rotation():
+    from hemlock_sentinel.acquisition.quality import heading_problem
+
+    assert heading_problem("trunk_right", 10.0, {"trunk_north": 0.0}) is not None   # did not move
+    assert heading_problem("trunk_right", 95.0, {"trunk_north": 0.0}) is None       # quarter-turn
+    assert heading_problem("trunk_right", 355.0, {"trunk_north": 5.0}) is not None  # wraps at 360
+    assert heading_problem("trunk_right", None, {"trunk_north": 0.0}) is None       # no compass
+    assert heading_problem("branching", 0.0, {"trunk_north": 0.0}) is None          # not a rotation view
+
+
+def test_reduced_jpeg_decode_keeps_min_side_and_orientation(bark):
+    import io
+
+    from PIL import Image
+
+    from hemlock_sentinel.preprocessing import decode_image
+
+    big = cv2.resize(bark(5), (1600, 2400))
+    buf = io.BytesIO()
+    Image.fromarray(big).save(buf, "JPEG", quality=90)
+    full = decode_image(buf.getvalue(), None)
+    small = decode_image(buf.getvalue(), 640)
+    assert full.shape == (2400, 1600, 3)
+    assert min(small.shape[:2]) >= 640 and small.shape[0] > small.shape[1]  # portrait kept
+    assert small.shape[0] < full.shape[0]
+    x_full, x_small = to_network_input(full, 96), to_network_input(small, 96)
+    assert np.corrcoef(x_full.ravel(), x_small.ravel())[0, 1] > 0.98
+
+
+def test_quality_report_fields_are_not_shifted(bark):
+    # Regression: adding QualityReport.warnings shifted the positional `weight` into it.
+    r = assess(bark(0))
+    assert isinstance(r.weight, float) and 0.25 <= r.weight <= 1.0
+    assert r.warnings == [] and r.problems == []

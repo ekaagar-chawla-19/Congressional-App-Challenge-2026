@@ -1,0 +1,277 @@
+{
+  "C": 10.0,
+  "val_accuracy_closed": 0.9426751592356688,
+  "threshold": 0.6169351697709264,
+  "threshold_val_balanced_acc": 0.9291123019571296,
+  "val": {
+    "closed_set": {
+      "accuracy": 0.9426751592356688,
+      "macro_f1": 0.9469723174476451,
+      "labels": [
+        "tsuga_canadensis",
+        "pinus_strobus",
+        "pinus_resinosa",
+        "pinus_rigida",
+        "fagus_grandifolia",
+        "acer_rubrum"
+      ],
+      "confusion_matrix": [
+        [
+          53,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          76,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          45,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          41,
+          2
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          10,
+          81
+        ]
+      ],
+      "n": 314
+    },
+    "with_rejection": {
+      "accuracy": 0.8821656050955414,
+      "macro_f1": 0.9367724470060399,
+      "labels": [
+        "tsuga_canadensis",
+        "pinus_strobus",
+        "pinus_resinosa",
+        "pinus_rigida",
+        "fagus_grandifolia",
+        "acer_rubrum",
+        "unknown"
+      ],
+      "confusion_matrix": [
+        [
+          53,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          71,
+          0,
+          0,
+          0,
+          0,
+          6
+        ],
+        [
+          0,
+          0,
+          43,
+          5,
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          41,
+          1,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          3,
+          69,
+          19
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "n": 314
+    },
+    "known_rejected_rate": 0.08917197452229299,
+    "unknown_species_rejected_rate": 0.9224137931034483,
+    "n_unknown_obs": 232,
+    "hemlock_precision": 1.0,
+    "hemlock_recall": 1.0,
+    "unknown_species_called_hemlock": 0
+  },
+  "test": {
+    "closed_set": {
+      "accuracy": 0.9302788844621513,
+      "macro_f1": 0.9320312770316395,
+      "labels": [
+        "tsuga_canadensis",
+        "pinus_strobus",
+        "pinus_resinosa",
+        "fagus_grandifolia",
+        "acer_rubrum"
+      ],
+      "confusion_matrix": [
+        [
+          100,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          90,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          6,
+          60,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          73,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          25,
+          144
+        ]
+      ],
+      "n": 502
+    },
+    "with_rejection": {
+      "accuracy": 0.8864541832669323,
+      "macro_f1": 0.9251703582727255,
+      "labels": [
+        "tsuga_canadensis",
+        "pinus_strobus",
+        "pinus_resinosa",
+        "fagus_grandifolia",
+        "acer_rubrum",
+        "unknown"
+      ],
+      "confusion_matrix": [
+        [
+          92,
+          0,
+          0,
+          0,
+          0,
+          9
+        ],
+        [
+          0,
+          88,
+          0,
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          3,
+          60,
+          0,
+          0,
+          3
+        ],
+        [
+          0,
+          0,
+          0,
+          72,
+          0,
+          2
+        ],
+        [
+          0,
+          0,
+          0,
+          19,
+          133,
+          19
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "n": 502
+    },
+    "known_rejected_rate": 0.0697211155378486,
+    "unknown_species_rejected_rate": 0.8898305084745762,
+    "n_unknown_obs": 236,
+    "hemlock_precision": 0.9484536082474226,
+    "hemlock_recall": 0.9108910891089109,
+    "unknown_species_called_hemlock": 5
+  },
+  "protocol": "observation = 3 views of one tree, mean softmax; trees identity-disjoint; val unknown species=thuja_occidentalis, test unknown species=picea_rubens (never trained/tuned on)"
+}

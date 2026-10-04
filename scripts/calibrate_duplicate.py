@@ -58,15 +58,20 @@ def main() -> None:
 
     reshoot, nextview = [], []
     for t in trees:
-        a, b = rng.sample(by_tree[t], 2)
+        a, b, c2 = rng.sample(by_tree[t], 3)
         ra = decode_image(Path(a).read_bytes())
         ea = emb(ra)
         reshoot.append(float(ea @ emb(jitter(ra, rng))))
         nextview.append(float(ea @ emb(decode_image(Path(b).read_bytes()))))
+        nextview.append(float(ea @ emb(decode_image(Path(c2).read_bytes()))))
     r1, n99 = float(np.percentile(reshoot, 1)), float(np.percentile(nextview, 99))
     res = {"n": len(trees), "reshoot_cos": {p: round(float(np.percentile(reshoot, p)), 4) for p in (1, 5, 50)},
            "next_view_cos": {p: round(float(np.percentile(nextview, p)), 4) for p in (50, 95, 99)},
-           "threshold": round((r1 + n99) / 2, 4), "separable": r1 > n99,
+           "threshold": round(n99, 4), "separable": r1 > n99,
+           "next_view_max": round(float(np.max(nextview)), 4),
+           # hard rejection only above anything a genuine next view ever reached
+           "hard_threshold": round(max(0.97, float(np.max(nextview)) + 0.02), 4),
+           "reshoots_caught_at_threshold": round(float((np.asarray(reshoot) > n99).mean()), 4),
            "note": "re-shoots simulated with small jitter on training-split images"}
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(res, indent=2))

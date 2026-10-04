@@ -70,6 +70,7 @@ class Sessions:
 
 def _view_json(v: ViewResult) -> dict:
     return {"index": v.index, "view_type": v.view_type, "accepted": v.accepted, "problems": v.quality.problems,
+            "warnings": v.quality.warnings,
             "metrics": {k: round(x, 4) for k, x in v.quality.metrics.items()}, "faces_blurred": v.faces_blurred}
 
 

@@ -1,0 +1,153 @@
+{
+  "name": "lb_subcenter_s0",
+  "embeddings": "runs/reid/lb_subcenter_s0/embeddings.npy",
+  "protocol": {
+    "regime": "same tree / new bark region / same session (BarkNet has one session per tree)",
+    "test_identities_in_training": false,
+    "species": "tsuga_canadensis",
+    "views_per_observation": 3,
+    "enrolled_fraction": 0.5,
+    "repeats": 20,
+    "thresholds_fitted_on": "val split",
+    "n_val_trees": 9,
+    "n_test_trees": 14
+  },
+  "image_retrieval": {
+    "val": {
+      "top1": 0.4882,
+      "top5": 0.8412,
+      "mAP": 0.3711,
+      "n_queries": 170
+    },
+    "test": {
+      "top1": 0.5475,
+      "top5": 0.7753,
+      "mAP": 0.2699,
+      "n_queries": 316
+    },
+    "test_other_species_pooled": {
+      "top1": 0.7349,
+      "top5": 0.9053,
+      "mAP": 0.3593,
+      "n_queries": 1256
+    }
+  },
+  "device_analysis_test": {
+    "genuine": {
+      "mean": 0.3094,
+      "p99": 0.6432,
+      "n": 4343
+    },
+    "impostor_same_device": {
+      "mean": 0.2468,
+      "p99": 0.5736,
+      "n": 30332
+    },
+    "impostor_cross_device": {
+      "mean": 0.1426,
+      "p99": 0.4444,
+      "n": 15095
+    },
+    "auc_vs_same_device_impostors": 0.6146,
+    "auc_vs_cross_device_impostors": 0.8044
+  },
+  "n_observations": {
+    "val": 53,
+    "test": 101
+  },
+  "open_set_mean": {
+    "closed_set_test": {
+      "top1": 0.5019762845849802,
+      "top5": 0.9657444005270093,
+      "mean_rank": 2.0737812911725957,
+      "n_known_queries": 759,
+      "top1_ci95_by_tree": [
+        0.3057,
+        0.667
+      ]
+    },
+    "closed_set_val": {
+      "top1": 0.6946564885496184,
+      "top5": 1.0,
+      "mean_rank": 1.559796437659033,
+      "n_known_queries": 393
+    },
+    "roc_auc_test": 0.525,
+    "roc_auc_val": 0.5889,
+    "roc_auc_all_pairs_test": 0.7965,
+    "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+    "genuine_test": {
+      "1": 0.2691,
+      "5": 0.3641,
+      "25": 0.4968,
+      "50": 0.5845,
+      "75": 0.6617,
+      "95": 0.7522,
+      "99": 0.8118,
+      "n": 759
+    },
+    "impostor_test": {
+      "1": 0.2701,
+      "5": 0.3405,
+      "25": 0.4842,
+      "50": 0.5938,
+      "75": 0.6518,
+      "95": 0.7128,
+      "99": 0.7473,
+      "n": 1820
+    },
+    "thresholds": {
+      "val_fmr_0.01": {
+        "threshold": 0.7102,
+        "n_known": 759,
+        "n_new": 1061,
+        "known_accuracy": 0.1502,
+        "new_accuracy": 0.9444,
+        "false_match_rate": 0.0495,
+        "false_match_rate_new_trees": 0.0556,
+        "false_new_rate": 0.809,
+        "precision_existing": 0.5588,
+        "recall_existing": 0.1502
+      },
+      "val_fmr_0.05": {
+        "threshold": 0.6774,
+        "n_known": 759,
+        "n_new": 1061,
+        "known_accuracy": 0.2042,
+        "new_accuracy": 0.8699,
+        "false_match_rate": 0.1165,
+        "false_match_rate_new_trees": 0.1301,
+        "false_new_rate": 0.6983,
+        "precision_existing": 0.4223,
+        "recall_existing": 0.2042
+      }
+    },
+    "closed_set_test_by_capture": {
+      "same_capture": {
+        "top1": 0.5291,
+        "n": 705
+      },
+      "different_capture_same_day": {
+        "top1": 0.1481,
+        "n": 54
+      }
+    }
+  },
+  "open_set_strict_no_overlap": {
+    "val": {
+      "top1": 0.5809128630705395,
+      "top5": 1.0,
+      "mean_rank": 1.8215767634854771,
+      "n_known_queries": 241,
+      "dropped_overlapping_queries": 152
+    },
+    "test": {
+      "top1": 0.4272890484739677,
+      "top5": 0.9533213644524237,
+      "mean_rank": 2.289048473967684,
+      "n_known_queries": 557,
+      "dropped_overlapping_queries": 202,
+      "roc_auc_all_pairs": 0.7887
+    }
+  }
+}

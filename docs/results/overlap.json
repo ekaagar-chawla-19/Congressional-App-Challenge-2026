@@ -1,0 +1,19 @@
+{
+  "n_same_tree_pairs": 6028,
+  "n_different_tree_pairs": 6028,
+  "different_tree_inliers_p99_9": 6.0,
+  "same_tree_pairs_overlapping_fraction": 0.0587,
+  "trees_with_any_overlapping_pair": 23,
+  "n_trees": 23,
+  "same_tree_inliers_percentiles": {
+    "50": 0.0,
+    "90": 5.0,
+    "99": 72.72999999999956
+  },
+  "different_tree_inliers_percentiles": {
+    "50": 0.0,
+    "90": 4.0,
+    "99": 5.0
+  },
+  "n_overlapping_pairs": 354
+}

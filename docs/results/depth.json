@@ -1,0 +1,69 @@
+{
+  "A_real_dbh_gate": {
+    "n_trees": 45,
+    "dbh_cm": {
+      "min": 15.9,
+      "median": 31.5,
+      "max": 55.1
+    },
+    "n_impostor_pairs": 990,
+    "gate": {
+      "sigma_0.5cm": {
+        "tolerance_cm": 1.82,
+        "impostor_pairs_rejected": 0.8939,
+        "genuine_pairs_kept": 0.99
+      },
+      "sigma_1.0cm": {
+        "tolerance_cm": 3.64,
+        "impostor_pairs_rejected": 0.7667,
+        "genuine_pairs_kept": 0.99
+      },
+      "sigma_2.0cm": {
+        "tolerance_cm": 7.29,
+        "impostor_pairs_rejected": 0.5707,
+        "genuine_pairs_kept": 0.99
+      },
+      "sigma_3.0cm": {
+        "tolerance_cm": 10.93,
+        "impostor_pairs_rejected": 0.3707,
+        "genuine_pairs_kept": 0.99
+      },
+      "sigma_5.0cm": {
+        "tolerance_cm": 18.22,
+        "impostor_pairs_rejected": 0.1364,
+        "genuine_pairs_kept": 0.99
+      }
+    }
+  },
+  "B_SYNTHETIC_profile_matching": {
+    "noise_b_0.0": {
+      "point_sigma_cm_at_distance": 0.1,
+      "median_diameter_error_cm": 0.37,
+      "profile_auc_same_vs_different": 1.0,
+      "n_genuine": 30,
+      "n_impostor": 870
+    },
+    "noise_b_0.0025": {
+      "point_sigma_cm_at_distance": 0.66,
+      "median_diameter_error_cm": 1.08,
+      "profile_auc_same_vs_different": 1.0,
+      "n_genuine": 30,
+      "n_impostor": 870
+    },
+    "noise_b_0.005": {
+      "point_sigma_cm_at_distance": 1.23,
+      "median_diameter_error_cm": 2.4,
+      "profile_auc_same_vs_different": 0.9999,
+      "n_genuine": 30,
+      "n_impostor": 870
+    },
+    "noise_b_0.01": {
+      "point_sigma_cm_at_distance": 2.35,
+      "median_diameter_error_cm": 5.46,
+      "profile_auc_same_vs_different": 0.9997,
+      "n_genuine": 30,
+      "n_impostor": 870
+    },
+    "note": "SYNTHETIC trunks (SimulatedDepth), DBH drawn from real BarkNet hemlock DBHs; stereo-style noise sigma=a+b*z^2; not evidence about real trees/sensors"
+  }
+}

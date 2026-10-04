@@ -1,0 +1,153 @@
+{
+  "name": "lb_hemlock_only_eqsteps_s0",
+  "embeddings": "runs/reid/lb_hemlock_only_eqsteps_s0/embeddings.npy",
+  "protocol": {
+    "regime": "same tree / new bark region / same session (BarkNet has one session per tree)",
+    "test_identities_in_training": false,
+    "species": "tsuga_canadensis",
+    "views_per_observation": 3,
+    "enrolled_fraction": 0.5,
+    "repeats": 20,
+    "thresholds_fitted_on": "val split",
+    "n_val_trees": 9,
+    "n_test_trees": 14
+  },
+  "image_retrieval": {
+    "val": {
+      "top1": 0.5882,
+      "top5": 0.8353,
+      "mAP": 0.4213,
+      "n_queries": 170
+    },
+    "test": {
+      "top1": 0.5253,
+      "top5": 0.7753,
+      "mAP": 0.3029,
+      "n_queries": 316
+    },
+    "test_other_species_pooled": {
+      "top1": 0.6385,
+      "top5": 0.8527,
+      "mAP": 0.2677,
+      "n_queries": 1256
+    }
+  },
+  "device_analysis_test": {
+    "genuine": {
+      "mean": 0.3057,
+      "p99": 0.6678,
+      "n": 4343
+    },
+    "impostor_same_device": {
+      "mean": 0.1649,
+      "p99": 0.5496,
+      "n": 30332
+    },
+    "impostor_cross_device": {
+      "mean": 0.1162,
+      "p99": 0.4878,
+      "n": 15095
+    },
+    "auc_vs_same_device_impostors": 0.7157,
+    "auc_vs_cross_device_impostors": 0.7916
+  },
+  "n_observations": {
+    "val": 53,
+    "test": 101
+  },
+  "open_set_mean": {
+    "closed_set_test": {
+      "top1": 0.5836627140974967,
+      "top5": 0.9617918313570487,
+      "mean_rank": 1.9262187088274045,
+      "n_known_queries": 759,
+      "top1_ci95_by_tree": [
+        0.3881,
+        0.7402
+      ]
+    },
+    "closed_set_val": {
+      "top1": 0.7531806615776081,
+      "top5": 1.0,
+      "mean_rank": 1.3511450381679388,
+      "n_known_queries": 393
+    },
+    "roc_auc_test": 0.5854,
+    "roc_auc_val": 0.7007,
+    "roc_auc_all_pairs_test": 0.8372,
+    "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+    "genuine_test": {
+      "1": 0.1848,
+      "5": 0.2618,
+      "25": 0.4627,
+      "50": 0.5587,
+      "75": 0.6514,
+      "95": 0.7366,
+      "99": 0.7698,
+      "n": 759
+    },
+    "impostor_test": {
+      "1": 0.119,
+      "5": 0.2432,
+      "25": 0.4114,
+      "50": 0.5292,
+      "75": 0.6127,
+      "95": 0.7058,
+      "99": 0.7555,
+      "n": 1820
+    },
+    "thresholds": {
+      "val_fmr_0.01": {
+        "threshold": 0.6413,
+        "n_known": 759,
+        "n_new": 1061,
+        "known_accuracy": 0.2727,
+        "new_accuracy": 0.8228,
+        "false_match_rate": 0.1566,
+        "false_match_rate_new_trees": 0.1772,
+        "false_new_rate": 0.5995,
+        "precision_existing": 0.4207,
+        "recall_existing": 0.2727
+      },
+      "val_fmr_0.05": {
+        "threshold": 0.6016,
+        "n_known": 759,
+        "n_new": 1061,
+        "known_accuracy": 0.3386,
+        "new_accuracy": 0.7352,
+        "false_match_rate": 0.2401,
+        "false_match_rate_new_trees": 0.2648,
+        "false_new_rate": 0.4559,
+        "precision_existing": 0.3703,
+        "recall_existing": 0.3386
+      }
+    },
+    "closed_set_test_by_capture": {
+      "same_capture": {
+        "top1": 0.5773,
+        "n": 705
+      },
+      "different_capture_same_day": {
+        "top1": 0.6667,
+        "n": 54
+      }
+    }
+  },
+  "open_set_strict_no_overlap": {
+    "val": {
+      "top1": 0.6763485477178424,
+      "top5": 1.0,
+      "mean_rank": 1.4273858921161826,
+      "n_known_queries": 241,
+      "dropped_overlapping_queries": 152
+    },
+    "test": {
+      "top1": 0.5368043087971275,
+      "top5": 0.9497307001795332,
+      "mean_rank": 2.0897666068222622,
+      "n_known_queries": 557,
+      "dropped_overlapping_queries": 202,
+      "roc_auc_all_pairs": 0.8193
+    }
+  }
+}

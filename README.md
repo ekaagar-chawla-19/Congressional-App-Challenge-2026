@@ -37,6 +37,26 @@ Running on a Raspberry Pi: [`docs/deployment.md`](docs/deployment.md).
 * **Cross-season re-identification has not been tested.** No openly licensed dataset with repeat visits of individual hemlocks exists that we could find. The app is built to collect one.
 * Depth matching is implemented and tested only on **simulated** trunks. It stays off until it is calibrated on real field depth.
 
+## Results at a glance
+
+Hemlock test trees never seen in training (14 trees, BarkNet, same-session regime). Details and confidence intervals are in [`docs/experiments.md`](docs/experiments.md).
+
+| | Production (DINOv2-S/14) |
+|---|---|
+| Recognise a returning tree from 3 trunk views: top-1 / top-5 among enrolled trees | **0.86 / 0.997** |
+| … from 5 views | 0.94 |
+| Fully automatic decision at the shipped calibration: returning trees auto-accepted / new trees falsely matched | 43 % / **0.6 %** |
+| Species gate: accuracy; hemlock precision / recall; never-seen red spruce called hemlock | 93 %; 0.99 / 0.99; 1 of 236 |
+| ONNX model / RAM / time per view (x86 4-core dev box, not a Pi) | 87 MB / 273 MB / 117 ms |
+
+When not confident enough to auto-accept, the app does not guess. It either:
+* asks for extra trunk views (when views disagree), or
+* shows the ranked candidates for one-tap confirmation; the correct tree is in the top 5 for 99.7 % of returning-tree queries here.
+
+<img src="docs/images/app_revisit_real_model.png" width="260" alt="Guided capture app: revisit of a held-out hemlock matched to H-001">
+
+*The capture app running the trained model: a held-out BarkNet hemlock enrolled as H-001 and recognised on a revisit with different photos.*
+
 ## Repository layout
 
 ```

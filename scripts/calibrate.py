@@ -99,8 +99,9 @@ def main() -> None:
     margin = float(np.percentile(gaps, 99))
     t_view = threshold_at_fmr(np.array(view_imp), args.target_fmr)
 
-    dup = json.loads(Path(args.duplicate).read_text())["threshold"] if args.duplicate else None
-    cal = Calibration(species_threshold=float(sp["threshold"]), match_threshold=float(t_match), duplicate_cosine=dup,
+    dupj = json.loads(Path(args.duplicate).read_text()) if args.duplicate else {}
+    cal = Calibration(species_threshold=float(sp["threshold"]), match_threshold=float(t_match),
+                      duplicate_cosine=dupj.get("threshold"), duplicate_hard_cosine=dupj.get("hard_threshold"),
                       global_threshold=float(t_global), target_fmr=args.target_fmr,
                       view_contradiction_margin=max(margin, 0.0), view_match_threshold=float(t_view),
                       fusers={"+".join(FEATS): fuser},

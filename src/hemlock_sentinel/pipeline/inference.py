@@ -21,7 +21,7 @@ import numpy as np
 from ..acquisition.interfaces import GPS, DepthFrame, EnvironmentalSensors, Frame, ModelRuntime, Storage
 from ..acquisition.privacy import blur_faces
 from ..acquisition.protocol import GUIDED_VIEWS, MIN_VIEWS, is_identity_view, spec_for
-from ..acquisition.quality import QualityReport, QualityThresholds, assess
+from ..acquisition.quality import QualityReport, QualityThresholds, assess, heading_problem
 from ..database.indexing import IndexCache
 from ..database.models import ObservationRecord, ViewRecord
 from ..database.repository import TreeRepository
@@ -89,7 +89,9 @@ class HemlockSentinel:
         self.cal = calibration
         self.cfg = config or PipelineConfig()
         if calibration.duplicate_cosine is not None:
-            self.cfg.quality.max_duplicate_cosine = calibration.duplicate_cosine
+            self.cfg.quality.warn_duplicate_cosine = calibration.duplicate_cosine
+        if calibration.duplicate_hard_cosine is not None:
+            self.cfg.quality.max_duplicate_cosine = calibration.duplicate_hard_cosine
         self.gps = gps
         self.sensors = sensors
         self.index = IndexCache(repo, runtime.embedding_dim)
@@ -104,6 +106,11 @@ class HemlockSentinel:
         rgb = frame.rgb
         q = assess(rgb, self.cfg.quality)
         vr = ViewResult(index, spec.key, q, depth=depth, heading_deg=frame.heading_deg)
+        hp = heading_problem(spec.key, frame.heading_deg, {p.view_type: p.heading_deg for p in previous or []},
+                             self.cfg.quality)
+        if hp:
+            q.problems.append(hp)
+            q.ok = False
         if not q.ok:
             return vr
         faces = 0
@@ -114,12 +121,16 @@ class HemlockSentinel:
         emb, logits = self.runtime.run(x)
         vr.embedding, vr.species_logits = emb[0], logits[0]
         for p in previous or []:
-            if p.embedding is not None and float(l2_normalize(p.embedding) @ l2_normalize(vr.embedding)) \
-                    > self.cfg.quality.max_duplicate_cosine:
+            if p.embedding is None:
+                continue
+            cos = float(l2_normalize(p.embedding) @ l2_normalize(vr.embedding))
+            if cos > self.cfg.quality.max_duplicate_cosine:
                 vr.duplicate_of = p.index
                 q.problems.append(f"same as view {p.index + 1}: move to the next position before capturing")
                 q.ok = False
                 return vr
+            if cos > self.cfg.quality.warn_duplicate_cosine:
+                q.warnings.append(f"very similar to view {p.index + 1}: make sure you moved to the next position")
         if self.matcher is not None and spec.identity_view:
             vr.local = self.matcher.extract(rgb)
         if self.cfg.store_images:

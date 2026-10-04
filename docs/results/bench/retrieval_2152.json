@@ -1,0 +1,30 @@
+{
+  "dim": 2152,
+  "obs_per_tree": 4,
+  "search": {
+    "100_trees": {
+      "observations": 400,
+      "index_ram_mb_fp32": 3.44,
+      "build_ms": 20.5,
+      "search_ms_median": 0.22
+    },
+    "1000_trees": {
+      "observations": 4000,
+      "index_ram_mb_fp32": 34.43,
+      "build_ms": 180.7,
+      "search_ms_median": 1.56
+    },
+    "5000_trees": {
+      "observations": 20000,
+      "index_ram_mb_fp32": 172.16,
+      "build_ms": 2065.8,
+      "search_ms_median": 9.19
+    }
+  },
+  "storage_per_observation": {
+    "db_kb_per_3view_observation": 19.2,
+    "embedding_kb_fp16_each": 4.2,
+    "local_features_kb_per_view_npz": 54.1,
+    "note": "plus original JPEGs (stored once, content-addressed); typically 1-4 MB per phone photo"
+  }
+}
