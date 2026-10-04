@@ -24,7 +24,7 @@ def test_pipeline_flow_and_persistence(tmp_path):
 
 
 def test_local_features_are_stored_and_used(tmp_path):
-    app = build(tmp_path)
+    app = build(tmp_path, use_local_matching=True)  # off by default (E-local)
     app.identify(capture(app, [tree_view(2, v) for v in range(3)]))
     r = app.identify(capture(app, [tree_view(2, v, jitter_seed=3) for v in range(3)]))
     cand = r.decision.candidates[0]
@@ -58,3 +58,11 @@ def test_index_survives_restart(tmp_path):
     app2 = build(tmp_path)
     r = app2.identify(capture(app2, [tree_view(6, v, jitter_seed=1) for v in range(3)]))
     assert r.status == "existing" and r.tree_id == "H-001"
+
+
+def test_local_matching_off_by_default(tmp_path):
+    app = build(tmp_path)
+    assert app.matcher is None
+    app.identify(capture(app, [tree_view(2, v) for v in range(3)]))
+    r = app.identify(capture(app, [tree_view(2, v, jitter_seed=3) for v in range(3)]))
+    assert "local" not in r.decision.candidates[0]

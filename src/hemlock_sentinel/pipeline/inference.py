@@ -20,7 +20,7 @@ import numpy as np
 
 from ..acquisition.interfaces import GPS, DepthFrame, EnvironmentalSensors, Frame, ModelRuntime, Storage
 from ..acquisition.privacy import blur_faces
-from ..acquisition.protocol import GUIDED_VIEWS, MIN_VIEWS
+from ..acquisition.protocol import GUIDED_VIEWS, MIN_VIEWS, is_identity_view, spec_for
 from ..acquisition.quality import QualityReport, QualityThresholds, assess
 from ..database.indexing import IndexCache
 from ..database.models import ObservationRecord, ViewRecord
@@ -69,7 +69,10 @@ class ObservationResult:
 @dataclass
 class PipelineConfig:
     top_k: int = 5
-    use_local_matching: bool = True
+    # Off by default: on BarkNet the RootSIFT signal added nothing over the fine-tuned
+    # global embedding (fused test AUC 0.890 vs 0.892) at ~1.4 s and 54 KB/view
+    # (docs/experiments.md E-local). Re-test on field data captured with the protocol.
+    use_local_matching: bool = False
     use_depth: bool = True
     store_images: bool = True
     blur_faces: bool = True
@@ -93,8 +96,9 @@ class HemlockSentinel:
 
     # ------------------------------------------------------------------ views
     def process_view(self, frame: Frame, index: int, previous: list[ViewResult] | None = None,
-                     depth: DepthFrame | None = None) -> ViewResult:
-        spec = GUIDED_VIEWS[min(index, len(GUIDED_VIEWS) - 1)]
+                     depth: DepthFrame | None = None, view_key: str | None = None) -> ViewResult:
+        """index: position in this capture; view_key: protocol view (default: GUIDED_VIEWS[index])."""
+        spec = spec_for(view_key) if view_key else GUIDED_VIEWS[min(index, len(GUIDED_VIEWS) - 1)]
         rgb = frame.rgb
         q = assess(rgb, self.cfg.quality)
         vr = ViewResult(index, spec.key, q, depth=depth, heading_deg=frame.heading_deg)
@@ -257,7 +261,7 @@ class HemlockSentinel:
 
 
 def _is_identity_view(view_type: str) -> bool:
-    return any(s.key == view_type and s.identity_view for s in GUIDED_VIEWS)
+    return is_identity_view(view_type)
 
 
 def _encode_jpeg(rgb: np.ndarray, quality: int = 92) -> bytes:

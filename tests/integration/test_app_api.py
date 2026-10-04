@@ -63,6 +63,10 @@ def test_uncertain_asks_for_another_view_then_resolves(tmp_path):
         c.post(f"/api/session/{sid}/view", files={"image": ("v.jpg", _jpeg(img))})
     r = c.post(f"/api/session/{sid}/identify").json()
     assert r["status"] == "uncertain" and r["action"] == "capture_another_view"
+    # uncertainty asks for an extra TRUNK view (identity evidence), not the branching view
+    assert r["next"]["key"] == "trunk_right3" and r["next"]["identity_view"]
+    v = c.post(f"/api/session/{sid}/view", files={"image": ("v.jpg", _jpeg(tree_view(50, 3, 3)))}).json()
+    assert v["view"]["view_type"] == "trunk_right3" and v["view"]["accepted"]
     r = c.post(f"/api/session/{sid}/identify", data={"force_commit": "true"}).json()
     assert r["status"] == "uncertain" and r["action"] == "review"
     assert c.post(f"/api/session/{sid}/resolve", data={"tree_id": "H-001"}).json()["tree_id"] == "H-001"
@@ -72,3 +76,21 @@ def test_uncertain_asks_for_another_view_then_resolves(tmp_path):
 def test_unknown_session_404(tmp_path):
     c = TestClient(create_app(build(tmp_path)))
     assert c.post("/api/session/nope/identify").status_code == 404
+
+
+def test_one_tap_correction_merges_duplicate(tmp_path):
+    app = build(tmp_path)
+    c = TestClient(create_app(app))
+
+    def session(seed, jitter=0):
+        sid = c.post("/api/session").json()["session_id"]
+        for v in range(3):
+            c.post(f"/api/session/{sid}/view", files={"image": ("v.jpg", _jpeg(tree_view(seed, v, jitter)))})
+        return sid, c.post(f"/api/session/{sid}/identify").json()
+
+    session(70)
+    sid, r = session(71)  # a different tree registered as new: H-002
+    assert r["tree_id"] == "H-002"
+    assert c.post(f"/api/session/{sid}/correct", data={"tree_id": "H-001"}).json()["tree_id"] == "H-001"
+    assert [t["tree_id"] for t in c.get("/api/trees").json()] == ["H-001"]
+    assert app.repo.get_tree("H-001").observation_count == 2

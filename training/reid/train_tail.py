@@ -30,7 +30,7 @@ from torch import nn
 
 from hemlock_sentinel.evaluation.metrics import retrieval_metrics
 from hemlock_sentinel.evaluation.splits import read_manifest
-from hemlock_sentinel.reid.backbone import trunk_tail
+from hemlock_sentinel.reid.backbone import last_block_split, trunk_tail
 from hemlock_sentinel.reid.embedding import EmbeddingHead
 from hemlock_sentinel.reid.losses import build_loss
 
@@ -42,10 +42,14 @@ class Tail(nn.Module):
     (stage5 / conv_head / bn2 / head) are what scripts/export_model.py maps."""
 
     def __init__(self, backbone: str = "efficientnetv2_rw_m", pretrained: bool = True, gem_p: float = 3.0,
-                 train_stage5: bool = True, img_size: int | None = None):
+                 train_stage5: bool = True, img_size: int | None = None, split: str = "trunk"):
         super().__init__()
         self.backbone = backbone
-        if backbone.startswith("efficientnetv2"):
+        self.split = split
+        if split == "last_block":  # controlled-ablation regime
+            kw = {"img_size": img_size} if "dinov2" in backbone else {}
+            _, self.tail, dim = last_block_split(backbone, pretrained=pretrained, **kw)
+        elif backbone.startswith("efficientnetv2"):
             m = timm.create_model(backbone, pretrained=pretrained, num_classes=0, global_pool="")
             self.stage5 = m.blocks[TRUNK_STAGES:]
             self.conv_head, self.bn2 = m.conv_head, m.bn2
@@ -59,12 +63,12 @@ class Tail(nn.Module):
         self.dim = dim
 
     def forward(self, x):
-        if self.backbone.startswith("efficientnetv2"):
+        if self.split == "trunk" and self.backbone.startswith("efficientnetv2"):
             return self.head(self.bn2(self.conv_head(self.stage5(x))))
         return self.head(self.tail(x))
 
     def param_groups(self):
-        if self.backbone.startswith("efficientnetv2"):
+        if self.split == "trunk" and self.backbone.startswith("efficientnetv2"):
             bb = [p for p in self.stage5.parameters() if p.requires_grad] + \
                 list(self.conv_head.parameters()) + list(self.bn2.parameters())
         else:
@@ -149,7 +153,8 @@ def main() -> None:
 
     meta = json.loads((cache / "meta.json").read_text())
     backbone = meta.get("backbone", "efficientnetv2_rw_m")
-    tail = Tail(backbone, train_stage5=not args.freeze_stage5, img_size=meta["size"])
+    tail = Tail(backbone, train_stage5=not args.freeze_stage5, img_size=meta["size"],
+                split=meta.get("split", "trunk"))
     loss_fn = build_loss(args.loss, tail.dim, len(train_trees), class_counts=counts, s=args.s,
                          m_max=args.m_max, k=args.subcenters)
     bb_params, head_params = tail.param_groups()
@@ -200,7 +205,8 @@ def main() -> None:
         if m["mAP"] > best:
             best, best_state = m["mAP"], copy.deepcopy(tail.state_dict())
     tail.load_state_dict(best_state)
-    torch.save({"tail": best_state, "args": vars(args), "backbone": backbone, "train_trees": train_trees},
+    torch.save({"tail": best_state, "args": vars(args), "backbone": backbone, "split": tail.split,
+                "train_trees": train_trees},
                out / "tail.pt")
     emb = embed(tail, ev, np.arange(len(recs)))
     np.save(out / "embeddings.npy", emb.astype(np.float32))

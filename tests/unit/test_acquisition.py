@@ -71,6 +71,17 @@ def test_protocol_has_guided_views():
     assert GUIDED_VIEWS[0].identity_view and GUIDED_VIEWS[0].required
 
 
+def test_next_view_order_and_extra_trunk_views():
+    from hemlock_sentinel.acquisition.protocol import next_view
+
+    assert next_view(set()).key == "trunk_north"
+    assert next_view({"trunk_north", "trunk_right", "trunk_right2"}).key == "branching"
+    nv = next_view({"trunk_north", "trunk_right", "trunk_right2"}, need_identity=True)
+    assert nv.key == "trunk_right3" and nv.identity_view
+    allk = {"trunk_north", "trunk_right", "trunk_right2", "trunk_right3", "trunk_north_high"}
+    assert next_view(allk, need_identity=True) is None
+
+
 def test_face_blur_noop_on_bark(bark):
     img = bark(3)
     out, n = blur_faces(img)

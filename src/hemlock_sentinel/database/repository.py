@@ -116,6 +116,25 @@ class TreeRepository:
                       (tree_id, decision, observation_id))
             self._refresh_tree(c, tree_id)
 
+    def reassign_observation(self, observation_id: str, tree_id: str, decision: str = "user_corrected") -> None:
+        """Move an observation to another tree (user correction). A tree left with no
+        observations is retired as merged into the target; its ID is never reused."""
+        with self.tx() as c:
+            row = c.execute("SELECT tree_id FROM observations WHERE observation_id=?", (observation_id,)).fetchone()
+            if row is None:
+                raise KeyError(observation_id)
+            old = row[0]
+            c.execute("UPDATE observations SET tree_id=?, decision=? WHERE observation_id=?",
+                      (tree_id, decision, observation_id))
+            self._refresh_tree(c, tree_id)
+            if old is not None and old != tree_id:
+                n = c.execute("SELECT COUNT(*) FROM observations WHERE tree_id=?", (old,)).fetchone()[0]
+                if n == 0:
+                    c.execute("UPDATE trees SET merged_into=?, observation_count=0, canonical_embedding=NULL"
+                              " WHERE tree_id=?", (tree_id, old))
+                else:
+                    self._refresh_tree(c, old)
+
     def merge_trees(self, keep: str, drop: str) -> None:
         """Fix a duplicate: move drop's observations to keep. drop's ID is retired, not reused."""
         with self.tx() as c:

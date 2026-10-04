@@ -74,6 +74,29 @@ def open_set_block(obs_val, obs_test, emb_of, aggregate, score_mode, fmrs=(0.01,
     return res, qv, qt
 
 
+def strict_block(ov, ot, emb_of, pairs, repeats):
+    out = {}
+    for split, obs, seed in (("val", ov, 100), ("test", ot, 200)):
+        qs = run_open_set(obs, emb_of, aggregate_mean, repeats=repeats, seed=seed)
+        first = {}
+        for o in sorted(obs, key=lambda o: o.obs_id):
+            first.setdefault(o.tree_id, o)
+        keep = []
+        dropped = 0
+        for q in qs:
+            if q.truth is not None:
+                g = first[q.truth].paths
+                if any(frozenset((a, b)) in pairs for a in q.obs.paths for b in g):
+                    dropped += 1
+                    continue
+            keep.append(q)
+        out[split] = {**closed_set_topk(keep), "dropped_overlapping_queries": dropped}
+        if split == "test":
+            gp, ip = all_pairs(keep)
+            out[split]["roc_auc_all_pairs"] = round(roc_auc(gp, ip), 4)
+    return out
+
+
 def device_analysis(recs, emb, rows):
     """Cosine of image pairs split by same/different tree and same/different device."""
     z = l2_normalize(emb[rows])
@@ -103,6 +126,9 @@ def main() -> None:
     ap.add_argument("--views", type=int, default=3)
     ap.add_argument("--repeats", type=int, default=20)
     ap.add_argument("--quick", action="store_true", help="main protocol only (no ablations)")
+    ap.add_argument("--hemlock-only", action="store_true", help="skip other-species metrics (partial embeddings)")
+    ap.add_argument("--overlap", default="runs/results/overlap.json",
+                    help="overlapping same-tree image pairs (scripts/analyze_overlap.py) for the strict regime")
     args = ap.parse_args()
 
     recs = read_manifest(Path(args.data) / "manifest.csv")
@@ -123,15 +149,22 @@ def main() -> None:
             for s, ids in (("val", val), ("test", test))}
     res["image_retrieval"] = {s: retrieval_metrics(emb[r], np.array([recs[i].tree_id for i in r]))
                               for s, r in rows.items()}
-    other = np.array([i for i, r in enumerate(recs) if r.tree_id in test and r.species != HEMLOCK])
-    res["image_retrieval"]["test_other_species_pooled"] = retrieval_metrics(
-        emb[other], np.array([recs[i].tree_id for i in other]))
+    if not args.hemlock_only:
+        other = np.array([i for i, r in enumerate(recs) if r.tree_id in test and r.species != HEMLOCK])
+        res["image_retrieval"]["test_other_species_pooled"] = retrieval_metrics(
+            emb[other], np.array([recs[i].tree_id for i in other]))
     res["device_analysis_test"] = device_analysis(recs, emb, rows["test"])
 
     ov = build_observations(recs, val, HEMLOCK, args.views, seed=1)
     ot = build_observations(recs, test, HEMLOCK, args.views, seed=2)
     res["n_observations"] = {"val": len(ov), "test": len(ot)}
     res["open_set_mean"], _, _ = open_set_block(ov, ot, emb_of, aggregate_mean, "aggregate", repeats=args.repeats)
+
+    if Path(args.overlap).exists():
+        # STRICT regime: drop known queries containing any image that overlaps (RANSAC) an image
+        # of the enrolled gallery observation of the same tree
+        pairs = {frozenset(p) for p in json.loads(Path(args.overlap).read_text())["overlapping_pairs"]}
+        res["open_set_strict_no_overlap"] = strict_block(ov, ot, emb_of, pairs, args.repeats)
 
     if not args.quick:
         abl = {}

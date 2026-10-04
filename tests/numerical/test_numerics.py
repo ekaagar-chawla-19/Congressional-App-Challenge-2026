@@ -128,3 +128,29 @@ def trunk_tail_state(trunk, tail, full):
         sd[{"0": "blocks", "1": "conv_head", "2": "bn2"}[i] + "." + rest] = v
     assert set(sd) == set(ref), set(ref) ^ set(sd)
     return sd
+
+
+@pytest.mark.parametrize("name,kw,size", [("efficientnetv2_rw_m", {}, 64),
+                                          ("vit_small_patch14_dinov2", {"img_size": 56}, 56)])
+def test_last_block_split_composes_to_tail(name, kw, size):
+    from hemlock_sentinel.reid.backbone import last_block_split, trunk_tail
+
+    torch.manual_seed(0)
+    trunk, tail, _, _ = trunk_tail(name, pretrained=False, **kw)
+    prefix, last, _ = last_block_split(name, pretrained=False, **kw)
+    # copy the tail's weights into prefix/last (all randomly initialised separately)
+    if name.startswith("efficientnetv2"):
+        stage = tail[0][0]  # blocks[5]
+        prefix.load_state_dict(torch.nn.Sequential(*stage[:-1]).state_dict())
+        last[0].load_state_dict(stage[-1:].state_dict())
+        last[1].load_state_dict(tail[1].state_dict())
+        last[2].load_state_dict(tail[2].state_dict())
+    else:
+        prefix.load_state_dict(torch.nn.Sequential(*tail.blocks[:-1]).state_dict())
+        last.blocks.load_state_dict(tail.blocks[-1:].state_dict())
+        last.norm.load_state_dict(tail.norm.state_dict())
+    for m in (trunk, tail, prefix, last):
+        m.eval()
+    with torch.no_grad():
+        h = trunk(torch.rand(2, 3, size, size))
+        assert torch.allclose(last(prefix(h)), tail(h), atol=1e-4)

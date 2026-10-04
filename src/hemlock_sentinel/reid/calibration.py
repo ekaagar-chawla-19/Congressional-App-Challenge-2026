@@ -31,6 +31,22 @@ def threshold_at_fmr(impostor_scores: np.ndarray, target_fmr: float) -> float:
     return float(np.nextafter(s[allowed], np.inf))
 
 
+def threshold_for_gallery(pair_impostor_scores: np.ndarray, n_gallery: int, target_fmr: float) -> float:
+    """Gallery-size-aware threshold.
+
+    A new tree is falsely matched if ANY of the n_gallery wrong trees scores >= t.
+    Treating wrong-tree scores as independent draws from the per-pair impostor
+    distribution F, P(false match) = 1 - (1 - F(t))^n. So we need a per-pair
+    exceedance of 1 - (1 - target)^(1/n), which shrinks as the gallery grows.
+    Fitted on validation per-pair scores and re-evaluated for the deployed
+    gallery size (the app recomputes it as the gallery grows).
+    """
+    if n_gallery < 1:
+        raise ValueError("n_gallery >= 1")
+    per_pair = 1.0 - (1.0 - target_fmr) ** (1.0 / n_gallery)
+    return threshold_at_fmr(pair_impostor_scores, per_pair)
+
+
 def threshold_max_f1(genuine: np.ndarray, impostor: np.ndarray) -> float:
     g = np.asarray(genuine, dtype=np.float64)
     i = np.asarray(impostor, dtype=np.float64)

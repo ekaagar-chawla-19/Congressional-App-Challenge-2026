@@ -21,7 +21,9 @@ import numpy as np
 from hemlock_sentinel.evaluation.benchmarks import build_observations, run_open_set
 from hemlock_sentinel.evaluation.metrics import open_set_metrics
 from hemlock_sentinel.evaluation.splits import read_manifest
-from hemlock_sentinel.reid.calibration import Calibration, LogisticCalibrator, threshold_at_fmr
+from hemlock_sentinel.evaluation.benchmarks import all_pairs, decide_global
+from hemlock_sentinel.reid.calibration import (Calibration, LogisticCalibrator, threshold_at_fmr,
+                                               threshold_for_gallery)
 from hemlock_sentinel.reid.fusion import candidate_features, decide
 
 FEATS = ["global", "gap", "agreement"]
@@ -48,6 +50,9 @@ def main() -> None:
     ap.add_argument("--target-fmr", type=float, default=0.01)
     ap.add_argument("--repeats", type=int, default=20)
     ap.add_argument("--k", type=int, default=5)
+    ap.add_argument("--calib-species", default="hemlock", choices=["hemlock", "all"],
+                    help="all: pool within-species open-set trials of every species' VAL trees "
+                         "(more impostor data than 9 val hemlocks); test is always hemlock")
     args = ap.parse_args()
     recs = read_manifest(Path(args.data) / "manifest.csv")
     splits = json.loads((Path(args.data) / "splits.json").read_text())
@@ -55,8 +60,15 @@ def main() -> None:
     emb_of = {r.path: emb[i] for i, r in enumerate(recs)}
     sp = json.loads(Path(args.species).read_text())
 
-    qv = run_open_set(build_observations(recs, set(splits["val"]), "tsuga_canadensis", 3, 1), emb_of,
-                      repeats=args.repeats, seed=100)
+    if args.calib_species == "hemlock":
+        qv = run_open_set(build_observations(recs, set(splits["val"]), "tsuga_canadensis", 3, 1), emb_of,
+                          repeats=args.repeats, seed=100)
+    else:
+        qv = []
+        for sp_name in sorted({r.species for r in recs if r.tree_id in set(splits["val"])}):
+            ob = build_observations(recs, set(splits["val"]), sp_name, 3, 1)
+            if len({o.tree_id for o in ob}) >= 4:
+                qv += run_open_set(ob, emb_of, repeats=args.repeats, seed=100)
     qt = run_open_set(build_observations(recs, set(splits["test"]), "tsuga_canadensis", 3, 2), emb_of,
                       repeats=args.repeats, seed=200)
 
@@ -90,7 +102,7 @@ def main() -> None:
                       global_threshold=float(t_global), target_fmr=args.target_fmr,
                       view_contradiction_margin=max(margin, 0.0), view_match_threshold=float(t_view),
                       fusers={"+".join(FEATS): fuser},
-                      provenance={"fitted_on": "hemlock val trees (identity-disjoint from train/test)",
+                      provenance={"fitted_on": f"{args.calib_species} val trees (identity-disjoint from train/test)",
                                   "n_val_queries": len(qv), "n_val_candidate_pairs": int(len(yv)),
                                   "embeddings": args.emb, "date": time.strftime("%Y-%m-%d")})
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -114,6 +126,17 @@ def main() -> None:
         m["uncertain_rate_known"] = known.count("uncertain") / max(len(known), 1)
         m["uncertain_rate_new"] = new.count("uncertain") / max(len(new), 1)
         report[name] = {k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()}
+    # Gallery-size-aware global threshold (per-pair val impostors -> test gallery size)
+    _, pair_imp = all_pairs(qv)
+    n_test_gallery = int(np.median([len(q.tree_ids) for q in qt]))
+    t_ga = threshold_for_gallery(pair_imp, n_test_gallery, args.target_fmr)
+    m = open_set_metrics(*decide_global(qt, t_ga))
+    report["global_threshold_gallery_aware"] = {"threshold": round(t_ga, 4), "n_gallery": n_test_gallery,
+                                                **{k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()}}
+    m = open_set_metrics(*decide_global(qt, t_global))
+    report["global_threshold_max_impostor"] = {"threshold": round(t_global, 4),
+                                               **{k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()}}
+    report["pair_impostor_scores_val"] = {"n": int(len(pair_imp))}
     Path(args.report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.report).write_text(json.dumps(report, indent=2))
     print(json.dumps({k: v for k, v in report.items() if k != "calibration"}, indent=1))

@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..acquisition.interfaces import Frame
 from ..acquisition.mocks import LocalFileStorage
-from ..acquisition.protocol import GUIDED_VIEWS, MAX_VIEWS, MIN_VIEWS
+from ..acquisition.protocol import GUIDED_VIEWS, MAX_TOTAL_VIEWS, MAX_VIEWS, MIN_VIEWS, next_view, spec_for
 from ..database.repository import TreeRepository
 from ..pipeline.inference import HemlockSentinel, ObservationResult, PipelineConfig, ViewResult
 from ..preprocessing import decode_image
@@ -102,15 +102,16 @@ def create_app(pipeline: HemlockSentinel, demo: bool = False) -> FastAPI:
     @app.get("/api/protocol")
     def protocol():
         return {"views": [asdict(v) for v in GUIDED_VIEWS], "min_views": MIN_VIEWS, "max_views": MAX_VIEWS,
+                "max_total_views": MAX_TOTAL_VIEWS,
                 "demo": demo, "model_version": getattr(pipeline.runtime, "version", "?")}
 
     @app.post("/api/session")
     def new_session():
-        return {"session_id": sessions.new()}
+        return {"session_id": sessions.new(), "next": asdict(GUIDED_VIEWS[0])}
 
     @app.post("/api/session/{sid}/view")
     async def add_view(sid: str, image: UploadFile = File(...), heading_deg: float | None = Form(None),
-                       replace_index: int | None = Form(None)):
+                       view_key: str | None = Form(None)):
         s = sessions.get(sid)
         data = await image.read()
         if len(data) > 25_000_000:
@@ -120,32 +121,50 @@ def create_app(pipeline: HemlockSentinel, demo: bool = False) -> FastAPI:
         except Exception as e:  # noqa: BLE001
             raise HTTPException(400, f"cannot decode image: {e}") from e
         views: list[ViewResult] = s["views"]
-        accepted = [v for v in views if v.accepted]
-        idx = len(accepted) if replace_index is None else replace_index
-        if idx >= MAX_VIEWS:
-            raise HTTPException(400, f"at most {MAX_VIEWS} views")
-        prev = [v for v in accepted if v.index != idx]
-        vr = pipeline.process_view(Frame(rgb, time.time(), encoded=data, heading_deg=heading_deg), idx, prev)
+        captured = {v.view_type for v in views}
+        if view_key is None:  # default: the view the server asked for last
+            nxt = s.get("next") or next_view(captured)
+            if nxt is None:
+                raise HTTPException(400, "all views captured")
+            view_key = nxt.key
+        try:
+            spec_for(view_key)
+        except KeyError as e:
+            raise HTTPException(400, f"unknown view {view_key}") from e
+        if len(views) >= MAX_TOTAL_VIEWS:
+            raise HTTPException(400, f"at most {MAX_TOTAL_VIEWS} views")
+        prev = [v for v in views if v.view_type != view_key]
+        vr = pipeline.process_view(Frame(rgb, time.time(), encoded=data, heading_deg=heading_deg),
+                                   len(prev), prev, view_key=view_key)
         del rgb
         if vr.accepted:
-            s["views"] = sorted(prev + [vr], key=lambda v: v.index)
-        n_ok = len(s["views"])
-        nxt = GUIDED_VIEWS[n_ok] if n_ok < MAX_VIEWS else None
-        return {"view": _view_json(vr), "accepted_views": n_ok, "progress": n_ok / MAX_VIEWS,
-                "can_identify": n_ok >= MIN_VIEWS, "next": asdict(nxt) if nxt else None}
+            s["views"] = prev + [vr]
+            captured = {v.view_type for v in s["views"]}
+            s["next"] = next_view(captured, need_identity=s.get("need_identity", False))
+        else:
+            s["next"] = spec_for(view_key)  # retake the same view
+        n_std = sum(1 for v in s["views"] if v.view_type in {g.key for g in GUIDED_VIEWS})
+        n_id = sum(1 for v in s["views"] if spec_for(v.view_type).identity_view)
+        nxt = s["next"]
+        return {"view": _view_json(vr), "accepted_views": len(s["views"]), "progress": min(1.0, n_std / MAX_VIEWS),
+                "can_identify": n_id >= MIN_VIEWS, "next": asdict(nxt) if nxt else None}
 
     @app.post("/api/session/{sid}/identify")
     def identify(sid: str, force_commit: bool = Form(False)):
         s = sessions.get(sid)
         views = s["views"]
         r = pipeline.identify(views, commit=False)
-        # Ambiguous: ask for another view while the protocol has room, otherwise
-        # store the observation unassigned for later review (never auto-merge).
-        if r.status == "uncertain" and len(views) < MAX_VIEWS and not force_commit:
-            out = _result_json(r)
-            out["action"] = "capture_another_view"
-            out["next"] = asdict(GUIDED_VIEWS[len(views)])
-            return out
+        # Ambiguous: ask for another TRUNK view while any remain (more trunk views is the
+        # measured lever), otherwise store unassigned for user review (never auto-merge).
+        if r.status == "uncertain" and not force_commit:
+            s["need_identity"] = True
+            nxt = next_view({v.view_type for v in views}, need_identity=True)
+            if nxt is not None:
+                s["next"] = nxt
+                out = _result_json(r)
+                out["action"] = "capture_another_view"
+                out["next"] = asdict(nxt)
+                return out
         if r.status == "recapture":
             return {**_result_json(r), "action": "retake"}
         r = pipeline.commit(views, r)
@@ -166,6 +185,22 @@ def create_app(pipeline: HemlockSentinel, demo: bool = False) -> FastAPI:
         elif pipeline.repo.get_tree(tree_id) is None:
             raise HTTPException(404, "unknown tree")
         pipeline.repo.assign_observation(r.observation_id, tree_id, "user_confirmed")
+        pipeline.index.invalidate(r.species.species)
+        sessions.drop(sid)
+        return {"tree_id": tree_id}
+
+    @app.post("/api/session/{sid}/correct")
+    def correct(sid: str, tree_id: str = Form(...)):
+        """User says the committed observation is actually tree `tree_id` (one-tap correction
+        from the candidate list). Moves the observation; a tree created by this observation
+        alone is retired (merged), never reused."""
+        s = sessions.get(sid)
+        r: ObservationResult | None = s.get("result")
+        if r is None or r.observation_id is None:
+            raise HTTPException(400, "nothing to correct")
+        if pipeline.repo.get_tree(tree_id) is None:
+            raise HTTPException(404, "unknown tree")
+        pipeline.repo.reassign_observation(r.observation_id, tree_id)
         pipeline.index.invalidate(r.species.species)
         sessions.drop(sid)
         return {"tree_id": tree_id}

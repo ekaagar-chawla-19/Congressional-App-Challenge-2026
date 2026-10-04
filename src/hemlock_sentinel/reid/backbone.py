@@ -85,3 +85,22 @@ def trunk_tail(name: str, pretrained: bool = True, frozen: int | None = None, **
     else:
         raise ValueError(f"no trunk/tail split defined for {name}")
     return trunk, tail, int(m.num_features), k
+
+
+def last_block_split(name: str, pretrained: bool = True, **timm_kwargs):
+    """For controlled ablations: (prefix, last) where prefix maps the trunk_tail()
+    cache to the input of the LAST block, and last = last block + final layers.
+
+    EfficientNetV2-M: prefix = blocks[5][:-1]; last = blocks[5][-1] + conv_head + bn2 (2.3 M params).
+    DINOv2-S/14:      prefix = blocks[8:11];   last = blocks[11] + norm, tokens -> fmap (1.8 M params).
+    """
+    m = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="", **timm_kwargs)
+    if name.startswith("efficientnetv2"):
+        prefix = nn.Sequential(*m.blocks[5][:-1])
+        last = nn.Sequential(m.blocks[5][-1:], m.conv_head, m.bn2)
+    elif "dinov2" in name or name.startswith("vit"):
+        prefix = nn.Sequential(*m.blocks[8:-1])
+        last = _ViTTail(m.blocks[-1:], m.norm, getattr(m, "num_prefix_tokens", 1))
+    else:
+        raise ValueError(name)
+    return prefix, last, int(m.num_features)

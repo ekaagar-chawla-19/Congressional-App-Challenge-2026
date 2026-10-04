@@ -101,7 +101,7 @@
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
-let proto = null, sid = null, accepted = 0, heading = null, stream = null;
+let proto = null, sid = null, accepted = 0, heading = null, stream = null, nextView = null;
 
 const ring = $("ring");
 const perim = 2 * (284 + 384) - (8 - 2 * Math.PI) * 30; // rounded-rect perimeter
@@ -115,12 +115,19 @@ function setProgress(p) {
     `<span class="dot ${i < accepted ? "done" : ""} ${i === accepted ? "cur" : ""}"></span>`).join("");
 }
 
-function showView(i) {
-  const v = proto.views[Math.min(i, proto.max_views - 1)];
-  $("step").textContent = i < proto.max_views ? `View ${i + 1}/${proto.max_views}${v.required ? "" : " (optional)"}` : "All views captured";
-  $("vtitle").textContent = i < proto.max_views ? v.title : "Ready";
-  $("instr").textContent = i < proto.max_views ? v.instruction : "Tap Identify tree.";
-  $("shoot").disabled = i >= proto.max_views;
+function showView(v) {
+  nextView = v;
+  if (!v) {
+    $("step").textContent = "All views captured";
+    $("vtitle").textContent = "Ready"; $("instr").textContent = "Tap Identify tree.";
+    $("shoot").disabled = true; return;
+  }
+  const i = proto.views.findIndex(x => x.key === v.key);
+  $("step").textContent = i >= 0 ? `View ${i + 1}/${proto.max_views}${v.required ? "" : " (optional)"}`
+                                 : `Extra trunk view (${accepted + 1})`;
+  $("vtitle").textContent = v.title;
+  $("instr").textContent = v.instruction;
+  $("shoot").disabled = false;
 }
 
 function feedback(html, cls) { $("feedback").innerHTML = html ? `<div class="msg ${cls}">${html}</div>` : ""; }
@@ -140,9 +147,10 @@ window.addEventListener("deviceorientationabsolute", (e) => { if (e.alpha != nul
 window.addEventListener("deviceorientation", (e) => { if (e.webkitCompassHeading != null) heading = e.webkitCompassHeading; });
 
 async function newSession() {
-  sid = (await (await fetch("/api/session", {method: "POST"})).json()).session_id;
+  const j = await (await fetch("/api/session", {method: "POST"})).json();
+  sid = j.session_id;
   accepted = 0; $("result").innerHTML = ""; feedback("");
-  $("identify").disabled = true; showView(0); setProgress(0);
+  $("identify").disabled = true; showView(j.next); setProgress(0);
 }
 
 async function grabFrame() {
@@ -157,6 +165,7 @@ async function grabFrame() {
 async function sendView(blob) {
   const fd = new FormData();
   fd.append("image", blob, "view.jpg");
+  if (nextView) fd.append("view_key", nextView.key);
   if (heading != null) fd.append("heading_deg", heading.toFixed(1));
   $("shoot").disabled = true;
   feedback("Checking image…", "");
@@ -165,12 +174,12 @@ async function sendView(blob) {
   if (!res.ok) { feedback(j.detail || "Upload failed", "bad"); $("shoot").disabled = false; return; }
   if (j.view.accepted) {
     accepted = j.accepted_views;
-    feedback(`View ${j.view.index + 1} accepted.`, "ok");
+    feedback(`View accepted (${accepted} so far).`, "ok");
   } else {
-    feedback(`<b>Retake view ${j.view.index + 1}:</b> ${j.view.problems.join("; ")}`, "bad");
+    feedback(`<b>Retake this view:</b> ${j.view.problems.join("; ")}`, "bad");
   }
   setProgress(j.progress);
-  showView(accepted);
+  showView(j.next);
   $("identify").disabled = !j.can_identify;
 }
 
@@ -203,13 +212,20 @@ function renderResult(j) {
       `</tbody></table>`;
   }
   if (j.action === "capture_another_view") {
-    html += `<div class="row"><button class="primary" onclick="document.getElementById('shoot').scrollIntoView()">Capture another view</button>` +
+    showView(j.next);
+    html += `<div class="row"><button class="primary" onclick="document.getElementById('shoot').scrollIntoView()">Capture extra trunk view</button>` +
             `<button class="secondary" onclick="identify(true)">Save as unresolved</button></div>`;
   } else if (j.action === "review" && j.status === "uncertain") {
     html += `<p>Saved unresolved. Choose:</p><div class="row">` +
       (j.candidates || []).slice(0, 2).map(c => `<button class="secondary" onclick="resolve('${c.tree_id}')">It is ${c.tree_id}</button>`).join("") +
       `<button class="secondary" onclick="resolve('new')">New tree</button></div>`;
   } else if (j.action === "done") {
+    const alts = (j.candidates || []).filter(c => c.tree_id !== j.tree_id).slice(0, 3);
+    if (alts.length) {
+      html += `<p class="step">Not right? Pick the tree this really is:</p><div class="row">` +
+        alts.map(c => `<button class="secondary" onclick="correct('${c.tree_id}')">It's ${c.tree_id}</button>`).join("") +
+        `</div>`;
+    }
     html += `<div class="row"><button class="primary" onclick="newSession()">Next tree</button></div>`;
   }
   if (j.timings_ms) html += `<p class="step">Decision time: ${j.timings_ms.identify_total_ms ?? "–"} ms</p>`;
@@ -220,6 +236,13 @@ async function resolve(tid) {
   const fd = new FormData(); fd.append("tree_id", tid);
   const j = await (await fetch(`/api/session/${sid}/resolve`, {method: "POST", body: fd})).json();
   $("result").innerHTML = `<div class="card"><div class="big">Saved to ${j.tree_id}</div>` +
+    `<div class="row"><button class="primary" onclick="newSession()">Next tree</button></div></div>`;
+}
+
+async function correct(tid) {
+  const fd = new FormData(); fd.append("tree_id", tid);
+  const j = await (await fetch(`/api/session/${sid}/correct`, {method: "POST", body: fd})).json();
+  $("result").innerHTML = `<div class="card"><div class="big">Corrected: saved to ${j.tree_id}</div>` +
     `<div class="row"><button class="primary" onclick="newSession()">Next tree</button></div></div>`;
 }
 

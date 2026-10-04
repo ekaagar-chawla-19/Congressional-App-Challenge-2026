@@ -99,3 +99,16 @@ def test_mixed_capture_is_uncertain_not_new():
     assert d.kind == "uncertain" and d.tree_id is None and "view 1" in d.reason
     cal.view_match_threshold = None
     assert decide(feats, cal, vs, ["H-001", "H-002"]).kind == "new"
+
+
+def test_gallery_aware_threshold_controls_open_set_fmr():
+    from hemlock_sentinel.reid.calibration import threshold_for_gallery
+
+    rng = np.random.default_rng(0)
+    pairs = rng.normal(0.1, 0.1, 200_000)
+    for n in (5, 50):
+        t = threshold_for_gallery(pairs, n, 0.05)
+        # simulate new-tree queries against n wrong trees
+        best = rng.normal(0.1, 0.1, (20_000, n)).max(1)
+        assert abs((best >= t).mean() - 0.05) < 0.01
+    assert threshold_for_gallery(pairs, 50, 0.05) > threshold_for_gallery(pairs, 5, 0.05)

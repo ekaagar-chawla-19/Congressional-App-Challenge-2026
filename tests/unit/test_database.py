@@ -64,3 +64,16 @@ def test_failed_transaction_rolls_back(tmp_path):
             c.execute("INSERT INTO trees(tree_id, species, created_at, last_seen_at) VALUES('X-1','s',0,0)")
             raise RuntimeError
     assert r.get_tree("X-1") is None
+
+
+def test_reassign_retires_single_observation_tree(tmp_path):
+    r = TreeRepository(tmp_path / "t.db")
+    a = r.create_tree("tsuga_canadensis", "H")
+    r.add_observation(_obs(a, np.eye(4)[0], t=1.0))
+    b = r.create_tree("tsuga_canadensis", "H")  # wrongly created "new" tree
+    oid = r.add_observation(_obs(b, np.eye(4)[1], t=2.0))
+    r.reassign_observation(oid, a)
+    assert r.get_tree(a).observation_count == 2
+    assert r.get_tree(b).merged_into == a
+    assert [t.tree_id for t in r.list_trees()] == [a]
+    assert r.create_tree("tsuga_canadensis", "H") == "H-003"  # b's number is not reused
