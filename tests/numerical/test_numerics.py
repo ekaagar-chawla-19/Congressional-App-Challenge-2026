@@ -1,0 +1,94 @@
+"""Numerical properties of embeddings and similarity."""
+
+import numpy as np
+import pytest
+import torch
+
+from hemlock_sentinel.database.models import from_blob, to_blob
+from hemlock_sentinel.reid.multiview import aggregate_mean, l2_normalize
+from hemlock_sentinel.reid.retrieval import EmbeddingIndex, cosine_similarity
+
+
+@pytest.fixture(scope="module")
+def tiny_net():
+    from hemlock_sentinel.reid.embedding import ReIDConfig, ReIDNet
+
+    # Small timm backbone with random weights: tests the wiring, not accuracy.
+    return ReIDNet(ReIDConfig(backbone="efficientnet_b0", pretrained=False, image_size=64, n_species=3)).eval()
+
+
+def test_embedding_dimensionality(tiny_net):
+    with torch.no_grad():
+        emb, logits = tiny_net(torch.rand(2, 3, 64, 64))
+    assert emb.shape == (2, tiny_net.backbone.num_features) and logits.shape == (2, 3)
+
+
+def test_primary_backbone_dimension_matches_miewid():
+    import timm
+
+    m = timm.create_model("efficientnetv2_rw_m", pretrained=False, num_classes=0)
+    assert m.num_features == 2152  # MiewID embedding width (backbone width, no FC)
+
+
+def test_normalised_embeddings_have_unit_norm():
+    x = np.random.default_rng(0).normal(size=(10, 2152)) * 37
+    assert np.allclose(np.linalg.norm(l2_normalize(x), axis=1), 1.0, atol=1e-5)
+
+
+def test_cosine_range_and_identity():
+    rng = np.random.default_rng(1)
+    a, b = rng.normal(size=(20, 64)), rng.normal(size=(30, 64))
+    s = cosine_similarity(a, b)
+    assert s.min() >= -1 and s.max() <= 1
+    assert np.allclose(np.diag(cosine_similarity(a, a)), 1.0, atol=1e-5)
+
+
+def test_known_cases():
+    e = np.eye(3)
+    assert cosine_similarity(e[0], e[1])[0, 0] == pytest.approx(0.0, abs=1e-7)
+    assert cosine_similarity(e[0], -e[0])[0, 0] == pytest.approx(-1.0)
+    assert cosine_similarity(e[0], 5 * e[0])[0, 0] == pytest.approx(1.0)
+    assert cosine_similarity([1, 1, 0], [1, 0, 0])[0, 0] == pytest.approx(2 ** -0.5)
+
+
+def test_zero_vector_is_safe():
+    assert np.all(np.isfinite(l2_normalize(np.zeros((1, 4)))))
+
+
+def test_fp16_storage_changes_cosine_by_less_than_1e3():
+    rng = np.random.default_rng(2)
+    a, b = l2_normalize(rng.normal(size=2152)), l2_normalize(rng.normal(size=2152))
+    a16, b16 = from_blob(to_blob(a)), from_blob(to_blob(b))
+    assert abs(float(a @ b) - float(l2_normalize(a16) @ l2_normalize(b16))) < 1e-3
+    idx = EmbeddingIndex(2152)
+    idx.add("T", a)
+    assert idx.tree_scores(a)[0, 0] == pytest.approx(1.0, abs=1e-3)
+
+
+def test_mean_aggregation_of_identical_views_is_the_view():
+    v = l2_normalize(np.random.default_rng(3).normal(size=128))
+    assert np.allclose(aggregate_mean(np.stack([v, v, v])), v, atol=1e-6)
+
+
+def test_eval_mode_embedding_is_deterministic(tiny_net):
+    x = torch.rand(1, 3, 64, 64)
+    with torch.no_grad():
+        assert torch.equal(tiny_net(x)[0], tiny_net(x)[0])
+
+
+def test_learned_aggregators_shapes_and_masks():
+    from hemlock_sentinel.reid.multiview import AttentionPool, MultiViewTransformer
+
+    torch.manual_seed(0)
+    views = torch.randn(2, 5, 32)
+    mask = torch.tensor([[1, 1, 1, 0, 0], [1, 1, 1, 1, 1]], dtype=torch.bool)
+    for m in (AttentionPool(32), MultiViewTransformer(32, 16, 1, 2)):
+        m.eval()
+        with torch.no_grad():
+            out = m(views, mask)
+            assert out.shape == (2, 32)
+            assert torch.allclose(out.norm(dim=1), torch.ones(2), atol=1e-5)
+            # padded views must not change the output
+            v2 = views.clone()
+            v2[0, 3:] = torch.randn(2, 32) * 100
+            assert torch.allclose(m(v2, mask)[0], out[0], atol=1e-5)

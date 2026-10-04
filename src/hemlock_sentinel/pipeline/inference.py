@@ -62,6 +62,8 @@ class ObservationResult:
     observation_id: str | None
     message: str
     timings_ms: dict = field(default_factory=dict)
+    aggregated: np.ndarray | None = None
+    committed: bool = False
 
 
 @dataclass
@@ -162,8 +164,10 @@ class HemlockSentinel:
         msg = {"existing": f"Matched existing tree {decision.tree_id}",
                "new": "No reliable match: registering a new tree",
                "uncertain": decision.reason}[decision.kind]
-        res = self._finish(views, species, decision, decision.kind, agg, msg, commit, now, t0)
+        res = self._finish(views, species, decision, decision.kind, agg, msg, False, now, t0)
         res.timings_ms.update(timings)
+        if commit:
+            self.commit(views, res, now)
         return res
 
     # ---------------------------------------------------------------- helpers
@@ -199,48 +203,57 @@ class HemlockSentinel:
 
     def _finish(self, views, species, decision, status, agg, message, commit, now, t0) -> ObservationResult:
         tree_id = decision.tree_id if decision is not None and decision.kind == "existing" else None
-        oid = None
+        res = ObservationResult(status, tree_id, species, decision, None, message,
+                                {"identify_total_ms": (time.perf_counter() - t0) * 1000}, agg)
         if commit:
-            if status == "new":
-                tree_id = self.repo.create_tree(species.species, ID_PREFIX.get(species.species, "T"), now)
-            fix = self.gps.fix() if self.gps else None
-            env = self.sensors.read().values if self.sensors else {}
-            vrecs = []
-            for v in views:
-                if not v.accepted:
-                    continue
-                img_key = self.storage.put(v.image_bytes, ".jpg") if v.image_bytes else None
-                lf_key = None
-                if v.local is not None:
-                    buf = io.BytesIO()
-                    np.savez_compressed(buf, kp=v.local.keypoints, desc=v.local.descriptors)
-                    lf_key = self.storage.put(buf.getvalue(), ".npz")
-                d_key = None
-                if v.depth is not None:
-                    buf = io.BytesIO()
-                    np.savez_compressed(buf, depth=v.depth.depth_m.astype(np.float16),
-                                        K=np.array([v.depth.fx, v.depth.fy, v.depth.cx, v.depth.cy]))
-                    d_key = self.storage.put(buf.getvalue(), ".npz")
-                vrecs.append(ViewRecord(v.index, v.view_type, img_key, v.embedding,
-                                        {**v.quality.metrics, "weight": v.quality.weight,
-                                         "faces_blurred": v.faces_blurred}, d_key, lf_key, v.heading_deg))
-            obs = ObservationRecord(
-                uuid.uuid4().hex, tree_id if status in ("existing", "new") else None, now, status,
-                species.species if species else None, species.confidence if species else None,
-                decision.probability if decision else None, agg,
-                fix.lat if fix else None, fix.lon if fix else None, fix.accuracy_m if fix else None,
-                getattr(self.runtime, "version", None), env,
-                {"candidates": decision.candidates if decision else [],
-                 "contradicting_views": decision.consistency.contradicting_views
-                 if decision and decision.consistency else []},
-                vrecs)
-            oid = self.repo.add_observation(obs)
-            if obs.tree_id is not None and agg is not None:
-                self.index.add(species.species, obs.tree_id, agg, oid)
-            if status == "new":
-                message = f"New tree registered as {tree_id}"
-        return ObservationResult(status, tree_id, species, decision, oid, message,
-                                 {"identify_total_ms": (time.perf_counter() - t0) * 1000})
+            self.commit(views, res, now)
+        return res
+
+    def commit(self, views: list[ViewResult], res: ObservationResult, now: float | None = None) -> ObservationResult:
+        """Persist an identification result (new tree ID, observation, views, blobs). Idempotent."""
+        if res.committed or res.status == "recapture":
+            return res
+        now = time.time() if now is None else now
+        species, decision, status, agg = res.species, res.decision, res.status, res.aggregated
+        if status == "new":
+            res.tree_id = self.repo.create_tree(species.species, ID_PREFIX.get(species.species, "T"), now)
+            res.message = f"New tree registered as {res.tree_id}"
+        fix = self.gps.fix() if self.gps else None
+        env = self.sensors.read().values if self.sensors else {}
+        vrecs = []
+        for v in views:
+            if not v.accepted:
+                continue
+            img_key = self.storage.put(v.image_bytes, ".jpg") if v.image_bytes else None
+            lf_key = None
+            if v.local is not None:
+                buf = io.BytesIO()
+                np.savez_compressed(buf, kp=v.local.keypoints, desc=v.local.descriptors)
+                lf_key = self.storage.put(buf.getvalue(), ".npz")
+            d_key = None
+            if v.depth is not None:
+                buf = io.BytesIO()
+                np.savez_compressed(buf, depth=v.depth.depth_m.astype(np.float16),
+                                    K=np.array([v.depth.fx, v.depth.fy, v.depth.cx, v.depth.cy]))
+                d_key = self.storage.put(buf.getvalue(), ".npz")
+            vrecs.append(ViewRecord(v.index, v.view_type, img_key, v.embedding,
+                                    {**v.quality.metrics, "weight": v.quality.weight,
+                                     "faces_blurred": v.faces_blurred}, d_key, lf_key, v.heading_deg))
+        obs = ObservationRecord(
+            uuid.uuid4().hex, res.tree_id if status in ("existing", "new") else None, now, status,
+            species.species if species else None, species.confidence if species else None,
+            decision.probability if decision else None, agg,
+            fix.lat if fix else None, fix.lon if fix else None, fix.accuracy_m if fix else None,
+            getattr(self.runtime, "version", None), env,
+            {"candidates": decision.candidates if decision else [],
+             "contradicting_views": decision.consistency.contradicting_views
+             if decision and decision.consistency else []},
+            vrecs)
+        res.observation_id = self.repo.add_observation(obs)
+        if obs.tree_id is not None and agg is not None:
+            self.index.add(species.species, obs.tree_id, agg, res.observation_id)
+        res.committed = True
+        return res
 
 
 def _is_identity_view(view_type: str) -> bool:

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hemlock Sentinel</title>
+<style>
+  :root {
+    --bg: #0f1411; --panel: #18201b; --text: #e8efe9; --muted: #9bb0a2;
+    --green: #2fbf63; --track: #2b3a30; --warn: #f0b429; --bad: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; }
+  header h1 { font-size: 18px; margin: 0; }
+  nav button { background: none; border: 1px solid var(--track); color: var(--muted);
+               border-radius: 8px; padding: 6px 10px; }
+  nav button.on { color: var(--text); border-color: var(--green); }
+  main { max-width: 520px; margin: 0 auto; padding: 0 16px 24px; }
+  .banner { background: #3a2f10; color: var(--warn); padding: 8px 12px; border-radius: 8px;
+            font-size: 14px; margin-bottom: 12px; }
+  .step { color: var(--muted); font-size: 14px; }
+  .title { font-size: 22px; font-weight: 600; margin: 2px 0 4px; }
+  .instr { color: var(--muted); min-height: 44px; margin: 0 0 12px; }
+  .stage { position: relative; width: 100%; aspect-ratio: 3 / 4; }
+  .stage video, .stage img.preview { position: absolute; inset: 7%; width: 86%; height: 86%;
+      object-fit: cover; border-radius: 18px; background: #000; }
+  .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .ring-track { fill: none; stroke: var(--track); stroke-width: 10; }
+  .ring { fill: none; stroke: var(--green); stroke-width: 10; stroke-linecap: round;
+          transition: stroke-dashoffset .4s ease; }
+  .guide { position: absolute; left: 34%; right: 34%; top: 12%; bottom: 12%;
+           border: 2px dashed rgba(255,255,255,.35); border-radius: 10px; pointer-events: none; }
+  .dots { display: flex; gap: 10px; justify-content: center; margin: 12px 0 4px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--green); }
+  .dot.done { background: var(--green); }
+  .dot.cur { box-shadow: 0 0 0 3px rgba(47,191,99,.35); }
+  .pct { text-align: center; color: var(--muted); font-size: 14px; }
+  .row { display: flex; gap: 10px; margin-top: 14px; }
+  button.primary, button.secondary, label.secondary {
+    flex: 1; padding: 14px; font-size: 16px; border-radius: 12px; border: 0; text-align: center; }
+  button.primary { background: var(--green); color: #05230f; font-weight: 600; }
+  button.primary:disabled { opacity: .4; }
+  button.secondary, label.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--track); }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--panel); font-size: 15px; }
+  .msg.bad { border-left: 4px solid var(--bad); }
+  .msg.ok { border-left: 4px solid var(--green); }
+  .card { background: var(--panel); border-radius: 14px; padding: 16px; margin-top: 14px; }
+  .card h2 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .big { font-size: 26px; font-weight: 700; }
+  .kv { display: flex; justify-content: space-between; padding: 4px 0; color: var(--muted); font-size: 14px; }
+  .kv b { color: var(--text); font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--track); }
+  th { color: var(--muted); font-weight: 500; }
+  .hidden { display: none !important; }
+  a { color: var(--green); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hemlock Sentinel</h1>
+  <nav><button id="tabCapture" class="on">Capture</button> <button id="tabTrees">Trees</button></nav>
+</header>
+<main>
+  <div id="demo" class="banner hidden">Demo mode: mock model, uncalibrated. IDs are not meaningful.</div>
+
+  <section id="capture">
+    <div class="step" id="step">View 1/5</div>
+    <div class="title" id="vtitle">Front / trunk</div>
+    <p class="instr" id="instr"></p>
+    <div class="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <img id="still" class="preview hidden" alt="">
+      <div class="guide"></div>
+      <svg viewBox="0 0 300 400" aria-hidden="true">
+        <rect class="ring-track" x="8" y="8" width="284" height="384" rx="30"/>
+        <rect id="ring" class="ring" x="8" y="8" width="284" height="384" rx="30"/>
+      </svg>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="pct" id="pct">Progress: 0%</div>
+    <div class="row">
+      <button class="primary" id="shoot">Capture view</button>
+      <label class="secondary" id="fileLabel">Upload<input id="file" type="file" accept="image/*" capture="environment" hidden></label>
+    </div>
+    <div class="row">
+      <button class="secondary" id="identify" disabled>Identify tree</button>
+      <button class="secondary" id="restart">Start over</button>
+    </div>
+    <div id="feedback"></div>
+    <div id="result"></div>
+  </section>
+
+  <section id="trees" class="hidden">
+    <div class="card"><h2>Registered trees</h2><table id="treeTable"><thead>
+      <tr><th>ID</th><th>Species</th><th>Observations</th><th>Last seen</th></tr></thead><tbody></tbody></table></div>
+    <div id="treeDetail"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let proto = null, sid = null, accepted = 0, heading = null, stream = null;
+
+const ring = $("ring");
+const perim = 2 * (284 + 384) - (8 - 2 * Math.PI) * 30; // rounded-rect perimeter
+ring.style.strokeDasharray = perim;
+
+function setProgress(p) {
+  ring.style.strokeDashoffset = perim * (1 - p);
+  $("pct").textContent = `Progress: ${Math.round(p * 100)}%`;
+  const n = proto.max_views;
+  $("dots").innerHTML = Array.from({length: n}, (_, i) =>
+    `<span class="dot ${i < accepted ? "done" : ""} ${i === accepted ? "cur" : ""}"></span>`).join("");
+}
+
+function showView(i) {
+  const v = proto.views[Math.min(i, proto.max_views - 1)];
+  $("step").textContent = i < proto.max_views ? `View ${i + 1}/${proto.max_views}${v.required ? "" : " (optional)"}` : "All views captured";
+  $("vtitle").textContent = i < proto.max_views ? v.title : "Ready";
+  $("instr").textContent = i < proto.max_views ? v.instruction : "Tap Identify tree.";
+  $("shoot").disabled = i >= proto.max_views;
+}
+
+function feedback(html, cls) { $("feedback").innerHTML = html ? `<div class="msg ${cls}">${html}</div>` : ""; }
+const pctText = (x) => `${Math.round(x * 100)}%`;
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment", width: {ideal: 1920}}});
+    $("video").srcObject = stream;
+  } catch (e) {
+    $("video").classList.add("hidden");
+    feedback("Live camera unavailable (needs HTTPS or localhost). Use Upload to take photos.", "bad");
+  }
+}
+
+window.addEventListener("deviceorientationabsolute", (e) => { if (e.alpha != null) heading = (360 - e.alpha) % 360; });
+window.addEventListener("deviceorientation", (e) => { if (e.webkitCompassHeading != null) heading = e.webkitCompassHeading; });
+
+async function newSession() {
+  sid = (await (await fetch("/api/session", {method: "POST"})).json()).session_id;
+  accepted = 0; $("result").innerHTML = ""; feedback("");
+  $("identify").disabled = true; showView(0); setProgress(0);
+}
+
+async function grabFrame() {
+  const v = $("video");
+  if (!stream || !v.videoWidth) return null;
+  const c = document.createElement("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.92));
+}
+
+async function sendView(blob) {
+  const fd = new FormData();
+  fd.append("image", blob, "view.jpg");
+  if (heading != null) fd.append("heading_deg", heading.toFixed(1));
+  $("shoot").disabled = true;
+  feedback("Checking image…", "");
+  const res = await fetch(`/api/session/${sid}/view`, {method: "POST", body: fd});
+  const j = await res.json();
+  if (!res.ok) { feedback(j.detail || "Upload failed", "bad"); $("shoot").disabled = false; return; }
+  if (j.view.accepted) {
+    accepted = j.accepted_views;
+    feedback(`View ${j.view.index + 1} accepted.`, "ok");
+  } else {
+    feedback(`<b>Retake view ${j.view.index + 1}:</b> ${j.view.problems.join("; ")}`, "bad");
+  }
+  setProgress(j.progress);
+  showView(accepted);
+  $("identify").disabled = !j.can_identify;
+}
+
+async function identify(force) {
+  $("identify").disabled = true;
+  const fd = new FormData();
+  if (force) fd.append("force_commit", "true");
+  const j = await (await fetch(`/api/session/${sid}/identify`, {method: "POST", body: fd})).json();
+  renderResult(j);
+  $("identify").disabled = false;
+}
+
+function renderResult(j) {
+  let html = `<div class="card">`;
+  if (j.species) {
+    html += `<h2>Species</h2><div class="big">${j.species.name} — ${pctText(j.species.confidence)}</div>`;
+  }
+  html += `<h2 style="margin-top:14px">Individual</h2>`;
+  if (j.status === "existing") html += `<div class="big">${j.tree_id} — ${pctText(j.probability)}</div><p>${j.message}</p>`;
+  else if (j.status === "new") html += `<div class="big">${j.tree_id} (new)</div><p>${j.message}</p>`;
+  else html += `<div class="big">${j.status.replace("_", " ")}</div><p>${j.message}</p>`;
+  if (j.consistency) {
+    html += `<div class="kv"><span>Views agreeing with top match</span><b>${pctText(j.consistency.agreement)}</b></div>`;
+    if (j.consistency.contradicting_views.length)
+      html += `<div class="kv"><span>Contradicting views</span><b>${j.consistency.contradicting_views.join(", ")}</b></div>`;
+  }
+  if (j.candidates && j.candidates.length) {
+    html += `<table><thead><tr><th>Candidate</th><th>Cosine</th><th>P(same)</th></tr></thead><tbody>` +
+      j.candidates.map(c => `<tr><td>${c.tree_id}</td><td>${c.global.toFixed(3)}</td><td>${pctText(c.probability)}</td></tr>`).join("") +
+      `</tbody></table>`;
+  }
+  if (j.action === "capture_another_view") {
+    html += `<div class="row"><button class="primary" onclick="document.getElementById('shoot').scrollIntoView()">Capture another view</button>` +
+            `<button class="secondary" onclick="identify(true)">Save as unresolved</button></div>`;
+  } else if (j.action === "review" && j.status === "uncertain") {
+    html += `<p>Saved unresolved. Choose:</p><div class="row">` +
+      (j.candidates || []).slice(0, 2).map(c => `<button class="secondary" onclick="resolve('${c.tree_id}')">It is ${c.tree_id}</button>`).join("") +
+      `<button class="secondary" onclick="resolve('new')">New tree</button></div>`;
+  } else if (j.action === "done") {
+    html += `<div class="row"><button class="primary" onclick="newSession()">Next tree</button></div>`;
+  }
+  if (j.timings_ms) html += `<p class="step">Decision time: ${j.timings_ms.identify_total_ms ?? "–"} ms</p>`;
+  $("result").innerHTML = html + `</div>`;
+}
+
+async function resolve(tid) {
+  const fd = new FormData(); fd.append("tree_id", tid);
+  const j = await (await fetch(`/api/session/${sid}/resolve`, {method: "POST", body: fd})).json();
+  $("result").innerHTML = `<div class="card"><div class="big">Saved to ${j.tree_id}</div>` +
+    `<div class="row"><button class="primary" onclick="newSession()">Next tree</button></div></div>`;
+}
+
+async function loadTrees() {
+  const rows = await (await fetch("/api/trees")).json();
+  $("treeTable").querySelector("tbody").innerHTML = rows.map(t =>
+    `<tr><td><a href="#" onclick="showTree('${t.tree_id}');return false">${t.tree_id}</a></td><td>${t.name}</td>` +
+    `<td>${t.observation_count}</td><td>${new Date(t.last_seen_at * 1000).toLocaleDateString()}</td></tr>`).join("");
+}
+
+async function showTree(id) {
+  const t = await (await fetch(`/api/trees/${id}`)).json();
+  $("treeDetail").innerHTML = `<div class="card"><h2>${t.tree_id} history</h2>` + t.observations.map(o =>
+    `<div class="kv"><span>${new Date(o.timestamp * 1000).toLocaleString()}</span><b>${o.decision}` +
+    `${o.match_probability != null ? " · " + pctText(o.match_probability) : ""}</b></div>` +
+    `<div>${o.images.slice(0, 3).map(k => `<img src="/api/image/${k}" style="width:31%;margin:1%;border-radius:6px">`).join("")}</div>`
+  ).join("") + `</div>`;
+}
+
+$("shoot").onclick = async () => {
+  const blob = await grabFrame();
+  if (!blob) { $("file").click(); return; }
+  await sendView(blob);
+};
+$("file").onchange = async (e) => { if (e.target.files[0]) await sendView(e.target.files[0]); e.target.value = ""; };
+$("identify").onclick = () => identify(false);
+$("restart").onclick = newSession;
+$("tabCapture").onclick = () => { $("capture").classList.remove("hidden"); $("trees").classList.add("hidden");
+  $("tabCapture").classList.add("on"); $("tabTrees").classList.remove("on"); };
+$("tabTrees").onclick = () => { $("trees").classList.remove("hidden"); $("capture").classList.add("hidden");
+  $("tabTrees").classList.add("on"); $("tabCapture").classList.remove("on"); loadTrees(); };
+
+(async () => {
+  proto = await (await fetch("/api/protocol")).json();
+  if (proto.demo) $("demo").classList.remove("hidden");
+  await newSession();
+  startCamera();
+})();
+</script>
+</body>
+</html>

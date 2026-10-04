@@ -43,16 +43,19 @@ def test_index_tree_score_is_max_over_observations():
     assert top[0].tree_id == "H-002" and top[0].rank == 1
 
 
-def test_index_blocked_search_matches_unblocked():
+def test_index_matches_brute_force_with_incremental_adds():
     rng = np.random.default_rng(1)
     e = rng.normal(size=(50, 16))
-    ids = [f"T-{i % 7}" for i in range(50)]
-    a = EmbeddingIndex(16, block=4)
-    b = EmbeddingIndex(16, block=4096)
-    a.add_many(ids, e)
-    b.add_many(ids, e)
-    q = rng.normal(size=(3, 16))
-    assert np.allclose(a.tree_scores(q), b.tree_scores(q), atol=1e-6)
+    ids = [f"T-{(i * 3) % 7}" for i in range(50)]  # interleaved tree order
+    idx = EmbeddingIndex(16)
+    for i in range(0, 50, 7):  # incremental adds exercise buffer growth + regrouping
+        end = min(i + 7, 50)
+        idx.add_many(ids[i:end], e[i:end])
+        q = rng.normal(size=(3, 16))
+        s = cosine_similarity(q, e[:end])
+        names = idx.tree_names()
+        expect = np.stack([s[:, [j for j in range(end) if ids[j] == t]].max(1) for t in names], 1)
+        assert np.allclose(idx.tree_scores(q), expect, atol=1e-5)
 
 
 def test_index_dim_mismatch():
@@ -63,6 +66,7 @@ def test_index_dim_mismatch():
 
 def test_empty_index_search():
     assert EmbeddingIndex(4).search(np.ones(4)) == []
+    assert EmbeddingIndex(4).tree_scores(np.ones(4)).shape == (1, 0)
 
 
 def test_cosine_basic():

@@ -18,10 +18,10 @@ PRIMARY_BACKBONE = "efficientnetv2_rw_m"
 class Backbone(nn.Module):
     """Wraps a timm model and returns a (B, C, H, W) feature map."""
 
-    def __init__(self, name: str = PRIMARY_BACKBONE, pretrained: bool = True):
+    def __init__(self, name: str = PRIMARY_BACKBONE, pretrained: bool = True, **timm_kwargs):
         super().__init__()
         self.name = name
-        self.model = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="")
+        self.model = timm.create_model(name, pretrained=pretrained, num_classes=0, global_pool="", **timm_kwargs)
         self.num_features = int(self.model.num_features)
         cfg = self.model.pretrained_cfg
         self.mean = tuple(cfg.get("mean", (0.485, 0.456, 0.406)))
