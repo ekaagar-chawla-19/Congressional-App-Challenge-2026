@@ -151,9 +151,9 @@ def main() -> None:
     val_rows = np.array([i for i, r in enumerate(recs) if r.tree_id in set(splits["val"]) and r.species == "tsuga_canadensis"])
     val_labels = np.array([recs[i].tree_id for i in val_rows])
 
-    meta = json.loads((cache / "meta.json").read_text())
+    meta = json.loads((cache / "meta.json").read_text()) if (cache / "meta.json").exists() else {}
     backbone = meta.get("backbone", "efficientnetv2_rw_m")
-    tail = Tail(backbone, train_stage5=not args.freeze_stage5, img_size=meta["size"],
+    tail = Tail(backbone, train_stage5=not args.freeze_stage5, img_size=meta.get("size"),
                 split=meta.get("split", "trunk"))
     loss_fn = build_loss(args.loss, tail.dim, len(train_trees), class_counts=counts, s=args.s,
                          m_max=args.m_max, k=args.subcenters)

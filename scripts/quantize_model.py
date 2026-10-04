@@ -15,7 +15,6 @@ import random
 import shutil
 from pathlib import Path
 
-import numpy as np
 from onnxruntime.quantization import CalibrationDataReader, CalibrationMethod, QuantFormat, QuantType, quantize_static
 from onnxruntime.quantization.shape_inference import quant_pre_process
 

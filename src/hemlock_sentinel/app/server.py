@@ -19,7 +19,6 @@ import uuid
 from dataclasses import asdict
 from pathlib import Path
 
-import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles

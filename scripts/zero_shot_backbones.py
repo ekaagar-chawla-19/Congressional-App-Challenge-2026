@@ -90,7 +90,7 @@ def main() -> None:
         t0 = time.time()
         if tid == "miewid":
             net = load_miewid()
-            fn = lambda x: net.embed(x)  # noqa: E731  (its trained GeM + BN)
+            fn = net.embed  # its trained GeM + BN
         else:
             kw = {"img_size": size} if "dinov2" in tid else {}
             bb = Backbone(tid, pretrained=True, **kw).eval()

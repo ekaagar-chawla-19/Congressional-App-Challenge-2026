@@ -1,7 +1,6 @@
 """Scenario tests from the acceptance criteria (mock model; real pipeline/DB/storage)."""
 
 import cv2
-import numpy as np
 
 from tests.helpers import build, capture, species_fn_factory, tree_view
 

@@ -1,8 +1,7 @@
 """images -> species -> embedding -> retrieval -> decision -> persistence, with a mock model."""
 
-import numpy as np
 
-from tests.helpers import build, capture, species_fn_factory, tree_view
+from tests.helpers import build, capture, tree_view
 
 
 def test_pipeline_flow_and_persistence(tmp_path):

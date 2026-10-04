@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from hemlock_sentinel.evaluation.benchmarks import closed_set_topk, genuine_impostor, run_open_set
 from hemlock_sentinel.evaluation.metrics import bootstrap_ci, open_set_metrics, retrieval_metrics, roc_auc

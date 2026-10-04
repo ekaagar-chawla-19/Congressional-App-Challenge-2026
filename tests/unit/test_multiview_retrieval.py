@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from hemlock_sentinel.reid.multiview import aggregate_mean, l2_normalize
+from hemlock_sentinel.reid.multiview import aggregate_mean
 from hemlock_sentinel.reid.retrieval import EmbeddingIndex, cosine_similarity
 
 
