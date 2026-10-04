@@ -19,7 +19,7 @@ around the tree, then optionally branching and canopy). Depth is used when
 available. The system:
 
 1. checks image quality and blurs any faces;
-2. runs one shared **EfficientNetV2-M → GeM → BatchNorm** network per view, which gives a species prediction and a 2152-d identity embedding;
+2. runs one shared **DINOv2-S/14 → GeM → BatchNorm** network per view, which gives a species prediction and a 384-d identity embedding. The design started from MiewID's EfficientNetV2-M recipe; DINOv2-S replaced EfficientNetV2-M after controlled experiments roughly doubled test mAP. The GeM → BN head and sub-center ArcFace loss are kept;
 3. refuses to assign an ID unless the species is supported and above a **validated** confidence threshold;
 4. averages the views into one tree embedding and runs a cosine search over every stored observation;
 5. scores the top candidates with global similarity, view agreement and, optionally, local bark keypoints and trunk structure from depth, using a **calibrated** model fitted on validation data;
@@ -80,26 +80,26 @@ Phones only give web pages camera access over HTTPS (or localhost). See
 # 1. data: BarkNet 1.0 (Zenodo 11508014, MIT), species used: PRU PIB PIR PID HEG ERR ERB PEG (+ THO, EPR held out)
 python scripts/prepare_barknet.py --root /data/barknet --out runs/data            # manifest + tree-disjoint splits
 python scripts/calibrate_quality.py                                               # quality thresholds
+python scripts/analyze_overlap.py                                                 # leakage audit (strict regime)
 
-# 2. features + training (CPU budget: frozen trunk is cached once, tail fine-tuned)
-python training/reid/cache_trunk.py --out runs/cache --size 320 --train-augs 4
-python training/reid/train_tail.py --loss subcenter_arcface --epochs 6 --out runs/reid/subcenter
-python training/species/train_head.py --emb runs/reid/subcenter/embeddings.npy --out runs/species/subcenter
+# 2. production model: DINOv2-S/14 (CPU budget: frozen blocks 0-7 cached once, blocks 8-11 fine-tuned)
+python training/reid/cache_trunk.py --backbone vit_small_patch14_dinov2.lvd142m --size 322 --out runs/cache_dinov2
+python training/reid/train_tail.py --cache runs/cache_dinov2 --loss subcenter_arcface --epochs 4 --out runs/reid/dino_deep_multi
+bash   scripts/finalize.sh runs/reid/dino_deep_multi 322    # eval, species head, export, calibration, deployed-path eval
 
-# 3. evaluation, ablations, calibration
-python scripts/evaluate_reid.py --emb runs/reid/subcenter/embeddings.npy --name subcenter --out runs/results/subcenter.json
-python scripts/zero_shot_backbones.py
-bash   scripts/run_ablations.sh
-python training/reid/train_aggregator.py --emb runs/reid/subcenter/embeddings.npy --out runs/results/aggregators.json
-python scripts/evaluate_local.py --emb runs/reid/subcenter/embeddings.npy --out runs/results/local.json
+# 3. comparisons and ablations (docs/experiments.md)
+python scripts/zero_shot_backbones.py                                             # E-backbone
+python training/reid/cache_trunk.py --out runs/cache --size 320                   # EfficientNetV2-M baseline
+python training/reid/train_tail.py --cache runs/cache --epochs 2 --out runs/reid/effnet_deep
+python training/reid/recache_last_block.py --cache runs/cache --out runs/cache_last
+python training/reid/recache_last_block.py --cache runs/cache_dinov2 --out runs/cache_dinov2_last
+bash   scripts/run_ablations.sh                                                   # losses / identities / backbone
+python training/reid/train_aggregator.py --emb <embeddings.npy> --out runs/results/aggregators.json
+python scripts/evaluate_local.py --emb <embeddings.npy> --out runs/results/local.json
 python scripts/evaluate_depth.py
-python scripts/calibrate.py --emb runs/reid/subcenter/embeddings.npy \
-       --species runs/species/subcenter/species_results.json \
-       --out runs/export/calibration.json --report runs/results/decision.json
+python scripts/quantize_model.py --model runs/export/hemlock.onnx --out runs/export/hemlock_int8.onnx --op-types Conv
 
-# 4. export + benchmarks
-python scripts/export_model.py --tail runs/reid/subcenter/tail.pt \
-       --species runs/species/subcenter/species_head.npz --out runs/export/hemlock
+# 4. benchmarks
 python benchmarks/bench_inference.py --runtime onnx --model runs/export/hemlock.onnx --images <jpgs> --out runs/bench/onnx.json
 python benchmarks/bench_retrieval.py
 

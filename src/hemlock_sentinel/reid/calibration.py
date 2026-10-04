@@ -103,6 +103,9 @@ class Calibration:
     # observation as a whole does not match but such a view exists, the capture is
     # mixed/ambiguous and must not silently create a new tree. None = disabled.
     view_match_threshold: float | None = None
+    # Embedding cosine above which a new view is treated as a re-shoot of an earlier
+    # view (scripts/calibrate_duplicate.py). Model-specific, so it lives here.
+    duplicate_cosine: float | None = None
     fusers: dict[str, LogisticCalibrator] = field(default_factory=dict)  # key: "+".join(features)
     provenance: dict = field(default_factory=dict)  # split, n pairs, date — for honesty
 

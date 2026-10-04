@@ -88,6 +88,8 @@ class HemlockSentinel:
         self.storage = storage
         self.cal = calibration
         self.cfg = config or PipelineConfig()
+        if calibration.duplicate_cosine is not None:
+            self.cfg.quality.max_duplicate_cosine = calibration.duplicate_cosine
         self.gps = gps
         self.sensors = sensors
         self.index = IndexCache(repo, runtime.embedding_dim)

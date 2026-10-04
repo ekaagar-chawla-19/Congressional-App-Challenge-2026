@@ -16,11 +16,12 @@ Experimental results that justify each choice are in
                                    │
                     ┌──────────────┴──────────────┐
                     ▼                             ▼
-     EfficientNetV2-M (shared, 1 pass/view)   RootSIFT keypoints (trunk views)
+     DINOv2-S/14 (shared, 1 pass/view)         RootSIFT keypoints (trunk views,
+          │                                        off by default — E-local)
           │                                       │
-          GeM (learned p) → BatchNorm1d           │        depth frame (optional)
+          patch tokens → GeM (learned p) → BN     │        depth frame (optional)
           │                                       │              │
-     2152-d embedding ──► species head (Linear on L2-normed embedding)
+     384-d embedding ──► species head (Linear on L2-normed embedding)
           │                     │                 │              │
           │        species gate (validated threshold)            │
           │                     │                 │              │
@@ -80,21 +81,27 @@ anything is stored**. Original bytes are stored only when no face was found. No
 user identity is attached to observations. If the detector is missing, views
 are tagged `faces_blurred = -1` so unscreened images can be found later.
 
-## 4. Shared backbone: EfficientNetV2-M → GeM → BatchNorm (`reid/`)
+## 4. Shared backbone: DINOv2-S/14 → GeM → BatchNorm (`reid/`)
 
-* **EfficientNetV2-M** (`timm efficientnetv2_rw_m`, ImageNet-1k weights, 53 M params). This is MiewID's backbone, chosen over transformer alternatives by a zero-shot comparison on hemlock val/test trees (E-backbone). It is a CNN, so input resolution can change without retraining positional embeddings, and it runs on CPU with ONNX Runtime.
-* **GeM pooling** (generalised mean, p learned, initialised at 3). This sits between average and max pooling, a standard choice for instance retrieval.
-* **BatchNorm1d** on the pooled 2152-d vector. Its output is the embedding. As in MiewID there is no projection layer; L2 normalisation happens at retrieval time.
-* **Species head.** One `Linear(2152 → n_species)` on the L2-normalised embedding. One forward pass per view therefore gives both species and identity, with no second network on the device.
+* **Backbone: DINOv2-S/14** (`timm vit_small_patch14_dinov2.lvd142m`, self-supervised LVD-142M weights, Apache-2.0, 22 M params) at 322 px, i.e. 23×23 patch tokens.
+  * **How it was chosen.** The project started from MiewID's EfficientNetV2-M as the literature baseline. Controlled experiments then replaced it (E-backbone, E-ablations). At equal training budget, DINOv2-S roughly doubled test mAP on unseen hemlocks. It was also far more robust to different capture events and to impostors photographed with the same phone. And it is 2.4× smaller.
+  * **Only one backbone ships.** EfficientNetV2-M remains selectable in code only to reproduce the comparison.
+* **GeM pooling** over the patch-token grid (generalised mean, p learned, init 3). This is MiewID's choice and standard for instance retrieval. Patch tokens are pooled rather than the CLS token, so local bark texture contributes everywhere.
+* **BatchNorm1d** on the pooled 384-d vector. Its output is the embedding. As in MiewID there is no projection layer; L2 normalisation happens at retrieval time.
+* **Species head.** One `Linear(384 → n_species)` on the L2-normalised embedding. One forward pass per view gives both species and identity, with no second network on the device.
 
 **Training** (`training/reid/train_tail.py`): sub-center ArcFace (k=3) with
-MiewID's dynamic margins in [0.2, 0.5], s=30, on all training-split trees of all
-species. The model is selected on hemlock *validation* mAP.
+MiewID's dynamic margins in [0.2, 0.5], s=30. The model is selected on hemlock
+*validation* mAP.
 
-On this project's CPU-only budget, stages 0–4 (15 % of parameters) are frozen
-and their outputs cached with 4 augmentations per training image. Stage 5 +
-`conv_head` (85 % of parameters) + GeM + BN are fine-tuned. With a GPU the same
-code can fine-tune end to end.
+On this project's CPU-only budget, the first 8 of 12 transformer blocks are
+frozen and their outputs cached with 4 augmentations per training image. The
+last 4 blocks, final norm, GeM and BN are fine-tuned. With a GPU the same code
+can fine-tune end to end.
+
+Losses (ArcFace, SupCon, Triplet) and multispecies vs hemlock-only identities
+were compared in controlled runs. None beat sub-center ArcFace beyond seed noise
+(E-ablations).
 
 ## 5. Species gate (`species/`)
 

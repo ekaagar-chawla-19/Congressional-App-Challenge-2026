@@ -10,11 +10,12 @@ data:
   split_seed: 17
 
 model:
-  backbone: efficientnetv2_rw_m           # timm, ImageNet-1k agc weights (Apache-2.0)
-  image_size: 320
-  pooling: gem                            # p learned, init 3
-  neck: batchnorm1d                       # embedding = 2152-d BN output (MiewID, no FC)
-  frozen_stages: 5                        # CPU budget: stages 0-4 frozen + cached
+  backbone: vit_small_patch14_dinov2.lvd142m  # timm, DINOv2-S/14 (Apache-2.0); chosen by E-ablations
+  image_size: 322                         # 23x23 patches of 14 px
+  pooling: gem                            # over patch tokens, p learned, init 3
+  neck: batchnorm1d                       # embedding = 384-d BN output (MiewID head, no FC)
+  frozen_blocks: 8                        # CPU budget: blocks 0-7 frozen + cached, 8-11 fine-tuned
+  # reproduction baseline: efficientnetv2_rw_m @ 320, stages 0-4 frozen
 
 training:
   loss: subcenter_arcface                 # k=3, dynamic margins in [0.2, 0.5], s=30
@@ -27,7 +28,7 @@ training:
   lr_backbone: 1.0e-4
   lr_head: 1.0e-3
   schedule: warmup_half_epoch_then_cosine
-  epochs: 6
+  epochs: 4
   augmentations_cached_per_image: 4       # random-resized-crop, flip, rotate 15, colour jitter
   model_selection: hemlock_val_mAP
 

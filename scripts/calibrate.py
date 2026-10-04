@@ -50,6 +50,7 @@ def main() -> None:
     ap.add_argument("--target-fmr", type=float, default=0.01)
     ap.add_argument("--repeats", type=int, default=20)
     ap.add_argument("--k", type=int, default=5)
+    ap.add_argument("--duplicate", default=None, help="runs/results/duplicate.json from calibrate_duplicate.py")
     ap.add_argument("--calib-species", default="hemlock", choices=["hemlock", "all"],
                     help="all: pool within-species open-set trials of every species' VAL trees "
                          "(more impostor data than 9 val hemlocks); test is always hemlock")
@@ -98,7 +99,8 @@ def main() -> None:
     margin = float(np.percentile(gaps, 99))
     t_view = threshold_at_fmr(np.array(view_imp), args.target_fmr)
 
-    cal = Calibration(species_threshold=float(sp["threshold"]), match_threshold=float(t_match),
+    dup = json.loads(Path(args.duplicate).read_text())["threshold"] if args.duplicate else None
+    cal = Calibration(species_threshold=float(sp["threshold"]), match_threshold=float(t_match), duplicate_cosine=dup,
                       global_threshold=float(t_global), target_fmr=args.target_fmr,
                       view_contradiction_margin=max(margin, 0.0), view_match_threshold=float(t_view),
                       fusers={"+".join(FEATS): fuser},

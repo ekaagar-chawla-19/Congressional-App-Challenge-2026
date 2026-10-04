@@ -121,10 +121,15 @@ Hemlock **test** trees; 95 % CI over trees in brackets. "Steps" = optimiser step
 | Identities: hemlock only (22), **equal steps** | 688 | 0.421 | 0.525 / **0.303** | **0.584** [0.39, 0.74] | **0.837** | **0.537** | **0.67** | **0.716** |
 | **Backbone: DINOv2-S/14** (322 px), multispecies, seed 0 | 700 | **0.590** | **0.791 / 0.536** | **0.804** [0.67, 0.94] | **0.941** | **0.732** | **0.89** | **0.882** |
 | … DINOv2-S/14, seed 1 (seed noise) | 700 | 0.581 | 0.817 / 0.539 | 0.796 | 0.940 | 0.722 | 1.00 | 0.882 |
+| … DINOv2-S/14, hemlock-only identities, equal steps | 688 | 0.586 | 0.766 / 0.516 | 0.810 [0.68, 0.94] | 0.940 | 0.765 | 0.94 | 0.889 |
 
 **Conclusions.**
 * **Loss.** Sub-center ArcFace, ArcFace, SupCon and Triplet are within seed noise of each other on the main metrics (the two reference seeds differ by 0.03 in top-1, and all CIs overlap). SupCon and Triplet are worst on the same-phone and cross-capture checks (0.00 and 0.07 cross-capture top-1 with n=54 from 3 trees; small, but in the wrong direction). There is no evidence to move away from the MiewID objective, so sub-center ArcFace stays.
-* **Multispecies.** At equal optimiser steps, training on the 22 hemlock identities alone is *at least as good* for hemlock re-ID as training on 116 multispecies identities, and better on the harder metrics (cross-capture, same-phone). MiewID's multispecies gain (49 animal species, 37K individuals) **did not reproduce** at this scale. The apparent multispecies advantage at equal epochs is a step-count artefact.
+* **Multispecies.** At equal optimiser steps, training on the 22 hemlock identities alone is *at least as good* for hemlock re-ID as training on 116 multispecies identities.
+  * EfficientNetV2-M: hemlock-only is better on the harder metrics.
+  * DINOv2-S: the two are equivalent within noise.
+  * MiewID's multispecies gain (49 animal species, 37K individuals) **did not reproduce** at this scale, and the apparent multispecies advantage at equal epochs is a step-count artefact.
+  * **Decision:** keep multispecies identities for the production model anyway. They cost nothing in re-ID accuracy with DINOv2, and the same embedding drives the species gate, which needs other species to be separated.
 * **Backbone.** In an identical regime and budget, DINOv2-S beats EfficientNetV2-M by a margin far beyond seed noise: test mAP 0.536 vs 0.27, and 3-view top-1 0.80 vs 0.50–0.54. It is also more robust exactly where it matters for field use: different capture events (0.89 vs 0.15) and same-phone impostors (0.88 vs 0.61). It is 2.4× smaller (22 M vs 53 M params). **Decision: the primary backbone becomes DINOv2-S/14**, keeping MiewID's GeM → BN head and sub-center ArcFace. EfficientNetV2-M remains supported in code for reproduction.
 
 ## E-species: species gate on the shared embedding (`training/species/train_head.py`)

@@ -23,7 +23,7 @@ Outputs:
 
 | File | Purpose |
 |---|---|
-| `hemlock.onnx` | Opset 17, input `images` (N,3,320,320) float32; outputs `embedding` (N,2152), `species_logits` (N,C) |
+| `hemlock.onnx` | Opset 17, input `images` (N,3,322,322) float32; outputs `embedding` (N,384), `species_logits` (N,C) |
 | `hemlock.json` | Sidecar: image size, embedding dim, species labels, version, preprocessing spec |
 | `hemlock.pt` | Same weights for the Torch runtime (development) |
 | `parity.json` | Torch vs ONNX Runtime on real images. Export fails unless min cosine > 0.9999 |
@@ -32,8 +32,8 @@ Outputs:
 Preprocessing is part of the contract, not the graph:
 
 * decode JPEG with EXIF orientation
-* resize so the short side is 320 (INTER_AREA)
-* centre-crop 320×320
+* resize so the short side is 322 (INTER_AREA)
+* centre-crop 322×322
 * divide by 255 and apply ImageNet mean/std
 
 It lives in `hemlock_sentinel/preprocessing.py` and is shared by training-time
