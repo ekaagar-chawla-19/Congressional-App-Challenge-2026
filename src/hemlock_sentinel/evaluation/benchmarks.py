@@ -105,3 +105,12 @@ def closed_set_topk(qs: list[QueryScores], ks=(1, 5)) -> dict[str, float]:
 def build_observations(recs, tree_ids: set[str], species: str | None, views: int, seed: int) -> list[Observation]:
     sel = [r for r in recs if r.tree_id in tree_ids and (species is None or r.species == species)]
     return make_observations(sel, views, seed)
+
+
+def all_pairs(qs: list[QueryScores]) -> tuple[np.ndarray, np.ndarray]:
+    """Genuine vs EVERY wrong-tree score (standard verification ROC), not just the best wrong one."""
+    gen, imp = [], []
+    for q in qs:
+        for j, t in enumerate(q.tree_ids):
+            (gen if t == q.truth else imp).append(q.scores[j])
+    return np.asarray(gen), np.asarray(imp)

@@ -24,7 +24,6 @@ import torch
 
 from hemlock_sentinel.reid.embedding import ReIDConfig, ReIDNet
 
-TRUNK_STAGES = 5
 
 
 def assemble(tail_path: str, species_path: str, image_size: int) -> tuple[ReIDNet, list[str]]:
@@ -36,8 +35,8 @@ def assemble(tail_path: str, species_path: str, image_size: int) -> tuple[ReIDNe
     mapped = {}
     for k, v in tail.items():
         if k.startswith("stage5."):
-            i, rest = k[len("stage5."):].split(".", 1)
-            mapped[f"backbone.model.blocks.{TRUNK_STAGES + int(i)}.{rest}"] = v
+            # nn.Sequential slicing keeps the original indices: stage5.5.* == blocks.5.*
+            mapped["backbone.model.blocks." + k[len("stage5."):]] = v
         elif k.startswith("conv_head.") or k.startswith("bn2."):
             mapped["backbone.model." + k] = v
         elif k.startswith("head.pool."):

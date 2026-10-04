@@ -47,7 +47,9 @@ def load_miewid() -> torch.nn.Module:
     net = ReIDNet(ReIDConfig(pretrained=False))
     mapped = {}
     for k, v in sd.items():
-        if k.startswith("backbone."):
+        if k.startswith("backbone.global_pool."):  # MiewID-msv3 keeps GeM as the timm global_pool
+            mapped["pool." + k[len("backbone.global_pool."):]] = v
+        elif k.startswith("backbone."):
             mapped["backbone.model." + k[len("backbone."):]] = v
         elif k.startswith("pooling."):
             mapped["pool." + k[len("pooling."):]] = v
@@ -66,6 +68,7 @@ def main() -> None:
     ap.add_argument("--out", default="runs/results/zero_shot.json")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--repeats", type=int, default=20)
+    ap.add_argument("--only", default=None, help="substring: run only matching models (merges into --out)")
     args = ap.parse_args()
     torch.set_num_threads(args.threads)
     recs = read_manifest(Path(args.data) / "manifest.csv")
@@ -77,10 +80,13 @@ def main() -> None:
         bgr = cv2.imread(recs[i].path, cv2.IMREAD_REDUCED_COLOR_2)
         imgs[i] = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
-    results = {"protocol": "zero-shot, frozen weights, hemlock val+test trees (never trained on), "
+    prev = json.loads(Path(args.out).read_text()) if Path(args.out).exists() else {}
+    results = {**prev, "protocol": "zero-shot, frozen weights, hemlock val+test trees (never trained on), "
                            "views=3, enrolled 0.5, 20 repeats"}
     models = list(BACKBONES.items()) + [("MiewID-msv3 (wildlife re-ID, EfficientNetV2-M)", ("miewid", 320))]
     for name, (tid, size) in models:
+        if args.only and args.only not in name:
+            continue
         t0 = time.time()
         if tid == "miewid":
             net = load_miewid()

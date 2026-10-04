@@ -30,6 +30,7 @@ from torch import nn
 
 from hemlock_sentinel.evaluation.metrics import retrieval_metrics
 from hemlock_sentinel.evaluation.splits import read_manifest
+from hemlock_sentinel.reid.backbone import trunk_tail
 from hemlock_sentinel.reid.embedding import EmbeddingHead
 from hemlock_sentinel.reid.losses import build_loss
 
@@ -37,18 +38,38 @@ TRUNK_STAGES = 5
 
 
 class Tail(nn.Module):
-    def __init__(self, pretrained: bool = True, gem_p: float = 3.0, train_stage5: bool = True):
+    """Trainable tail + GeM + BN. For EfficientNetV2-M the parameter names
+    (stage5 / conv_head / bn2 / head) are what scripts/export_model.py maps."""
+
+    def __init__(self, backbone: str = "efficientnetv2_rw_m", pretrained: bool = True, gem_p: float = 3.0,
+                 train_stage5: bool = True, img_size: int | None = None):
         super().__init__()
-        m = timm.create_model("efficientnetv2_rw_m", pretrained=pretrained, num_classes=0, global_pool="")
-        self.stage5 = m.blocks[TRUNK_STAGES:]
-        self.conv_head, self.bn2 = m.conv_head, m.bn2
-        self.head = EmbeddingHead(m.num_features, gem_p)
-        self.dim = m.num_features
-        for p in self.stage5.parameters():
-            p.requires_grad_(train_stage5)
+        self.backbone = backbone
+        if backbone.startswith("efficientnetv2"):
+            m = timm.create_model(backbone, pretrained=pretrained, num_classes=0, global_pool="")
+            self.stage5 = m.blocks[TRUNK_STAGES:]
+            self.conv_head, self.bn2 = m.conv_head, m.bn2
+            dim = m.num_features
+            for p in self.stage5.parameters():
+                p.requires_grad_(train_stage5)
+        else:
+            kw = {"img_size": img_size} if img_size else {}
+            _, self.tail, dim, _ = trunk_tail(backbone, pretrained=pretrained, **kw)
+        self.head = EmbeddingHead(dim, gem_p)
+        self.dim = dim
 
     def forward(self, x):
-        return self.head(self.bn2(self.conv_head(self.stage5(x))))
+        if self.backbone.startswith("efficientnetv2"):
+            return self.head(self.bn2(self.conv_head(self.stage5(x))))
+        return self.head(self.tail(x))
+
+    def param_groups(self):
+        if self.backbone.startswith("efficientnetv2"):
+            bb = [p for p in self.stage5.parameters() if p.requires_grad] + \
+                list(self.conv_head.parameters()) + list(self.bn2.parameters())
+        else:
+            bb = list(self.tail.parameters())
+        return bb, list(self.head.parameters())
 
 
 def pk_batches(labels: np.ndarray, p: int, k: int, rng: random.Random):
@@ -111,9 +132,11 @@ def main() -> None:
     aug_rows = np.load(cache / "train_aug_rows.npy")
     ev = np.load(cache / "eval_trunk.npy", mmap_mode="r")
 
-    train_trees = sorted(set(splits["train"]))
+    allowed = set(splits["train"])
     if args.hemlock_only:
-        train_trees = [t for t in train_trees if t.startswith("PRU-")]
+        allowed = {t for t in allowed if t.startswith("PRU-")}
+    # identities = training trees that actually have cached samples
+    train_trees = sorted({recs[r].tree_id for r in aug_rows} & allowed)
     tmap = {t: i for i, t in enumerate(train_trees)}
     keep = np.array([recs[r].tree_id in tmap for r in aug_rows])
     aug_idx = np.nonzero(keep)[0]
@@ -124,13 +147,15 @@ def main() -> None:
     val_rows = np.array([i for i, r in enumerate(recs) if r.tree_id in set(splits["val"]) and r.species == "tsuga_canadensis"])
     val_labels = np.array([recs[i].tree_id for i in val_rows])
 
-    tail = Tail(train_stage5=not args.freeze_stage5)
+    meta = json.loads((cache / "meta.json").read_text())
+    backbone = meta.get("backbone", "efficientnetv2_rw_m")
+    tail = Tail(backbone, train_stage5=not args.freeze_stage5, img_size=meta["size"])
     loss_fn = build_loss(args.loss, tail.dim, len(train_trees), class_counts=counts, s=args.s,
                          m_max=args.m_max, k=args.subcenters)
+    bb_params, head_params = tail.param_groups()
     groups = [
-        {"params": [p for p in tail.stage5.parameters() if p.requires_grad], "lr": args.lr_backbone},
-        {"params": list(tail.conv_head.parameters()) + list(tail.bn2.parameters()), "lr": args.lr_backbone},
-        {"params": list(tail.head.parameters()) + list(loss_fn.parameters()), "lr": args.lr_head},
+        {"params": bb_params, "lr": args.lr_backbone},
+        {"params": head_params + list(loss_fn.parameters()), "lr": args.lr_head},
     ]
     opt = torch.optim.Adam([g for g in groups if g["params"]])
     n_batches = len(aug_idx) // (args.p * args.k)
@@ -167,7 +192,7 @@ def main() -> None:
             opt.zero_grad()
             loss.backward()
             opt.step()
-            losses.append(float(loss))
+            losses.append(float(loss.detach()))
             step += 1
         m = val_score()
         history.append({"epoch": ep, "loss": float(np.mean(losses)), "seconds": time.time() - t0, **m})
@@ -175,7 +200,8 @@ def main() -> None:
         if m["mAP"] > best:
             best, best_state = m["mAP"], copy.deepcopy(tail.state_dict())
     tail.load_state_dict(best_state)
-    torch.save({"tail": best_state, "args": vars(args), "train_trees": train_trees}, out / "tail.pt")
+    torch.save({"tail": best_state, "args": vars(args), "backbone": backbone, "train_trees": train_trees},
+               out / "tail.pt")
     emb = embed(tail, ev, np.arange(len(recs)))
     np.save(out / "embeddings.npy", emb.astype(np.float32))
     (out / "history.json").write_text(json.dumps(history, indent=2))

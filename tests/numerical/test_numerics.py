@@ -92,3 +92,39 @@ def test_learned_aggregators_shapes_and_masks():
             v2 = views.clone()
             v2[0, 3:] = torch.randn(2, 32) * 100
             assert torch.allclose(m(v2, mask)[0], out[0], atol=1e-5)
+
+
+@pytest.mark.parametrize("name,kw,size", [("efficientnetv2_rw_t", {}, 64),
+                                          ("vit_small_patch14_dinov2", {"img_size": 56}, 56)])
+def test_trunk_tail_split_equals_full_backbone(name, kw, size):
+    from hemlock_sentinel.reid.backbone import Backbone, trunk_tail
+
+    torch.manual_seed(0)
+    trunk, tail, dim, _ = trunk_tail(name, pretrained=False, **kw)
+    full = Backbone(name, pretrained=False, **kw)
+    full.model.load_state_dict(trunk_tail_state(trunk, tail, full))
+    trunk.eval(), tail.eval(), full.eval()
+    x = torch.rand(2, 3, size, size)
+    with torch.no_grad():
+        assert torch.allclose(tail(trunk(x)), full(x), atol=1e-5)
+
+
+def trunk_tail_state(trunk, tail, full):
+    """The split modules share the same underlying timm parameters; copy them to the full model."""
+    sd = {}
+    src = getattr(trunk, "vit", None)
+    if src is not None:
+        return src.state_dict()
+    # efficientnet: trunk = Sequential(conv_stem, bn1, *blocks[:k]); tail = Sequential(blocks[k:], conv_head, bn2)
+    ref = full.model.state_dict()
+    t_sd = trunk.state_dict()
+    names = ["conv_stem", "bn1"]
+    for key, v in t_sd.items():
+        i, rest = key.split(".", 1)
+        i = int(i)
+        sd[(names[i] + "." + rest) if i < 2 else f"blocks.{i - 2}.{rest}"] = v
+    for key, v in tail.state_dict().items():
+        i, rest = key.split(".", 1)
+        sd[{"0": "blocks", "1": "conv_head", "2": "bn2"}[i] + "." + rest] = v
+    assert set(sd) == set(ref), set(ref) ^ set(sd)
+    return sd

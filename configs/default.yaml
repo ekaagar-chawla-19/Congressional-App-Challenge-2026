@@ -1,0 +1,49 @@
+# Hemlock Sentinel — reference configuration of the reproduced pipeline.
+# Thresholds are NOT set here: they are fitted on validation data by
+# scripts/calibrate.py and stored in the calibration JSON shipped with the model.
+
+data:
+  barknet_root: /path/to/barknet          # Zenodo record 11508014 (MIT)
+  species_codes: [PRU, PIB, PIR, PID, HEG, ERR, ERB, PEG]
+  held_out_species: [THO, EPR]            # never trained on: unknown-species tests
+  split_fractions: [0.5, 0.2, 0.3]        # train / val / test, by TREE identity
+  split_seed: 17
+
+model:
+  backbone: efficientnetv2_rw_m           # timm, ImageNet-1k agc weights (Apache-2.0)
+  image_size: 320
+  pooling: gem                            # p learned, init 3
+  neck: batchnorm1d                       # embedding = 2152-d BN output (MiewID, no FC)
+  frozen_stages: 5                        # CPU budget: stages 0-4 frozen + cached
+
+training:
+  loss: subcenter_arcface                 # k=3, dynamic margins in [0.2, 0.5], s=30
+  subcenters: 3
+  margin_min: 0.2
+  margin_max: 0.5
+  scale: 30.0
+  sampler: {identities_per_batch: 16, samples_per_identity: 4}
+  optimizer: adam
+  lr_backbone: 1.0e-4
+  lr_head: 1.0e-3
+  schedule: warmup_half_epoch_then_cosine
+  epochs: 6
+  augmentations_cached_per_image: 4       # random-resized-crop, flip, rotate 15, colour jitter
+  model_selection: hemlock_val_mAP
+
+inference:
+  views_required: 3                       # trunk views (north, +90, +180)
+  views_max: 5                            # + branching, canopy (stored, not used for identity yet)
+  aggregation: quality_weighted_mean
+  top_k_candidates: 5
+  local_matching: rootsift_ransac         # re-ranks top-k only
+  depth_structure: off_until_calibrated_on_field_data
+  target_false_match_rate: 0.01
+
+quality:                                  # from scripts/calibrate_quality.py on BarkNet
+  min_laplacian_var: 25.0
+  min_edge_density: 0.06
+  min_mean_luma: 35.0
+  max_mean_luma: 225.0
+  max_clipped_fraction: 0.25
+  max_duplicate_cosine: 0.985

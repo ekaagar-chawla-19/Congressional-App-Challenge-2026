@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from hemlock_sentinel.evaluation.benchmarks import (build_observations, closed_set_topk, decide_global,
+from hemlock_sentinel.evaluation.benchmarks import (all_pairs, build_observations, closed_set_topk, decide_global,
                                                     genuine_impostor, run_open_set)
 from hemlock_sentinel.evaluation.metrics import bootstrap_ci, open_set_metrics, retrieval_metrics, roc_auc
 from hemlock_sentinel.evaluation.splits import read_manifest
@@ -39,8 +39,12 @@ def open_set_block(obs_val, obs_test, emb_of, aggregate, score_mode, fmrs=(0.01,
     qt = run_open_set(obs_test, emb_of, aggregate, repeats=repeats, seed=200, score_mode=score_mode)
     gv, iv = genuine_impostor(qv)
     gt, it = genuine_impostor(qt)
+    gp, ip = all_pairs(qt)
     res = {"closed_set_test": closed_set_topk(qt), "closed_set_val": closed_set_topk(qv),
            "roc_auc_test": round(roc_auc(gt, it), 4), "roc_auc_val": round(roc_auc(gv, iv), 4),
+           "roc_auc_all_pairs_test": round(roc_auc(gp, ip), 4),
+           "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); "
+                           "all_pairs: genuine vs every wrong tree (standard verification ROC)",
            "genuine_test": summarize_scores(gt), "impostor_test": summarize_scores(it), "thresholds": {}}
     # per-tree top-1 bootstrap CI (queries of one tree are correlated)
     per_tree = defaultdict(list)
@@ -49,6 +53,18 @@ def open_set_block(obs_val, obs_test, emb_of, aggregate, score_mode, fmrs=(0.01,
             per_tree[q.truth].append(q.rank == 1)
     res["closed_set_test"]["top1_ci95_by_tree"] = [round(x, 4) for x in
                                                    bootstrap_ci(np.array([np.mean(v) for v in per_tree.values()]))]
+    # capture-level breakdown: queries from a different capture event (a second photo
+    # session the same day) than the enrolled observation vs the same capture event
+    first = {}
+    for o in sorted(obs_test, key=lambda o: o.obs_id):
+        first.setdefault(o.tree_id, o.obs_id.split("#")[0])
+    by_cap = {"same_capture": [], "different_capture_same_day": []}
+    for q in qt:
+        if q.truth is not None:
+            key = "same_capture" if q.obs.obs_id.split("#")[0] == first[q.truth] else "different_capture_same_day"
+            by_cap[key].append(q.rank == 1)
+    res["closed_set_test_by_capture"] = {k: {"top1": round(float(np.mean(v)), 4) if v else None, "n": len(v)}
+                                         for k, v in by_cap.items()}
     for f in fmrs:
         t = threshold_at_fmr(iv, f)
         pred, truth = decide_global(qt, t)

@@ -21,15 +21,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import timm
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import v2 as T
 
 from hemlock_sentinel.evaluation.splits import read_manifest
 from hemlock_sentinel.preprocessing import IMAGENET_MEAN, IMAGENET_STD, resize_short_center_crop
-
-TRUNK_STAGES = 5  # blocks[0:5] frozen
+from hemlock_sentinel.reid.backbone import trunk_tail
 
 
 def load_rgb(path: str) -> np.ndarray:
@@ -80,6 +78,7 @@ def main() -> None:
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--backbone", default="efficientnetv2_rw_m")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
     torch.set_num_threads(args.threads)
@@ -90,16 +89,17 @@ def main() -> None:
     splits = json.loads((data / "splits.json").read_text())
     train_ids = set(splits["train"])
 
-    model = timm.create_model("efficientnetv2_rw_m", pretrained=True, num_classes=0, global_pool="").eval()
-    trunk = torch.nn.Sequential(model.conv_stem, model.bn1, *model.blocks[:TRUNK_STAGES]).eval()
+    kw = {"img_size": args.size} if "dinov2" in args.backbone else {}
+    trunk, _, _, frozen = trunk_tail(args.backbone, pretrained=True, **kw)
+    trunk = trunk.eval()
     with torch.no_grad():
-        c, h, w = trunk(torch.zeros(1, 3, args.size, args.size)).shape[1:]
+        feat_shape = tuple(trunk(torch.zeros(1, 3, args.size, args.size)).shape[1:])
 
     items = [(i, r.path, r.tree_id in train_ids) for i, r in enumerate(recs)]
     n_train = sum(1 for it in items if it[2])
-    eval_mm = np.lib.format.open_memmap(out / "eval_trunk.npy", "w+", np.float16, (len(recs), c, h, w))
+    eval_mm = np.lib.format.open_memmap(out / "eval_trunk.npy", "w+", np.float16, (len(recs), *feat_shape))
     aug_mm = np.lib.format.open_memmap(out / "train_aug_trunk.npy", "w+", np.float16,
-                                       (n_train * args.train_augs, c, h, w))
+                                       (n_train * args.train_augs, *feat_shape))
     aug_rows = []  # manifest row for each augmented sample
     loader = DataLoader(CacheSet(items, args.size, args.train_augs), batch_size=1, num_workers=args.workers)
     t0 = time.time()
@@ -117,7 +117,8 @@ def main() -> None:
     eval_mm.flush()
     aug_mm.flush()
     np.save(out / "train_aug_rows.npy", np.asarray(aug_rows, dtype=np.int64))
-    meta = {"size": args.size, "trunk_stages": TRUNK_STAGES, "shape": [int(c), int(h), int(w)],
+    meta = {"size": args.size, "backbone": args.backbone, "trunk_frozen_units": frozen,
+            "shape": [int(x) for x in feat_shape],
             "train_augs": args.train_augs, "n_images": len(recs), "n_train_images": n_train,
             "seconds": time.time() - t0}
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
