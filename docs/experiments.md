@@ -108,7 +108,24 @@ to the sub-center ArcFace reference.
 These are *relative* comparisons in a shallow fine-tuning regime. They are not
 the production model's numbers.
 
-(results table: see the section filled in below)
+Hemlock **test** trees; 95 % CI over trees in brackets. "Steps" = optimiser steps.
+
+| Run (one change vs reference) | Steps | Val img mAP | Test img top-1 / mAP | Test 3-view top-1 | All-pairs AUC | Strict top-1 | Diff.-capture top-1 (n=54) | Same-phone AUC |
+|---|---|---|---|---|---|---|---|---|
+| **Reference**: EffNetV2-M, sub-center ArcFace, 116 multispecies ids, seed 0 | 700 | 0.371 | 0.548 / 0.270 | 0.502 [0.31, 0.67] | 0.797 | 0.427 | 0.15 | 0.615 |
+| … seed 1 (seed noise) | 700 | 0.363 | 0.519 / 0.269 | 0.535 [0.35, 0.70] | 0.802 | 0.442 | 0.19 | 0.619 |
+| Loss: standard ArcFace (k=1, m=0.5) | 700 | 0.384 | 0.525 / 0.276 | 0.544 [0.35, 0.72] | 0.804 | 0.476 | 0.19 | 0.620 |
+| Loss: supervised contrastive (τ=0.1) | 700 | 0.387 | 0.563 / 0.294 | 0.565 [0.33, 0.71] | 0.794 | 0.524 | 0.00 | 0.556 |
+| Loss: batch-hard triplet (m=0.2) | 700 | 0.381 | 0.604 / 0.290 | 0.549 [0.31, 0.70] | 0.790 | 0.497 | 0.07 | 0.587 |
+| Identities: hemlock only (22), same epochs | 125 | 0.343 | 0.389 / 0.215 | 0.383 [0.24, 0.51] | 0.738 | 0.314 | 0.48 | 0.649 |
+| Identities: hemlock only (22), **equal steps** | 688 | 0.421 | 0.525 / **0.303** | **0.584** [0.39, 0.74] | **0.837** | **0.537** | **0.67** | **0.716** |
+| **Backbone: DINOv2-S/14** (322 px), multispecies, seed 0 | 700 | **0.590** | **0.791 / 0.536** | **0.804** [0.67, 0.94] | **0.941** | **0.732** | **0.89** | **0.882** |
+| … DINOv2-S/14, seed 1 (seed noise) | 700 | 0.581 | 0.817 / 0.539 | 0.796 | 0.940 | 0.722 | 1.00 | 0.882 |
+
+**Conclusions.**
+* **Loss.** Sub-center ArcFace, ArcFace, SupCon and Triplet are within seed noise of each other on the main metrics (the two reference seeds differ by 0.03 in top-1, and all CIs overlap). SupCon and Triplet are worst on the same-phone and cross-capture checks (0.00 and 0.07 cross-capture top-1 with n=54 from 3 trees; small, but in the wrong direction). There is no evidence to move away from the MiewID objective, so sub-center ArcFace stays.
+* **Multispecies.** At equal optimiser steps, training on the 22 hemlock identities alone is *at least as good* for hemlock re-ID as training on 116 multispecies identities, and better on the harder metrics (cross-capture, same-phone). MiewID's multispecies gain (49 animal species, 37K individuals) **did not reproduce** at this scale. The apparent multispecies advantage at equal epochs is a step-count artefact.
+* **Backbone.** In an identical regime and budget, DINOv2-S beats EfficientNetV2-M by a margin far beyond seed noise: test mAP 0.536 vs 0.27, and 3-view top-1 0.80 vs 0.50–0.54. It is also more robust exactly where it matters for field use: different capture events (0.89 vs 0.15) and same-phone impostors (0.88 vs 0.61). It is 2.4× smaller (22 M vs 53 M params). **Decision: the primary backbone becomes DINOv2-S/14**, keeping MiewID's GeM → BN head and sub-center ArcFace. EfficientNetV2-M remains supported in code for reproduction.
 
 ## E-species: species gate on the shared embedding (`training/species/train_head.py`)
 

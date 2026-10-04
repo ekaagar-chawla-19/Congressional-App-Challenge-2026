@@ -31,7 +31,7 @@ the paper and its code (`WildMeOrg/wbia-plugin-miew-id`: `models/model.py`,
 | Results (paper) | Multispecies model beats species-specific models by 12.5 % top-1 on average; beats MegaDescriptor by 19.2 % top-1 averaged over 33 species; EfficientNetV2 beat a SwinV2-Base variant by 4.5 % on average |
 | Applies to us | Embedding + cosine retrieval naturally handles new individuals (open set) without retraining a classifier. The architecture is a strong, efficient CNN (~53 M params, ~24 GMACs at 440 px) that runs on CPU. Multi-species training gives more identities for a margin loss. |
 | Does not apply | Animals have distinctive coat/skin marks; bark is a much more homogeneous texture. Their test set mixes seen and unseen identities. A field instrument must handle **unseen** trees, so we evaluate only on identities that never appear in training. Their 225K images: we have ~3K training images. |
-| **Decision** | Adopt the exact head (GeM p=3 learnable → BN, 2152-d, L2-normalised at retrieval) and sub-center ArcFace with dynamic margins (k=3, m ∈ [0.2, 0.5], s=30). Train on all species' training identities (multispecies), select on hemlock validation. Our implementation guards two edge cases MiewID's does not: equal class counts (0/0 → NaN margins) and the infinite derivative of `sqrt(1-cos²)` at cos=±1. Regression tests cover both. |
+| **Decision** | Adopt MiewID's *head and objective*: GeM (p=3, learnable) → BN, embedding = backbone width, L2-normalised at retrieval, sub-center ArcFace with dynamic margins (k=3, m ∈ [0.2, 0.5], s=30). Our implementation guards two edge cases MiewID's does not: equal class counts (0/0 → NaN margins) and the infinite derivative of `sqrt(1-cos²)` at cos=±1, both with regression tests. **Two MiewID findings did not reproduce on bark** in our controlled experiments (experiments.md E-ablations). (1) EfficientNetV2-M was beaten by DINOv2-S at equal budget, so **the primary backbone is DINOv2-S/14**. (2) At equal optimiser steps, multispecies identities did not improve hemlock re-ID. |
 
 Their HuggingFace model `conservationxlabs/miewid-msv3` has no license on its
 model card. We use it only for a zero-shot comparison and do not ship it.
@@ -90,7 +90,7 @@ for animal re-identification", WACV 2024.*
 | What they did | Toolkit over 63 public re-ID datasets, with closed-set, open-set, disjoint-set and **time-aware** splits. Compared local descriptors (SIFT, SuperPoint), ArcFace vs Triplet, and EfficientNet-B3 vs Swin-B. Trained MegaDescriptor (Swin-L/384, ArcFace) |
 | Results | Metric learning beat local-feature matching on most datasets. **ArcFace was more consistent than Triplet**. In their ablation, Swin-B ≥ EfficientNet-B3 in most cases. MegaDescriptor-L beat CLIP, DINOv2 and ImageNet features zero-shot |
 | Conflict with MiewID | MiewID reports EfficientNetV2-M > SwinV2-B by 4.5 % on its data. The two papers compare different CNNs (B3 vs V2-M), different data and protocols. **The literature is inconclusive on CNN vs transformer for re-ID** |
-| **Decision** | Keep ArcFace-family as the primary loss and Triplet/SupCon as controlled comparisons. Resolve the backbone question on *our* data: a zero-shot comparison (EfficientNetV2-M, ConvNeXt-T, Swin-T, DINOv2-S, MiewID-msv3). Keep one backbone. Use their split vocabulary: our test identities are disjoint from training. |
+| **Decision** | Keep ArcFace-family as the primary loss. Triplet/SupCon/ArcFace were measured as controlled comparisons: all within seed noise, with SupCon/Triplet weakest on cross-capture and same-phone checks. Resolve the backbone question on *our* data: a zero-shot comparison of five backbones, then a fine-tuned EfficientNetV2-M vs DINOv2-S comparison at equal budget. DINOv2-S won clearly (test mAP 0.54 vs 0.27; cross-capture top-1 0.89 vs 0.15), so it is the one primary backbone. Use their split vocabulary: our test identities are disjoint from training. |
 
 ## 6. Bark re-identification
 
@@ -105,6 +105,18 @@ feature descriptor", arXiv:1912.03221 (2019, rev. 2020), Université Laval
 | Applies to us | Bark *surfaces* carry an individual signature that keypoint matching with geometric verification can find, provided the two photos **overlap** |
 | Does not apply | Requires re-photographing the same bark patch. In BarkNet, images of one tree show different bark regions (we measured near-zero RANSAC inliers between them, E-local) |
 | **Decision** | Keep a cheap local branch (RootSIFT + RANSAC homography, re-ranking only the top-k global candidates) and fuse it through calibration only if it improves validation results. **Capture protocol consequence:** view 1 is anchored to the tree's north side so repeat visits re-photograph overlapping bark. |
+
+## 6b. DINOv2 (the backbone we ended up with)
+
+*Oquab et al., "DINOv2: Learning Robust Visual Features without Supervision", TMLR 2024 (arXiv:2304.07193). Weights are Apache-2.0 (timm `vit_small_patch14_dinov2.lvd142m`).*
+
+| | |
+|---|---|
+| What they did | Self-supervised ViT pre-training on 142 M curated images (LVD-142M). Features transfer well to fine-grained and instance-level retrieval without fine-tuning |
+| Why it is relevant | Bark re-ID is a texture-level, instance-level task far from ImageNet classes. Self-supervised dense features plausibly carry more instance detail than ImageNet-supervised CNN features, which tend to discard "irrelevant" texture |
+| Evidence on our data | Best zero-shot backbone of five (E-backbone). After fine-tuning only its last block, it beat EfficientNetV2-M in the same regime by 2× in test mAP, and was far more robust across capture events and phones (E-ablations) |
+| Caveats | ViTs need a fixed input size for a fixed position-embedding grid. We use 322 px = 23×23 patches of 14 px, interpolated once at model creation. WildlifeDatasets found transformers (Swin-B) competitive for animal re-ID. MiewID found the opposite with SwinV2-B. Our result is one more data point on bark, not a general law |
+| **Decision** | Primary backbone: DINOv2-S/14 at 322 px. Patch tokens → GeM → BN (MiewID head), sub-center ArcFace. |
 
 ## 7. Datasets considered
 
@@ -144,6 +156,6 @@ data.
 ## 9. Other choices and their sources
 
 * **GeM vs average pooling.** GeM is standard in instance retrieval (Radenović et al., TPAMI 2018) and MiewID uses it. We keep it (learnable p).
-* **Embedding dimension.** MiewID uses the backbone width (2152) without projection. Storage cost is 4.3 KB per observation in fp16 (E-efficiency), which is negligible, so we keep it.
+* **Embedding dimension.** MiewID uses the backbone width without projection, and we keep that rule. With DINOv2-S the embedding is 384-d (0.75 KB per observation in fp16), vs 2152-d (4.3 KB) for EfficientNetV2-M.
 * **Open-set thresholds.** Thresholds are chosen on identity-disjoint validation data at a target false-match rate (default 1 %), because merging two trees' histories is the costliest error. A false "new tree" creates a duplicate that `merge_trees` can repair. This follows the open-set / disjoint split practice in WildlifeDatasets.
 * **Multi-view aggregation.** Start with the mean of L2-normalised views (no parameters). Attention pooling and a small transformer are tested in a controlled ablation and kept only if they help (E-aggregation).
