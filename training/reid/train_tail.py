@@ -1,0 +1,186 @@
+"""Fine-tune the tail of EfficientNetV2-M (stage 5 + conv_head) + GeM + BN from cached trunk features.
+
+Identities: every training-split tree of every species (multi-species training
+follows MiewID's finding that multispecies models beat single-species ones;
+whether that transfers to trees is tested, not assumed — see
+docs/experiments.md E-loss/E-multispecies).
+
+Model selection: the epoch with the best hemlock *validation* mAP (val trees
+are identity-disjoint from train and test). Test trees are never touched here.
+
+Usage:
+    python training/reid/train_tail.py --cache runs/cache --data runs/data --loss subcenter_arcface \
+        --epochs 6 --out runs/reid/subcenter
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import random
+import time
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import numpy as np
+import timm
+import torch
+from torch import nn
+
+from hemlock_sentinel.evaluation.metrics import retrieval_metrics
+from hemlock_sentinel.evaluation.splits import read_manifest
+from hemlock_sentinel.reid.embedding import EmbeddingHead
+from hemlock_sentinel.reid.losses import build_loss
+
+TRUNK_STAGES = 5
+
+
+class Tail(nn.Module):
+    def __init__(self, pretrained: bool = True, gem_p: float = 3.0, train_stage5: bool = True):
+        super().__init__()
+        m = timm.create_model("efficientnetv2_rw_m", pretrained=pretrained, num_classes=0, global_pool="")
+        self.stage5 = m.blocks[TRUNK_STAGES:]
+        self.conv_head, self.bn2 = m.conv_head, m.bn2
+        self.head = EmbeddingHead(m.num_features, gem_p)
+        self.dim = m.num_features
+        for p in self.stage5.parameters():
+            p.requires_grad_(train_stage5)
+
+    def forward(self, x):
+        return self.head(self.bn2(self.conv_head(self.stage5(x))))
+
+
+def pk_batches(labels: np.ndarray, p: int, k: int, rng: random.Random):
+    """Batches of p identities x k samples (sampling with replacement inside small identities)."""
+    by = defaultdict(list)
+    for i, l in enumerate(labels):
+        by[int(l)].append(i)
+    ids = list(by)
+    n_batches = len(labels) // (p * k)
+    for _ in range(n_batches):
+        chosen = rng.sample(ids, min(p, len(ids)))
+        idx = []
+        for c in chosen:
+            pool = by[c]
+            idx += rng.sample(pool, k) if len(pool) >= k else [rng.choice(pool) for _ in range(k)]
+        yield idx
+
+
+@torch.no_grad()
+def embed(tail: Tail, feats: np.ndarray, rows: np.ndarray, bs: int = 64) -> np.ndarray:
+    tail.eval()
+    out = []
+    for s in range(0, len(rows), bs):
+        x = torch.from_numpy(feats[rows[s:s + bs]].astype(np.float32))
+        out.append(tail(x).numpy())
+    return np.concatenate(out) if out else np.zeros((0, tail.dim), np.float32)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cache", default="runs/cache")
+    ap.add_argument("--data", default="runs/data")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--loss", default="subcenter_arcface")
+    ap.add_argument("--epochs", type=int, default=6)
+    ap.add_argument("--p", type=int, default=16)
+    ap.add_argument("--k", type=int, default=4)
+    ap.add_argument("--lr-head", type=float, default=1e-3)
+    ap.add_argument("--lr-backbone", type=float, default=1e-4)
+    ap.add_argument("--s", type=float, default=30.0)
+    ap.add_argument("--m-max", type=float, default=0.5)
+    ap.add_argument("--subcenters", type=int, default=3)
+    ap.add_argument("--hemlock-only", action="store_true", help="train identities: hemlock only (ablation)")
+    ap.add_argument("--freeze-stage5", action="store_true", help="train conv_head+GeM+BN only (ablation)")
+    ap.add_argument("--threads", type=int, default=4)
+    ap.add_argument("--seed", type=int, default=0)
+    args = ap.parse_args()
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    rng = random.Random(args.seed)
+    torch.set_num_threads(args.threads)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    recs = read_manifest(Path(args.data) / "manifest.csv")
+    splits = json.loads((Path(args.data) / "splits.json").read_text())
+    cache = Path(args.cache)
+    aug = np.load(cache / "train_aug_trunk.npy", mmap_mode="r")
+    aug_rows = np.load(cache / "train_aug_rows.npy")
+    ev = np.load(cache / "eval_trunk.npy", mmap_mode="r")
+
+    train_trees = sorted(set(splits["train"]))
+    if args.hemlock_only:
+        train_trees = [t for t in train_trees if t.startswith("PRU-")]
+    tmap = {t: i for i, t in enumerate(train_trees)}
+    keep = np.array([recs[r].tree_id in tmap for r in aug_rows])
+    aug_idx = np.nonzero(keep)[0]
+    labels = np.array([tmap[recs[aug_rows[i]].tree_id] for i in aug_idx])
+    counts = [c for _, c in sorted(Counter(labels.tolist()).items())]
+    print(f"train identities={len(train_trees)} samples={len(aug_idx)}", flush=True)
+
+    val_rows = np.array([i for i, r in enumerate(recs) if r.tree_id in set(splits["val"]) and r.species == "tsuga_canadensis"])
+    val_labels = np.array([recs[i].tree_id for i in val_rows])
+
+    tail = Tail(train_stage5=not args.freeze_stage5)
+    loss_fn = build_loss(args.loss, tail.dim, len(train_trees), class_counts=counts, s=args.s,
+                         m_max=args.m_max, k=args.subcenters)
+    groups = [
+        {"params": [p for p in tail.stage5.parameters() if p.requires_grad], "lr": args.lr_backbone},
+        {"params": list(tail.conv_head.parameters()) + list(tail.bn2.parameters()), "lr": args.lr_backbone},
+        {"params": list(tail.head.parameters()) + list(loss_fn.parameters()), "lr": args.lr_head},
+    ]
+    opt = torch.optim.Adam([g for g in groups if g["params"]])
+    n_batches = len(aug_idx) // (args.p * args.k)
+    total = args.epochs * n_batches
+    warm = max(1, n_batches // 2)
+    base = [g["lr"] for g in opt.param_groups]
+
+    def set_lr(step):
+        f = (step + 1) / warm if step < warm else 0.5 * (1 + np.cos(np.pi * (step - warm) / max(1, total - warm)))
+        for g, b in zip(opt.param_groups, base):
+            g["lr"] = b * f
+
+    def val_score():
+        e = embed(tail, ev, val_rows)
+        return retrieval_metrics(e, val_labels)
+
+    history = []
+    m0 = val_score()
+    history.append({"epoch": 0, **m0})
+    print("epoch 0 val", m0, flush=True)
+    best, best_state = m0["mAP"], copy.deepcopy(tail.state_dict())
+    step = 0
+    t0 = time.time()
+    for ep in range(1, args.epochs + 1):
+        tail.train()
+        losses = []
+        for bidx in pk_batches(labels, args.p, args.k, rng):
+            set_lr(step)
+            rows = aug_idx[bidx]
+            order = np.argsort(rows)  # sorted reads from the memmap
+            x = torch.from_numpy(aug[rows[order]].astype(np.float32))
+            y = torch.from_numpy(labels[bidx][order]).long()
+            loss = loss_fn(tail(x), y)
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            losses.append(float(loss))
+            step += 1
+        m = val_score()
+        history.append({"epoch": ep, "loss": float(np.mean(losses)), "seconds": time.time() - t0, **m})
+        print(f"epoch {ep} loss {np.mean(losses):.3f} val {m} {time.time() - t0:.0f}s", flush=True)
+        if m["mAP"] > best:
+            best, best_state = m["mAP"], copy.deepcopy(tail.state_dict())
+    tail.load_state_dict(best_state)
+    torch.save({"tail": best_state, "args": vars(args), "train_trees": train_trees}, out / "tail.pt")
+    emb = embed(tail, ev, np.arange(len(recs)))
+    np.save(out / "embeddings.npy", emb.astype(np.float32))
+    (out / "history.json").write_text(json.dumps(history, indent=2))
+    print("best val mAP", best)
+
+
+if __name__ == "__main__":
+    main()
