@@ -29,8 +29,12 @@ from hemlock_sentinel.reid.embedding import ReIDConfig, ReIDNet
 def assemble(tail_path: str, species_path: str, image_size: int) -> tuple[ReIDNet, list[str]]:
     sp = np.load(species_path)
     labels = [str(x) for x in sp["labels"]]
-    net = ReIDNet(ReIDConfig(pretrained=True, image_size=image_size, n_species=len(labels)))
-    tail = torch.load(tail_path, map_location="cpu", weights_only=False)["tail"]
+    ck = torch.load(tail_path, map_location="cpu", weights_only=False)
+    backbone = ck.get("backbone", "efficientnetv2_rw_m")
+    if ck.get("split", "trunk") != "trunk" and not ("dinov2" in backbone):
+        raise NotImplementedError("export of EfficientNet last-block ablation checkpoints is not supported")
+    net = ReIDNet(ReIDConfig(backbone=backbone, pretrained=True, image_size=image_size, n_species=len(labels)))
+    tail = ck["tail"]
     sd = net.state_dict()
     mapped = {}
     for k, v in tail.items():
@@ -39,6 +43,9 @@ def assemble(tail_path: str, species_path: str, image_size: int) -> tuple[ReIDNe
             mapped["backbone.model.blocks." + k[len("stage5."):]] = v
         elif k.startswith("conv_head.") or k.startswith("bn2."):
             mapped["backbone.model." + k] = v
+        elif k.startswith("tail.blocks.") or k.startswith("tail.norm."):
+            # ViT tail (_ViTTail): block indices are the original ones (Sequential slicing)
+            mapped["backbone.model." + k[len("tail."):]] = v
         elif k.startswith("head.pool."):
             mapped["pool." + k[len("head.pool."):]] = v
         elif k.startswith("head.bn."):
@@ -68,6 +75,7 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     net, labels = assemble(args.tail, args.species, args.image_size)
     cfg = {"backbone": net.cfg.backbone, "image_size": args.image_size, "gem_p": 3.0, "n_species": len(labels)}
+    # trained GeM p is part of the state dict; gem_p is only the init value
     torch.save({"config": cfg, "state_dict": net.state_dict(), "species_labels": labels, "version": args.version},
                out.with_suffix(".pt"))
 

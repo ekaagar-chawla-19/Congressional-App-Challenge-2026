@@ -37,7 +37,9 @@ class ReIDNet(nn.Module):
     def __init__(self, cfg: ReIDConfig):
         super().__init__()
         self.cfg = cfg
-        self.backbone = Backbone(cfg.backbone, pretrained=cfg.pretrained)
+        # ViTs (DINOv2) need the input size at construction (position-embedding interpolation)
+        kw = {"img_size": cfg.image_size} if ("dinov2" in cfg.backbone or cfg.backbone.startswith("vit")) else {}
+        self.backbone = Backbone(cfg.backbone, pretrained=cfg.pretrained, **kw)
         self.pool = GeM(p=cfg.gem_p)
         self.bn = nn.BatchNorm1d(self.backbone.num_features)
         self.embedding_dim = self.backbone.num_features

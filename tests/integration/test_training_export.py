@@ -65,3 +65,36 @@ def test_train_tail_then_export_roundtrip(tmp_path, bark):
     k = next(k for k in tail if k.startswith("stage5.") and k.endswith("conv_pw.weight"))
     assert torch.equal(tail[k], full["backbone.model.blocks." + k[len("stage5."):]])
     assert torch.equal(tail["head.bn.running_mean"], full["bn.running_mean"])
+
+
+@pytest.mark.slow
+def test_dinov2_last_block_tail_export_mapping(tmp_path, bark):
+    """Regression: ViT tail keys (tail.blocks.<i>, tail.norm) must land in the right backbone blocks,
+    and the ONNX graph must not depend on traced token counts."""
+    import importlib.util
+
+    import cv2
+    import torch
+
+    spec = importlib.util.spec_from_file_location("train_tail", ROOT / "training/reid/train_tail.py")
+    tt = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tt)
+    name = "vit_small_patch14_dinov2.lvd142m"
+    tail = tt.Tail(name, pretrained=False, img_size=56, split="last_block")
+    torch.manual_seed(0)
+    for p in tail.parameters():
+        p.data.normal_(0, 0.02)
+    torch.save({"tail": tail.state_dict(), "backbone": name, "split": "last_block"}, tmp_path / "tail.pt")
+    np.savez(tmp_path / "sp.npz", W=np.random.default_rng(2).normal(size=(len(SPECIES), 384)).astype(np.float32),
+             b=np.zeros(len(SPECIES), np.float32), labels=np.array(SPECIES), threshold=np.float32(0.5))
+    img = tmp_path / "x.jpg"
+    cv2.imwrite(str(img), bark(1, 120, 100))
+    subprocess.run([sys.executable, str(ROOT / "scripts/export_model.py"), "--tail", str(tmp_path / "tail.pt"),
+                    "--species", str(tmp_path / "sp.npz"), "--out", str(tmp_path / "exp/hemlock"),
+                    "--image-size", "56", "--check-images", str(img)], check=True)
+    full = torch.load(tmp_path / "exp/hemlock.pt", weights_only=False)["state_dict"]
+    sd = tail.state_dict()
+    assert torch.equal(sd["tail.blocks.11.mlp.fc1.weight"], full["backbone.model.blocks.11.mlp.fc1.weight"])
+    assert torch.equal(sd["tail.norm.weight"], full["backbone.model.norm.weight"])
+    assert torch.equal(sd["head.pool.p"], full["pool.p"])
+    assert json.loads((tmp_path / "exp/parity.json").read_text())["min_cosine_torch_vs_onnx"] > 0.9999

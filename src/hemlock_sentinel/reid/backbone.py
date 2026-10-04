@@ -35,9 +35,8 @@ class Backbone(nn.Module):
         if self._is_vit:
             prefix = getattr(self.model, "num_prefix_tokens", 1)
             tokens = f[:, prefix:, :]
-            n = tokens.shape[1]
-            side = int(round(n**0.5))
-            return tokens.transpose(1, 2).reshape(f.shape[0], -1, side, side)
+            gh, gw = self.model.patch_embed.grid_size  # static: keeps the ONNX graph shape-free
+            return tokens.transpose(1, 2).reshape(f.shape[0], -1, gh, gw)
         if self._nhwc:
             return f.permute(0, 3, 1, 2)
         return f
