@@ -34,24 +34,31 @@ Running on a Raspberry Pi: [`docs/deployment.md`](docs/deployment.md).
 ## What the evidence does and does not support
 
 * All hemlock numbers come from **BarkNet 1.0** (MIT): 45 hemlocks, about 22 bark photos each, all from **one session per tree**. They measure "same tree, new bark region, same day" on trees never seen in training. The test set is 14 hemlocks, so confidence intervals are wide.
-* **Cross-season re-identification has not been tested.** No openly licensed dataset with repeat visits of individual hemlocks exists that we could find. The app is built to collect one.
+* Re-photographing robustness comes from the **Laval Tree-Bark-Re-Identification** dataset (MIT): red pine and elm, each bark patch re-shot 12 times under changed lighting, but in one night.
+* **Different-day / cross-season re-identification has not been tested.** No openly licensed dataset with repeat visits of individual hemlocks exists that we could find. The app is built to collect one, and the scripts to evaluate on it are ready.
 * Depth matching is implemented and tested only on **simulated** trunks. It stays off until it is calibrated on real field depth.
 
 ## Results at a glance
 
-Hemlock test trees never seen in training (14 trees, BarkNet, same-session regime). Details and confidence intervals are in [`docs/experiments.md`](docs/experiments.md).
+Production model **v2**: DINOv2-S/14, trained on BarkNet plus re-photographed trees. All numbers are on trees never seen in training. Details, confidence intervals and every experiment are in [`docs/experiments.md`](docs/experiments.md).
 
-| | Production (DINOv2-S/14) |
+| Test | Result |
 |---|---|
-| Recognise a returning tree from 3 trunk views: top-1 / top-5 among enrolled trees | **0.86 / 0.997** |
-| … from 5 views | 0.94 |
-| Fully automatic decision at the shipped calibration: returning trees auto-accepted / new trees falsely matched | 43 % / **0.6 %** |
-| Species gate: accuracy; hemlock precision / recall; never-seen red spruce called hemlock | 93 %; 0.99 / 0.99; 1 of 236 |
+| **Re-photographed trees** (Laval data: same bark patch re-shot with new lighting/angle; 40 test trees) — right tree first, 3 photos | **99–100 %** (red pine / elm); before re-photograph training: 81–82 %; MiewID EfficientNetV2-M recipe: 31–36 % |
+| … automatic decision with thresholds calibrated on that camera: recognised / wrong ID / new trees wrongly matched | 87–96 % / 0–0.2 % / 0.8–4.8 % |
+| **Hemlocks** (BarkNet, 14 test trees, same-day photos): right tree first / in top 5 (3 photos) | 87 % / 99 % |
+| Species gate: accuracy; hemlock precision / recall; never-seen red spruce called hemlock | 94 %; 1.00 / 0.97; 0 of 236 |
 | ONNX model / RAM / time per view (x86 4-core dev box, not a Pi) | 87 MB / 273 MB / 117 ms |
+
+**Not yet tested: the same hemlock on different days or seasons.** No public dataset has it. The app records it, and `scripts/export_field_data.py` + `scripts/evaluate_field.py` turn your field visits into exactly that test.
+
+Two findings shape how the system is used:
+* **Re-photograph the same bark patches** on every visit (north side first, then fixed quarter-turns). The model recognises a patch, not a whole trunk; a different patch of the same tree is rarely recognised.
+* **Calibrate thresholds on your own camera and field data.** Thresholds from one camera and lighting setup let up to 42 % of new trees be merged into existing IDs under a different setup (before v2).
 
 When not confident enough to auto-accept, the app does not guess. It either:
 * asks for extra trunk views (when views disagree), or
-* shows the ranked candidates for one-tap confirmation; the correct tree is in the top 5 for 99.7 % of returning-tree queries here.
+* shows the ranked candidates for one-tap confirmation.
 
 <img src="docs/images/app_revisit_real_model.png" width="260" alt="Guided capture app: revisit of a held-out hemlock matched to H-001">
 
@@ -104,8 +111,14 @@ python scripts/analyze_overlap.py                                               
 
 # 2. production model: DINOv2-S/14 (CPU budget: frozen blocks 0-7 cached once, blocks 8-11 fine-tuned)
 python training/reid/cache_trunk.py --backbone vit_small_patch14_dinov2.lvd142m --size 322 --out runs/cache_dinov2
-python training/reid/train_tail.py --cache runs/cache_dinov2 --loss subcenter_arcface --epochs 4 --out runs/reid/dino_deep_multi
-bash   scripts/finalize.sh runs/reid/dino_deep_multi 322    # eval, species head, export, calibration, deployed-path eval
+python scripts/prepare_bark_reid.py --root /data/barkreid --out runs/data_barkreid     # Laval re-ID data (MIT)
+python training/reid/cache_trunk.py --backbone vit_small_patch14_dinov2.lvd142m --size 322 \
+       --data runs/data_barkreid --out runs/cache_dinov2_barkreid
+python training/reid/train_tail.py --cache runs/cache_dinov2 --extra-cache runs/cache_dinov2_barkreid \
+       --extra-data runs/data_barkreid --loss subcenter_arcface --epochs 3 --out runs/reid/dino_plus_recapture
+bash   scripts/finalize.sh runs/reid/dino_plus_recapture 322    # eval, species head, export, calibration
+python scripts/evaluate_recapture.py --emb runs/reid/dino_plus_recapture/embeddings_extra.npy --name v2 \
+       --calibration runs/export/calibration.json --calibrate-on-val --out runs/results/recapture_v2.json
 
 # 3. comparisons and ablations (docs/experiments.md)
 python scripts/zero_shot_backbones.py                                             # E-backbone
@@ -130,7 +143,17 @@ hemlock-app --model runs/export/hemlock.onnx --calibration runs/export/calibrati
 With a GPU, skip the trunk cache and fine-tune end to end. The model, loss,
 splits and evaluation code are the same.
 
-## Collecting the team's own dataset
+## Collecting the team's own dataset (the hemlock multi-day test)
+
+```bash
+python scripts/export_field_data.py --db runs/app/trees.sqlite --blobs runs/app/blobs --out runs/data_field
+python scripts/embed_with_runtime.py --model runs/export/hemlock.onnx --data runs/data_field --all \
+       --out runs/reid/field/embeddings.npy
+python scripts/evaluate_field.py --data runs/data_field --emb runs/reid/field/embeddings.npy \
+       --calibration runs/export/calibration.json --out runs/results/field.json   # accuracy by days elapsed
+# then fine-tune on the field training trees: train_tail.py ... --extra-cache <field cache> --extra-data runs/data_field
+```
+
 
 Every capture made with the app is stored with:
 

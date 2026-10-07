@@ -1,0 +1,186 @@
+{
+  "name": "dino_production",
+  "embeddings": "runs/reid/dino_prod_barkreid/embeddings.npy",
+  "calibration": "runs/export_prev/calibration.json",
+  "protocol": "Laval Tree-Bark-Re-Identification; TEST trees only (20 per species), never trained or calibrated on; re-photographed at night under changed lighting/camera position, single session; 3-photo observations; half the test trees enrolled per repeat",
+  "pinus_resinosa": {
+    "n_test_trees": 20,
+    "n_images": 480,
+    "image_retrieval_same_surface": {
+      "top1": 0.7188,
+      "top5": 0.8854,
+      "mAP": 0.2862,
+      "n_queries": 480
+    },
+    "image_retrieval_tree": {
+      "top1": 0.7292,
+      "top5": 0.9062,
+      "mAP": 0.2002,
+      "n_queries": 480
+    },
+    "observation_3views": {
+      "gallery_trees": 10,
+      "same_patch": {
+        "top1": 0.8133,
+        "top5": 0.965,
+        "n": 600,
+        "top1_ci95_by_tree": [
+          0.7444,
+          0.8814
+        ]
+      },
+      "other_patch": {
+        "top1": 0.1462,
+        "top5": 0.5337,
+        "n": 800
+      },
+      "auc_same_patch_vs_wrong_tree": 0.9285,
+      "auc_other_patch_vs_wrong_tree": 0.562,
+      "cosine_median": {
+        "same_patch": 0.8646,
+        "other_patch": 0.7181,
+        "wrong_tree": 0.7038
+      }
+    },
+    "decision_barknet_calibration": {
+      "same": {
+        "correct": 0.6733,
+        "wrong": 0.095,
+        "new": 0.0,
+        "uncertain": 0.2317,
+        "n": 600
+      },
+      "other": {
+        "correct": 0.0788,
+        "wrong": 0.3688,
+        "new": 0.0063,
+        "uncertain": 0.5463,
+        "n": 800
+      },
+      "new": {
+        "correct": 0.0,
+        "wrong": 0.4156,
+        "new": 0.0131,
+        "uncertain": 0.5713,
+        "n": 1600
+      }
+    },
+    "decision_domain_calibration": {
+      "same": {
+        "correct": 0.2417,
+        "wrong": 0.0017,
+        "new": 0.6317,
+        "uncertain": 0.125,
+        "n": 600
+      },
+      "other": {
+        "correct": 0.0,
+        "wrong": 0.0013,
+        "new": 0.9812,
+        "uncertain": 0.0175,
+        "n": 800
+      },
+      "new": {
+        "correct": 0.0,
+        "wrong": 0.0019,
+        "new": 0.9825,
+        "uncertain": 0.0156,
+        "n": 1600
+      }
+    },
+    "domain_calibration_thresholds": {
+      "match": 0.5152,
+      "global": 0.8906
+    }
+  },
+  "ulmus_sp": {
+    "n_test_trees": 20,
+    "n_images": 480,
+    "image_retrieval_same_surface": {
+      "top1": 0.8396,
+      "top5": 0.9583,
+      "mAP": 0.3419,
+      "n_queries": 480
+    },
+    "image_retrieval_tree": {
+      "top1": 0.875,
+      "top5": 0.9667,
+      "mAP": 0.2839,
+      "n_queries": 480
+    },
+    "observation_3views": {
+      "gallery_trees": 10,
+      "same_patch": {
+        "top1": 0.815,
+        "top5": 0.97,
+        "n": 600,
+        "top1_ci95_by_tree": [
+          0.7317,
+          0.8943
+        ]
+      },
+      "other_patch": {
+        "top1": 0.4,
+        "top5": 0.7987,
+        "n": 800
+      },
+      "auc_same_patch_vs_wrong_tree": 0.9356,
+      "auc_other_patch_vs_wrong_tree": 0.7523,
+      "cosine_median": {
+        "same_patch": 0.8451,
+        "other_patch": 0.7211,
+        "wrong_tree": 0.6224
+      }
+    },
+    "decision_barknet_calibration": {
+      "same": {
+        "correct": 0.6667,
+        "wrong": 0.0583,
+        "new": 0.0233,
+        "uncertain": 0.2517,
+        "n": 600
+      },
+      "other": {
+        "correct": 0.16,
+        "wrong": 0.165,
+        "new": 0.0537,
+        "uncertain": 0.6212,
+        "n": 800
+      },
+      "new": {
+        "correct": 0.0,
+        "wrong": 0.185,
+        "new": 0.1044,
+        "uncertain": 0.7106,
+        "n": 1600
+      }
+    },
+    "decision_domain_calibration": {
+      "same": {
+        "correct": 0.5517,
+        "wrong": 0.0083,
+        "new": 0.3117,
+        "uncertain": 0.1283,
+        "n": 600
+      },
+      "other": {
+        "correct": 0.05,
+        "wrong": 0.03,
+        "new": 0.8225,
+        "uncertain": 0.0975,
+        "n": 800
+      },
+      "new": {
+        "correct": 0.0,
+        "wrong": 0.0225,
+        "new": 0.9062,
+        "uncertain": 0.0712,
+        "n": 1600
+      }
+    },
+    "domain_calibration_thresholds": {
+      "match": 0.5538,
+      "global": 0.8325
+    }
+  }
+}

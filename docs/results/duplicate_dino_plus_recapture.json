@@ -1,0 +1,19 @@
+{
+  "n": 116,
+  "reshoot_cos": {
+    "1": 0.7611,
+    "5": 0.8172,
+    "50": 0.8944
+  },
+  "next_view_cos": {
+    "50": 0.6491,
+    "95": 0.8137,
+    "99": 0.8706
+  },
+  "threshold": 0.8706,
+  "separable": false,
+  "next_view_max": 0.914,
+  "hard_threshold": 0.97,
+  "reshoots_caught_at_threshold": 0.7155,
+  "note": "re-shoots simulated with small jitter on training-split images"
+}

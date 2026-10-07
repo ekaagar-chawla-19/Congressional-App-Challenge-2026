@@ -20,7 +20,9 @@ JSON written by the scripts in this repository (copied from `runs/results`,
 | `duplicate_*.json` | `scripts/calibrate_duplicate.py` | E-duplicate |
 | `quality_calibration.json` | `scripts/calibrate_quality.py` | E-quality |
 | `history_*.json` | `training/reid/train_tail.py` | training curves (val) |
+| `recapture_*.json` | `scripts/evaluate_recapture.py` | E-recapture (Laval re-photographed trees) |
 | `bench/*.json` | `benchmarks/` | E-efficiency |
 
 `deep_subcenter_2ep` = EfficientNetV2-M (MiewID baseline), stage 5 fine-tuned, 2 epochs.
-`dino_deep_multi` = production DINOv2-S/14, blocks 8–11 fine-tuned, 4 epochs.
+`dino_deep_multi` = production v1, DINOv2-S/14, blocks 8–11 fine-tuned, 4 epochs (`calibration_v1.json`).
+`dino_plus_recapture` = production v2, v1 recipe + 40 re-photographed Laval training trees, 3 epochs (`calibration_production.json`).

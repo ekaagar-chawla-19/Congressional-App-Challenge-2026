@@ -1,0 +1,98 @@
+{
+  "calibration": {
+    "species_threshold": 0.7457521021507588,
+    "match_threshold": 0.8577161966348574,
+    "global_threshold": 0.7053030729293824,
+    "target_fmr": 0.01,
+    "view_contradiction_margin": 0.18683075904846191,
+    "view_match_threshold": 0.6684904098510743,
+    "duplicate_cosine": 0.8706,
+    "duplicate_hard_cosine": 0.97,
+    "fusers": {
+      "global+gap+agreement": {
+        "feature_names": [
+          "global",
+          "gap",
+          "agreement"
+        ],
+        "coef": [
+          4.537798093290255,
+          3.233987933078643,
+          -1.146399341799969
+        ],
+        "intercept": -8.821336124368912,
+        "mean": [
+          0.3470113013479003,
+          -0.180013547470432,
+          0.2500000000000009
+        ],
+        "scale": [
+          0.21329570671407885,
+          0.27052053057405345,
+          0.34988660394534726
+        ]
+      }
+    },
+    "provenance": {
+      "fitted_on": "hemlock val trees (identity-disjoint from train/test)",
+      "n_val_queries": 980,
+      "n_val_candidate_pairs": 3920,
+      "embeddings": "runs/reid/dino_plus_recapture/embeddings.npy",
+      "date": "2026-10-07"
+    }
+  },
+  "decide_with_view_checks": {
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.5204,
+    "new_accuracy": 0.9482,
+    "false_match_rate": 0.0379,
+    "false_match_rate_new_trees": 0.0518,
+    "false_new_rate": 0.4611,
+    "precision_existing": 0.8513,
+    "recall_existing": 0.5204,
+    "uncertain_rate_known": 0.141,
+    "uncertain_rate_new": 0.0763
+  },
+  "decide_without_view_checks": {
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.5204,
+    "new_accuracy": 0.9482,
+    "false_match_rate": 0.0385,
+    "false_match_rate_new_trees": 0.0518,
+    "false_new_rate": 0.4598,
+    "precision_existing": 0.8495,
+    "recall_existing": 0.5204,
+    "uncertain_rate_known": 0.0,
+    "uncertain_rate_new": 0.0
+  },
+  "global_threshold_gallery_aware": {
+    "threshold": 0.7338,
+    "n_gallery": 7,
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.5507,
+    "new_accuracy": 0.918,
+    "false_match_rate": 0.0582,
+    "false_match_rate_new_trees": 0.082,
+    "false_new_rate": 0.4242,
+    "precision_existing": 0.7977,
+    "recall_existing": 0.5507
+  },
+  "global_threshold_max_impostor": {
+    "threshold": 0.7053,
+    "n_known": 759,
+    "n_new": 1061,
+    "known_accuracy": 0.6153,
+    "new_accuracy": 0.8558,
+    "false_match_rate": 0.1137,
+    "false_match_rate_new_trees": 0.1442,
+    "false_new_rate": 0.3136,
+    "precision_existing": 0.6929,
+    "recall_existing": 0.6153
+  },
+  "pair_impostor_scores_val": {
+    "n": 3527
+  }
+}

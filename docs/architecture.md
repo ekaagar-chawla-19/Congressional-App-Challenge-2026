@@ -101,7 +101,12 @@ photos (E-deploy, E-efficiency).
 
 **Training** (`training/reid/train_tail.py`): sub-center ArcFace (k=3) with
 MiewID's dynamic margins in [0.2, 0.5], s=30. The model is selected on hemlock
-*validation* mAP.
+*validation* mAP. Production v2 trains on:
+
+* the BarkNet training trees (8 species), and
+* 40 trees from the Laval re-ID dataset whose bark patches were **re-photographed** under changed lighting and camera position.
+
+The second source teaches the invariance that real revisits need: re-photographed test trees go from 0.81 to 0.99–1.00 top-1 (experiments.md E-recapture). The embedding recognises bark *patches*, so the capture protocol re-photographs the same patches on every visit.
 
 On this project's CPU-only budget, the first 8 of 12 transformer blocks are
 frozen and their outputs cached with 4 augmentations per training image. The
@@ -164,6 +169,11 @@ All thresholds (`match_threshold`, `global_threshold`, `view_match_threshold`,
 `view_contradiction_margin`, `species_threshold`) are fitted on validation data
 at a target false-match rate (default 1 %) by `scripts/calibrate.py`, and saved
 with their provenance. The highest similarity is never accepted blindly.
+
+**Calibrate on the deployment camera.** Thresholds fitted under one camera and
+lighting setup do not transfer to another (E-recapture-decision). After the first
+field visits, export the app's database (`scripts/export_field_data.py`) and re-fit
+the thresholds on field validation trees.
 
 ## 10. Persistence (`database/`)
 

@@ -1,11 +1,11 @@
 {
-  "species_threshold": 0.6686432955390517,
-  "match_threshold": 0.8651513701288187,
-  "global_threshold": 0.7253155708312989,
+  "species_threshold": 0.7457521021507588,
+  "match_threshold": 0.9272912033245164,
+  "global_threshold": 0.7877748608589173,
   "target_fmr": 0.01,
-  "view_contradiction_margin": 0.190346360206604,
-  "view_match_threshold": 0.6691574454307557,
-  "duplicate_cosine": 0.8863,
+  "view_contradiction_margin": 0.21685709476470913,
+  "view_match_threshold": 0.7117097377777101,
+  "duplicate_cosine": 0.8706,
   "duplicate_hard_cosine": 0.97,
   "fusers": {
     "global+gap+agreement": {
@@ -15,20 +15,20 @@
         "agreement"
       ],
       "coef": [
-        3.790864092304117,
-        1.5849988302977456,
-        0.04600023086030586
+        3.0294727260309653,
+        1.932864661006706,
+        0.027876159733322435
       ],
-      "intercept": -8.12392163371745,
+      "intercept": -7.2321821817947765,
       "mean": [
-        0.27376935767989874,
-        -0.21360633021692194,
-        0.23991797676007925
+        0.2882015101309893,
+        -0.21569988320138037,
+        0.2399464570517173
       ],
       "scale": [
-        0.23139132066689813,
-        0.32563807173214054,
-        0.3682678147024644
+        0.23813930302141892,
+        0.318774929413617,
+        0.368055858815076
       ]
     }
   },
@@ -36,7 +36,7 @@
     "fitted_on": "all val trees (identity-disjoint from train/test)",
     "n_val_queries": 5620,
     "n_val_candidate_pairs": 23408,
-    "embeddings": "runs/reid/dino_deep_multi/embeddings.npy",
-    "date": "2026-10-04"
+    "embeddings": "runs/reid/dino_plus_recapture/embeddings.npy",
+    "date": "2026-10-07"
   }
 }

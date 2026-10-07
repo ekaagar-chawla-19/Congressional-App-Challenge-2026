@@ -123,6 +123,7 @@ feature descriptor", arXiv:1912.03221 (2019, rev. 2020), Université Laval
 | Dataset | Source / license | Species | Trees | Images | Individual labels | Conditions | Temporal |
 |---|---|---|---|---|---|---|---|
 | **BarkNet 1.0** (used) | Zenodo 11508014 (corrected re-upload); **MIT** | 23 NE-American species incl. **Tsuga canadensis (PRU)** | 45 hemlocks (≈1,000 trees total) | 986 hemlock (~23K total) | **Yes** (tree id + DBH) | Bark at 20–60 cm, 4 phones/cameras, Quebec City, 2017 | Date/time per tree, but **one session per tree** |
+| **Laval Tree-Bark-Re-Identification** (used) | [GitHub](https://github.com/ulaval-damas/Tree-Bark-Re-Identification) (Google Drive), **MIT** | Red pine, elm | 100 (50 + 50) | 2,400 (12 per bark patch, 2 patches per tree) | **Yes** (tree + patch) | Each patch **re-photographed** at night with lamp and phone moved (LG Q6) | Single night per tree |
 | CentralBark (Algorithms 2024) | MDPI article | 25 central-hardwood/Appalachian species | — | >19K | Not for individuals | Varying light/moisture | No |
 | BarkVisionAI (Sci. Data 2026) | Nature Sci. Data | multiple | — | — | Species | — | — |
 | iNaturalist (taxon 48734) | per-photo CC licenses | Tsuga canadensis | many | many | **No** | Citizen photos | Not per individual |
@@ -130,7 +131,13 @@ feature descriptor", arXiv:1912.03221 (2019, rev. 2020), Université Laval
 | Tree-SLAM orchard data | per paper | Apple, pear | rows | RGB-D sequences | Yes | Orchard | Seasons |
 
 **Decision.** BarkNet is the only openly licensed dataset we found with
-individual labels for Eastern hemlock, so all hemlock numbers come from it. It
+individual labels for Eastern hemlock, so all hemlock numbers come from it. The
+Laval re-ID set is the only open dataset we found where the *same* tree surface is
+genuinely re-photographed under changed conditions. We use it to test and to
+train robustness to re-photographing (experiments.md E-recapture). Harvard
+Forest (tagged hemlocks, crown-health ratings, no tree photos), PhenoCam (canopy
+time-lapse) and iNaturalist (no individual identity) were checked and do not provide
+individual-hemlock repeat photographs. It
 cannot test cross-season re-ID, canopy/branching views, or depth. The capture
 app and database are therefore built as the team's data-collection pipeline:
 every observation keeps its original JPEGs, per-view metadata, compass heading,

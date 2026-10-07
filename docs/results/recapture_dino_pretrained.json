@@ -1,0 +1,86 @@
+{
+  "name": "dino_pretrained",
+  "embeddings": "runs/reid/dino_pretrained_barkreid/embeddings.npy",
+  "calibration": null,
+  "protocol": "Laval Tree-Bark-Re-Identification; TEST trees only (20 per species), never trained or calibrated on; re-photographed at night under changed lighting/camera position, single session; 3-photo observations; half the test trees enrolled per repeat",
+  "pinus_resinosa": {
+    "n_test_trees": 20,
+    "n_images": 480,
+    "image_retrieval_same_surface": {
+      "top1": 0.275,
+      "top5": 0.5417,
+      "mAP": 0.1075,
+      "n_queries": 480
+    },
+    "image_retrieval_tree": {
+      "top1": 0.2875,
+      "top5": 0.6104,
+      "mAP": 0.106,
+      "n_queries": 480
+    },
+    "observation_3views": {
+      "gallery_trees": 10,
+      "same_patch": {
+        "top1": 0.3917,
+        "top5": 0.7233,
+        "n": 600,
+        "top1_ci95_by_tree": [
+          0.2919,
+          0.4759
+        ]
+      },
+      "other_patch": {
+        "top1": 0.1288,
+        "top5": 0.5725,
+        "n": 800
+      },
+      "auc_same_patch_vs_wrong_tree": 0.685,
+      "auc_other_patch_vs_wrong_tree": 0.5527,
+      "cosine_median": {
+        "same_patch": 0.982,
+        "other_patch": 0.9771,
+        "wrong_tree": 0.9743
+      }
+    }
+  },
+  "ulmus_sp": {
+    "n_test_trees": 20,
+    "n_images": 480,
+    "image_retrieval_same_surface": {
+      "top1": 0.3438,
+      "top5": 0.6292,
+      "mAP": 0.099,
+      "n_queries": 480
+    },
+    "image_retrieval_tree": {
+      "top1": 0.4417,
+      "top5": 0.7479,
+      "mAP": 0.1162,
+      "n_queries": 480
+    },
+    "observation_3views": {
+      "gallery_trees": 10,
+      "same_patch": {
+        "top1": 0.3967,
+        "top5": 0.6383,
+        "n": 600,
+        "top1_ci95_by_tree": [
+          0.3161,
+          0.491
+        ]
+      },
+      "other_patch": {
+        "top1": 0.26,
+        "top5": 0.6412,
+        "n": 800
+      },
+      "auc_same_patch_vs_wrong_tree": 0.6251,
+      "auc_other_patch_vs_wrong_tree": 0.6157,
+      "cosine_median": {
+        "same_patch": 0.9813,
+        "other_patch": 0.98,
+        "wrong_tree": 0.974
+      }
+    }
+  }
+}

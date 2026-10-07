@@ -17,7 +17,82 @@ the commands in the README). If an experiment could not be run, it says so.
 * **Thresholds** are fitted on **val** and applied unchanged to test. Test trees are never used for training, selection or calibration. The exception is curves explicitly labelled *oracle*.
 * **Uncertainty.** The test set has 14 trees. 95 % CIs bootstrap over trees (queries of one tree are correlated), and they are wide.
 
-## Headline: the production model (`runs/reid/dino_deep_multi`)
+## Update: production model v2 (`runs/reid/dino_plus_recapture`), trained with re-photographed trees
+
+There is no public dataset of individual hemlocks photographed on different days. We searched BarkNet, the Harvard Forest archives (tagged hemlocks but no tree photos), PhenoCam (canopy only), iNaturalist (no individual identity) and bark datasets. So we used the closest available real data: **Laval Tree-Bark-Re-Identification** (Robert, Dallaire & Giguère, arXiv:1912.03221, MIT, [repo](https://github.com/ulaval-damas/Tree-Bark-Re-Identification)).
+
+* 50 red pines + 50 elms, 2 bark patches per tree, 12 photos per patch.
+* Each patch was **re-photographed** at night with the lamp and the phone (LG Q6) moved between shots. That is strong lighting and viewpoint change, but **a single session, not different days**.
+* We split by tree: 20 train / 10 calibration / 20 test per species (`scripts/prepare_bark_reid.py`).
+* Every number below is on the 40 **test** trees, which were never trained on or calibrated on (`scripts/evaluate_recapture.py`).
+
+### E-recapture: does the model recognise a re-photographed tree?
+
+Each query is 3 new photos of a patch; the gallery holds one earlier capture of surface 1 per enrolled tree (about 10 trees per species, so chance is about 10 %).
+
+| Model | Red pine: same patch re-photographed, top-1 [CI] | Elm: same patch, top-1 [CI] | AUC same-patch vs wrong tree (RP / EL) | Other patch of same tree, top-1 (RP / EL) | Median cosine: same patch / wrong tree (RP) |
+|---|---|---|---|---|---|
+| DINOv2-S pretrained (no fine-tuning) | 0.39 [0.29, 0.48] | 0.40 [0.32, 0.49] | 0.685 / 0.625 | 0.13 / 0.26 | 0.982 / 0.974 |
+| EfficientNetV2-M (MiewID recipe, BarkNet 2 ep) | 0.36 [0.27, 0.45] | 0.31 [0.24, 0.39] | 0.653 / 0.603 | 0.10 / 0.19 | 0.663 / 0.557 |
+| DINOv2-S production v1 (BarkNet only) | 0.81 [0.74, 0.88] | 0.82 [0.73, 0.89] | 0.929 / 0.936 | 0.15 / 0.40 | 0.865 / 0.704 |
+| **DINOv2-S v2 (BarkNet + 40 re-photographed training trees)** | **1.00 [1.00, 1.00]** | **0.99 [0.97, 1.00]** | **0.9994 / 0.9998** | 0.19 / 0.40 | **0.779 / 0.294** |
+
+**Conclusions.**
+1. Training on BarkNet hemlocks/conifers already transfers to new trees, a new species (elm), a new phone and night lighting: 0.39 → 0.81.
+2. Adding genuinely re-photographed training trees teaches the model what stays the same about a tree when the light and angle change: 0.81 → 0.99–1.00. Wrong trees are pushed far apart (median cosine 0.70 → 0.29).
+3. The model recognises a **bark patch**, not a whole trunk. A *different* patch of the same tree is barely recognised (0.19 / 0.40). This confirms the protocol design: every visit re-photographs the same patches (north side first, then fixed quarter-turns). It also shows the BarkNet "same tree, different region" numbers were partly driven by shared session cues (lighting, camera): the EfficientNetV2-M recipe that scored 0.77 on BarkNet scores 0.31–0.36 here.
+
+### E-recapture-decision: are the automatic decisions safe in a new imaging condition?
+
+The app's `fusion.decide` was run on the same test queries. Cells give auto-recognised correctly / wrong existing ID / new / uncertain:
+
+| Model + calibration | Same patch re-photographed (RP) | Same patch (EL) | **New trees wrongly matched** (RP / EL) |
+|---|---|---|---|
+| v1 + BarkNet calibration (shipped) | 67 / 9.5 / 0 / 23 % | 67 / 5.8 / 2.3 / 25 % | **42 % / 19 %** |
+| v1 + calibration on this camera (10 trees/species) | 24 / 0.2 / 63 / 13 % | 55 / 0.8 / 31 / 13 % | 0.2 % / 2.3 % |
+| v2 + its BarkNet calibration (shipped) | 35 / 0 / 43 / 22 % | 65 / 0 / 14 / 21 % | **0 % / 0 %** |
+| **v2 + calibration on this camera** | **87 / 0 / 8.5 / 4.2 %** | **96 / 0.2 / 0.2 / 3.7 %** | 0.75 % / 4.8 % |
+
+**Conclusions.**
+* Thresholds do **not** transfer across cameras and lighting for a model that has not learned invariance. v1 with BarkNet thresholds would have merged 19–42 % of new trees into existing IDs. **Always calibrate on the deployment camera.** `scripts/export_field_data.py` + `scripts/calibrate.py` do this from the app's own database.
+* v2 is safe even with mismatched thresholds (0 % false matches), and with on-camera calibration it auto-recognises 87–96 % of re-photographed trees.
+
+### v2 on the original hemlock test (no regression) and species gate
+
+| Hemlock test (BarkNet, 14 trees) | v1 | **v2** |
+|---|---|---|
+| Image top-1 / mAP | 0.832 / 0.581 | 0.854 / 0.573 |
+| 3-view top-1 [CI] / top-5 | 0.860 [0.71, 0.97] / 0.997 | 0.872 [0.77, 0.97] / 0.992 |
+| 5-view top-1 | 0.941 | 0.928 |
+| All-pairs AUC / strict no-overlap top-1 | 0.975 / 0.817 | 0.966 / 0.826 |
+| AUC vs same-phone impostors | 0.912 | 0.895 (less reliance on camera cues) |
+| Oracle open-set: returning trees accepted at 1 % / 10 % new-tree FMR, 3 views | 0.39 / 0.64 | 0.41 / 0.55 |
+| … 5 views | 0.67 / 0.90 | 0.45 / 0.78 |
+| Shipped decision (all-species BarkNet calibration): auto-accepted / FMR new trees | 43 % / 0.57 % | 15 % / 0 % |
+| Species accuracy / hemlock precision / recall | 0.934 / 0.990 / 0.990 | **0.942 / 1.000 / 0.970** |
+| Red spruce (never seen) called hemlock | 1 of 236 | **0 of 236** |
+
+On BarkNet's same-session hemlocks, ranking is unchanged within noise, and v2's BarkNet-fitted thresholds are more conservative. The 5-view, 1 %-FMR oracle point is lower. Because BarkNet rewards session cues that will not exist on real revisits, we judged v2's re-photograph robustness the more relevant property.
+
+**Decision: v2 is the production model.** Its thresholds must be re-fitted on field data.
+
+* Training: `train_tail.py --cache runs/cache_dinov2 --extra-cache runs/cache_dinov2_barkreid --extra-data runs/data_barkreid --epochs 3`, with 156 identities and 705 steps (matched to v1's 700).
+* Deployed ONNX path: hemlock test top-1 0.851 / mAP 0.572. Torch↔ONNX min cosine 0.99999988.
+* Real-model end-to-end app test passes:
+  * 5 hemlock revisits: 3 auto-recognised, 1 "uncertain", 1 registered as new with the true tree as second candidate.
+  * 3 unenrolled hemlocks → new.
+  * 3 red spruces → rejected.
+  * No wrong IDs.
+
+### What this still does not test
+
+**Different days and seasons on hemlocks.** Laval is one night per tree; BarkNet is one day per tree. The pipeline for that test is built:
+* `scripts/export_field_data.py` turns the app's database into a dataset where the session is the capture date.
+* `scripts/evaluate_field.py` enrols each tree on its first day and queries later days, reporting accuracy by days elapsed (≤7 d, 8–60 d, 61–180 d, >180 d).
+
+It is covered by an integration test on simulated multi-day visits. It needs your field data to produce real numbers.
+
+## Previous headline: production model v1 (`runs/reid/dino_deep_multi`)
 
 **Configuration.**
 * DINOv2-S/14 at 322 px: blocks 0–7 frozen (cached, 4 augmentations per training image); blocks 8–11, final norm, GeM (p learned) and BN (384-d) fine-tuned.
@@ -384,7 +459,7 @@ The two distributions **overlap**, so embedding similarity cannot reliably detec
 
 ## Open blockers / not done
 
-* **No temporal data.** Same-tree / later-session and cross-season re-identification cannot be measured with any open dataset we found. The app stores everything needed to build this dataset from field visits.
+* **No multi-day hemlock data.** Same-tree / later-day and cross-season re-identification cannot be measured with any open dataset we found. Re-photographing under changed lighting was tested (E-recapture), and the export + later-day evaluation pipeline is ready for field data.
 * **No canopy/branching training data** with individual labels. Those views are stored but excluded from identity.
 * **No Raspberry Pi or depth camera was available.** All latencies are from the dev machine, and the device adapters (`acquisition/devices.py`) are untested on hardware.
 * **Training budget.** CPU only, so DINOv2 blocks 0–7 stay frozen, and the loss/identity ablations used the cheaper last-block regime with 1–2 seeds. End-to-end fine-tuning on a GPU, with more seeds, is the obvious next experiment.

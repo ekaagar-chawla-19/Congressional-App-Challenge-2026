@@ -1,0 +1,467 @@
+{
+  "name": "dino_plus_recapture",
+  "embeddings": "runs/reid/dino_plus_recapture/embeddings.npy",
+  "protocol": {
+    "regime": "same tree / new bark region / same session (BarkNet has one session per tree)",
+    "test_identities_in_training": false,
+    "species": "tsuga_canadensis",
+    "views_per_observation": 3,
+    "enrolled_fraction": 0.5,
+    "repeats": 20,
+    "thresholds_fitted_on": "val split",
+    "n_val_trees": 9,
+    "n_test_trees": 14
+  },
+  "image_retrieval": {
+    "val": {
+      "top1": 0.8941,
+      "top5": 0.9941,
+      "mAP": 0.6198,
+      "n_queries": 170
+    },
+    "test": {
+      "top1": 0.8544,
+      "top5": 0.9747,
+      "mAP": 0.5733,
+      "n_queries": 316
+    },
+    "test_other_species_pooled": {
+      "top1": 0.9371,
+      "top5": 0.9809,
+      "mAP": 0.6785,
+      "n_queries": 1256
+    }
+  },
+  "device_analysis_test": {
+    "genuine": {
+      "mean": 0.5132,
+      "p99": 0.8089,
+      "n": 4343
+    },
+    "impostor_same_device": {
+      "mean": 0.2138,
+      "p99": 0.6019,
+      "n": 30332
+    },
+    "impostor_cross_device": {
+      "mean": 0.166,
+      "p99": 0.5093,
+      "n": 15095
+    },
+    "auc_vs_same_device_impostors": 0.895,
+    "auc_vs_cross_device_impostors": 0.9432
+  },
+  "n_observations": {
+    "val": 53,
+    "test": 101
+  },
+  "open_set_mean": {
+    "closed_set_test": {
+      "top1": 0.8722002635046113,
+      "top5": 0.9920948616600791,
+      "mean_rank": 1.2661396574440054,
+      "n_known_queries": 759,
+      "top1_ci95_by_tree": [
+        0.7693,
+        0.9694
+      ]
+    },
+    "closed_set_val": {
+      "top1": 0.9618320610687023,
+      "top5": 1.0,
+      "mean_rank": 1.0381679389312977,
+      "n_known_queries": 393
+    },
+    "roc_auc_test": 0.8588,
+    "roc_auc_val": 0.9515,
+    "roc_auc_all_pairs_test": 0.9656,
+    "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+    "genuine_test": {
+      "1": 0.5856,
+      "5": 0.6151,
+      "25": 0.6709,
+      "50": 0.7476,
+      "75": 0.8007,
+      "95": 0.8551,
+      "99": 0.8657,
+      "n": 759
+    },
+    "impostor_test": {
+      "1": 0.1686,
+      "5": 0.2365,
+      "25": 0.4847,
+      "50": 0.5932,
+      "75": 0.6744,
+      "95": 0.7481,
+      "99": 0.7927,
+      "n": 1820
+    },
+    "thresholds": {
+      "val_fmr_0.01": {
+        "threshold": 0.7053,
+        "n_known": 759,
+        "n_new": 1061,
+        "known_accuracy": 0.6153,
+        "new_accuracy": 0.8558,
+        "false_match_rate": 0.1137,
+        "false_match_rate_new_trees": 0.1442,
+        "false_new_rate": 0.3136,
+        "precision_existing": 0.6929,
+        "recall_existing": 0.6153
+      },
+      "val_fmr_0.05": {
+        "threshold": 0.6873,
+        "n_known": 759,
+        "n_new": 1061,
+        "known_accuracy": 0.6693,
+        "new_accuracy": 0.8115,
+        "false_match_rate": 0.1467,
+        "false_match_rate_new_trees": 0.1885,
+        "false_new_rate": 0.2424,
+        "precision_existing": 0.6555,
+        "recall_existing": 0.6693
+      }
+    },
+    "closed_set_test_by_capture": {
+      "same_capture": {
+        "top1": 0.8624,
+        "n": 705
+      },
+      "different_capture_same_day": {
+        "top1": 1.0,
+        "n": 54
+      }
+    }
+  },
+  "open_set_strict_no_overlap": {
+    "val": {
+      "top1": 0.9377593360995851,
+      "top5": 1.0,
+      "mean_rank": 1.062240663900415,
+      "n_known_queries": 241,
+      "dropped_overlapping_queries": 152
+    },
+    "test": {
+      "top1": 0.8258527827648114,
+      "top5": 0.9892280071813285,
+      "mean_rank": 1.362657091561939,
+      "n_known_queries": 557,
+      "dropped_overlapping_queries": 202,
+      "roc_auc_all_pairs": 0.9552
+    }
+  },
+  "aggregation_ablation": {
+    "single_view": {
+      "closed_set_test": {
+        "top1": 0.6363636363636364,
+        "top5": 0.9815546772068511,
+        "mean_rank": 1.7351778656126482,
+        "n_known_queries": 759,
+        "top1_ci95_by_tree": [
+          0.5761,
+          0.8329
+        ]
+      },
+      "closed_set_val": {
+        "top1": 0.732824427480916,
+        "top5": 1.0,
+        "mean_rank": 1.3842239185750635,
+        "n_known_queries": 393
+      },
+      "roc_auc_test": 0.6053,
+      "roc_auc_val": 0.6703,
+      "roc_auc_all_pairs_test": 0.8719,
+      "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+      "genuine_test": {
+        "1": 0.2458,
+        "5": 0.2648,
+        "25": 0.3811,
+        "50": 0.4738,
+        "75": 0.5492,
+        "95": 0.6832,
+        "99": 0.7682,
+        "n": 759
+      },
+      "impostor_test": {
+        "1": 0.1616,
+        "5": 0.2106,
+        "25": 0.3618,
+        "50": 0.4282,
+        "75": 0.4924,
+        "95": 0.5643,
+        "99": 0.6284,
+        "n": 1820
+      },
+      "thresholds": {
+        "val_fmr_0.01": {
+          "threshold": 0.637,
+          "n_known": 759,
+          "n_new": 1061,
+          "known_accuracy": 0.0856,
+          "new_accuracy": 0.9925,
+          "false_match_rate": 0.0088,
+          "false_match_rate_new_trees": 0.0075,
+          "false_new_rate": 0.9038,
+          "precision_existing": 0.8025,
+          "recall_existing": 0.0856
+        },
+        "val_fmr_0.05": {
+          "threshold": 0.5273,
+          "n_known": 759,
+          "n_new": 1061,
+          "known_accuracy": 0.3254,
+          "new_accuracy": 0.8407,
+          "false_match_rate": 0.1374,
+          "false_match_rate_new_trees": 0.1593,
+          "false_new_rate": 0.5679,
+          "precision_existing": 0.497,
+          "recall_existing": 0.3254
+        }
+      },
+      "closed_set_test_by_capture": {
+        "same_capture": {
+          "top1": 0.6213,
+          "n": 705
+        },
+        "different_capture_same_day": {
+          "top1": 0.8333,
+          "n": 54
+        }
+      }
+    },
+    "max_pair_late_fusion": {
+      "closed_set_test": {
+        "top1": 0.7404479578392622,
+        "top5": 0.994729907773386,
+        "mean_rank": 1.4571805006587615,
+        "n_known_queries": 759,
+        "top1_ci95_by_tree": [
+          0.6654,
+          0.8863
+        ]
+      },
+      "closed_set_val": {
+        "top1": 0.9236641221374046,
+        "top5": 1.0,
+        "mean_rank": 1.0814249363867685,
+        "n_known_queries": 393
+      },
+      "roc_auc_test": 0.824,
+      "roc_auc_val": 0.9309,
+      "roc_auc_all_pairs_test": 0.956,
+      "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+      "genuine_test": {
+        "1": 0.4516,
+        "5": 0.5292,
+        "25": 0.6065,
+        "50": 0.6737,
+        "75": 0.7271,
+        "95": 0.8129,
+        "99": 0.8679,
+        "n": 759
+      },
+      "impostor_test": {
+        "1": 0.2662,
+        "5": 0.34,
+        "25": 0.4814,
+        "50": 0.5485,
+        "75": 0.6194,
+        "95": 0.6831,
+        "99": 0.7249,
+        "n": 1820
+      },
+      "thresholds": {
+        "val_fmr_0.01": {
+          "threshold": 0.7198,
+          "n_known": 759,
+          "n_new": 1061,
+          "known_accuracy": 0.2767,
+          "new_accuracy": 0.9896,
+          "false_match_rate": 0.0099,
+          "false_match_rate_new_trees": 0.0104,
+          "false_new_rate": 0.7141,
+          "precision_existing": 0.9211,
+          "recall_existing": 0.2767
+        },
+        "val_fmr_0.05": {
+          "threshold": 0.637,
+          "n_known": 759,
+          "n_new": 1061,
+          "known_accuracy": 0.5507,
+          "new_accuracy": 0.8077,
+          "false_match_rate": 0.1764,
+          "false_match_rate_new_trees": 0.1923,
+          "false_new_rate": 0.2951,
+          "precision_existing": 0.5656,
+          "recall_existing": 0.5507
+        }
+      },
+      "closed_set_test_by_capture": {
+        "same_capture": {
+          "top1": 0.7248,
+          "n": 705
+        },
+        "different_capture_same_day": {
+          "top1": 0.9444,
+          "n": 54
+        }
+      }
+    },
+    "mean_1_views": {
+      "closed_set_test": {
+        "top1": 0.5913010873640795,
+        "top5": 0.9711286089238845,
+        "mean_rank": 1.8653918260217472,
+        "n_known_queries": 2667,
+        "top1_ci95_by_tree": [
+          0.4902,
+          0.7289
+        ]
+      },
+      "closed_set_val": {
+        "top1": 0.8002793296089385,
+        "top5": 1.0,
+        "mean_rank": 1.2828212290502794,
+        "n_known_queries": 1432
+      },
+      "roc_auc_test": 0.5928,
+      "roc_auc_val": 0.712,
+      "roc_auc_all_pairs_test": 0.8683,
+      "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+      "genuine_test": {
+        "1": 0.2224,
+        "5": 0.2648,
+        "25": 0.3766,
+        "50": 0.4601,
+        "75": 0.5664,
+        "95": 0.7009,
+        "99": 0.7765,
+        "n": 2667
+      },
+      "impostor_test": {
+        "1": 0.1383,
+        "5": 0.2093,
+        "25": 0.3567,
+        "50": 0.4283,
+        "75": 0.504,
+        "95": 0.5973,
+        "99": 0.6721,
+        "n": 5982
+      },
+      "thresholds": {
+        "val_fmr_0.01": {
+          "threshold": 0.605,
+          "n_known": 2667,
+          "n_new": 3315,
+          "known_accuracy": 0.1657,
+          "new_accuracy": 0.9608,
+          "false_match_rate": 0.0435,
+          "false_match_rate_new_trees": 0.0392,
+          "false_new_rate": 0.7855,
+          "precision_existing": 0.6296,
+          "recall_existing": 0.1657
+        },
+        "val_fmr_0.05": {
+          "threshold": 0.5273,
+          "n_known": 2667,
+          "n_new": 3315,
+          "known_accuracy": 0.3041,
+          "new_accuracy": 0.8374,
+          "false_match_rate": 0.1479,
+          "false_match_rate_new_trees": 0.1626,
+          "false_new_rate": 0.5662,
+          "precision_existing": 0.4782,
+          "recall_existing": 0.3041
+        }
+      },
+      "closed_set_test_by_capture": {
+        "same_capture": {
+          "top1": 0.5756,
+          "n": 2505
+        },
+        "different_capture_same_day": {
+          "top1": 0.8333,
+          "n": 162
+        }
+      }
+    },
+    "mean_5_views": {
+      "closed_set_test": {
+        "top1": 0.928388746803069,
+        "top5": 1.0,
+        "mean_rank": 1.1176470588235294,
+        "n_known_queries": 391,
+        "top1_ci95_by_tree": [
+          0.856,
+          1.0
+        ]
+      },
+      "closed_set_val": {
+        "top1": 0.9791666666666666,
+        "top5": 1.0,
+        "mean_rank": 1.0208333333333333,
+        "n_known_queries": 192
+      },
+      "roc_auc_test": 0.9252,
+      "roc_auc_val": 0.9778,
+      "roc_auc_all_pairs_test": 0.9835,
+      "roc_auc_note": "roc_auc_*: genuine vs BEST wrong tree per query (what the accept decision faces); all_pairs: genuine vs every wrong tree (standard verification ROC)",
+      "genuine_test": {
+        "1": 0.5998,
+        "5": 0.6833,
+        "25": 0.7697,
+        "50": 0.823,
+        "75": 0.8657,
+        "95": 0.8958,
+        "99": 0.9029,
+        "n": 391
+      },
+      "impostor_test": {
+        "1": 0.1486,
+        "5": 0.2556,
+        "25": 0.543,
+        "50": 0.6449,
+        "75": 0.7057,
+        "95": 0.8057,
+        "99": 0.8325,
+        "n": 1010
+      },
+      "thresholds": {
+        "val_fmr_0.01": {
+          "threshold": 0.7721,
+          "n_known": 391,
+          "n_new": 619,
+          "known_accuracy": 0.7366,
+          "new_accuracy": 0.9208,
+          "false_match_rate": 0.0564,
+          "false_match_rate_new_trees": 0.0792,
+          "false_new_rate": 0.243,
+          "precision_existing": 0.8348,
+          "recall_existing": 0.7366
+        },
+        "val_fmr_0.05": {
+          "threshold": 0.7136,
+          "n_known": 391,
+          "n_new": 619,
+          "known_accuracy": 0.8645,
+          "new_accuracy": 0.8158,
+          "false_match_rate": 0.1307,
+          "false_match_rate_new_trees": 0.1842,
+          "false_new_rate": 0.0895,
+          "precision_existing": 0.7191,
+          "recall_existing": 0.8645
+        }
+      },
+      "closed_set_test_by_capture": {
+        "same_capture": {
+          "top1": 0.9224,
+          "n": 361
+        },
+        "different_capture_same_day": {
+          "top1": 1.0,
+          "n": 30
+        }
+      }
+    }
+  }
+}

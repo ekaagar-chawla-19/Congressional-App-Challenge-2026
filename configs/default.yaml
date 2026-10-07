@@ -6,6 +6,7 @@ data:
   barknet_root: /path/to/barknet          # Zenodo record 11508014 (MIT)
   species_codes: [PRU, PIB, PIR, PID, HEG, ERR, ERB, PEG]
   held_out_species: [THO, EPR]            # never trained on: unknown-species tests
+  extra_recapture_data: laval_tree_bark_reid  # RP + EL, re-photographed patches (MIT); 20/10/20 trees per species
   split_fractions: [0.5, 0.2, 0.3]        # train / val / test, by TREE identity
   split_seed: 17
 
@@ -28,7 +29,7 @@ training:
   lr_backbone: 1.0e-4
   lr_head: 1.0e-3
   schedule: warmup_half_epoch_then_cosine
-  epochs: 4
+  epochs: 3                               # v2: 156 identities (116 BarkNet + 40 Laval), 705 steps
   augmentations_cached_per_image: 4       # random-resized-crop, flip, rotate 15, colour jitter
   model_selection: hemlock_val_mAP
 
