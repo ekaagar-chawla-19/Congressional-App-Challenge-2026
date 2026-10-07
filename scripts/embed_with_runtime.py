@@ -27,11 +27,13 @@ def main() -> None:
     ap.add_argument("--data", default="runs/data")
     ap.add_argument("--out", required=True)
     ap.add_argument("--threads", type=int, default=2)
+    ap.add_argument("--all", action="store_true", help="embed every manifest row (not only hemlock val/test)")
     args = ap.parse_args()
     recs = read_manifest(Path(args.data) / "manifest.csv")
     sp = json.loads((Path(args.data) / "splits.json").read_text())
     ids = set(sp["val"]) | set(sp["test"])
-    rows = [i for i, r in enumerate(recs) if r.tree_id in ids and r.species == "tsuga_canadensis"]
+    rows = list(range(len(recs))) if args.all else \
+        [i for i, r in enumerate(recs) if r.tree_id in ids and r.species == "tsuga_canadensis"]
     rt = OnnxRuntime(args.model, threads=args.threads)
     emb = np.full((len(recs), rt.embedding_dim), np.nan, np.float32)
     t0 = time.time()

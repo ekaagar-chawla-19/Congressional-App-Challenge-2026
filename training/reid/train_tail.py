@@ -120,6 +120,11 @@ def main() -> None:
     ap.add_argument("--freeze-stage5", action="store_true", help="train conv_head+GeM+BN only (ablation)")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--extra-cache", default=None,
+                    help="second trunk cache (same backbone), e.g. re-photographed trees from another dataset")
+    ap.add_argument("--extra-data", default=None, help="manifest/splits dir for --extra-cache")
+    ap.add_argument("--extra-identity", choices=["tree", "capture"], default="tree",
+                    help="identity label for the extra data: whole tree, or capture (bark surface)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -145,8 +150,43 @@ def main() -> None:
     keep = np.array([recs[r].tree_id in tmap for r in aug_rows])
     aug_idx = np.nonzero(keep)[0]
     labels = np.array([tmap[recs[aug_rows[i]].tree_id] for i in aug_idx])
+    # sources: (aug memmap, sample rows into it); global sample g -> (source, row) via src/pos
+    sources = [(aug, aug_idx)]
+    src = np.zeros(len(aug_idx), dtype=np.int64)
+    pos = np.arange(len(aug_idx))
+    extra = None
+    if args.extra_cache:
+        xrecs = read_manifest(Path(args.extra_data) / "manifest.csv")
+        xsplits = json.loads((Path(args.extra_data) / "splits.json").read_text())
+        xc = Path(args.extra_cache)
+        xaug = np.load(xc / "train_aug_trunk.npy", mmap_mode="r")
+        xrows = np.load(xc / "train_aug_rows.npy")
+        key = (lambda r: r.tree_id) if args.extra_identity == "tree" else (lambda r: r.capture)
+        xids = sorted({key(xrecs[r]) for r in xrows if xrecs[r].tree_id in set(xsplits["train"])})
+        off = len(train_trees)
+        xmap = {t: off + i for i, t in enumerate(xids)}
+        xidx = np.array([i for i, r in enumerate(xrows) if xrecs[r].tree_id in set(xsplits["train"])])
+        train_trees = train_trees + [f"extra:{t}" for t in xids]
+        labels = np.concatenate([labels, [xmap[key(xrecs[xrows[i]])] for i in xidx]])
+        sources.append((xaug, xidx))
+        src = np.concatenate([src, np.ones(len(xidx), dtype=np.int64)])
+        pos = np.concatenate([pos, np.arange(len(xidx))])
+        extra = (xrecs, np.load(xc / "eval_trunk.npy", mmap_mode="r"), xsplits)
     counts = [c for _, c in sorted(Counter(labels.tolist()).items())]
-    print(f"train identities={len(train_trees)} samples={len(aug_idx)}", flush=True)
+    print(f"train identities={len(train_trees)} samples={len(labels)}", flush=True)
+
+    def load_batch(bidx):
+        bidx = np.asarray(bidx)
+        xs, ys = [], []
+        for si, (mm, idx) in enumerate(sources):
+            sel = bidx[src[bidx] == si]
+            if len(sel) == 0:
+                continue
+            rows_ = idx[pos[sel]]
+            order = np.argsort(rows_)  # sorted reads from the memmap
+            xs.append(torch.from_numpy(mm[rows_[order]].astype(np.float32)))
+            ys.append(torch.from_numpy(labels[sel][order]).long())
+        return torch.cat(xs), torch.cat(ys)
 
     val_rows = np.array([i for i, r in enumerate(recs) if r.tree_id in set(splits["val"]) and r.species == "tsuga_canadensis"])
     val_labels = np.array([recs[i].tree_id for i in val_rows])
@@ -163,7 +203,7 @@ def main() -> None:
         {"params": head_params + list(loss_fn.parameters()), "lr": args.lr_head},
     ]
     opt = torch.optim.Adam([g for g in groups if g["params"]])
-    n_batches = len(aug_idx) // (args.p * args.k)
+    n_batches = len(labels) // (args.p * args.k)
     total = args.epochs * n_batches
     warm = max(1, n_batches // 2)
     base = [g["lr"] for g in opt.param_groups]
@@ -189,10 +229,7 @@ def main() -> None:
         losses = []
         for bidx in pk_batches(labels, args.p, args.k, rng):
             set_lr(step)
-            rows = aug_idx[bidx]
-            order = np.argsort(rows)  # sorted reads from the memmap
-            x = torch.from_numpy(aug[rows[order]].astype(np.float32))
-            y = torch.from_numpy(labels[bidx][order]).long()
+            x, y = load_batch(bidx)
             loss = loss_fn(tail(x), y)
             opt.zero_grad()
             loss.backward()
@@ -200,6 +237,11 @@ def main() -> None:
             losses.append(float(loss.detach()))
             step += 1
         m = val_score()
+        if extra is not None:  # information only; model selection stays on hemlock val
+            xrecs, xev, xsplits = extra
+            xv = np.array([i for i, r in enumerate(xrecs) if r.tree_id in set(xsplits["val"])])
+            m["extra_val_surface_mAP"] = retrieval_metrics(embed(tail, xev, xv),
+                                                           np.array([xrecs[i].capture for i in xv]))["mAP"]
         history.append({"epoch": ep, "loss": float(np.mean(losses)), "seconds": time.time() - t0, **m})
         print(f"epoch {ep} loss {np.mean(losses):.3f} val {m} {time.time() - t0:.0f}s", flush=True)
         if m["mAP"] > best:
@@ -210,6 +252,8 @@ def main() -> None:
                out / "tail.pt")
     emb = embed(tail, ev, np.arange(len(recs)))
     np.save(out / "embeddings.npy", emb.astype(np.float32))
+    if extra is not None:
+        np.save(out / "embeddings_extra.npy", embed(tail, extra[1], np.arange(len(extra[0]))).astype(np.float32))
     (out / "history.json").write_text(json.dumps(history, indent=2))
     print("best val mAP", best)
 
