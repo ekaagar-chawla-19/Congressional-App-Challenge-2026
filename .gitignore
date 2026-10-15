@@ -8,4 +8,5 @@ data/
 *.pt
 *.onnx
 !models/third_party/*.onnx
+!models/production/*.onnx
 .venv/

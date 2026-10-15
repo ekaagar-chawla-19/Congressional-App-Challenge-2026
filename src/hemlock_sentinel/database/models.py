@@ -87,6 +87,7 @@ class TreeRecord:
     observation_count: int
     canonical_embedding: np.ndarray | None = None
     merged_into: str | None = None
+    notes: str | None = None
 
 
 @dataclass

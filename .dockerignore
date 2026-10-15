@@ -1,0 +1,10 @@
+runs/
+data/
+client/node_modules/
+client/dist/
+**/__pycache__/
+.git/
+.pytest_cache/
+.ruff_cache/
+*.pt
+*.npy

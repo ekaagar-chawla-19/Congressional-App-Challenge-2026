@@ -75,7 +75,11 @@ class TreeRepository:
     @staticmethod
     def _tree(r) -> TreeRecord:
         return TreeRecord(r["tree_id"], r["species"], r["created_at"], r["last_seen_at"],
-                          r["observation_count"], from_blob(r["canonical_embedding"]), r["merged_into"])
+                          r["observation_count"], from_blob(r["canonical_embedding"]), r["merged_into"], r["notes"])
+
+    def set_notes(self, tree_id: str, notes: str | None) -> None:
+        with self.tx() as c:
+            c.execute("UPDATE trees SET notes=? WHERE tree_id=?", (notes, tree_id))
 
     # --------------------------------------------------------- observations
     def add_observation(self, obs: ObservationRecord) -> str:
@@ -146,6 +150,20 @@ class TreeRepository:
     def get_observations(self, tree_id: str, with_views: bool = True) -> list[ObservationRecord]:
         rows = self._conn.execute("SELECT * FROM observations WHERE tree_id=? ORDER BY timestamp", (tree_id,))
         return [self._obs(r, with_views) for r in rows.fetchall()]
+
+    def list_observations(self, decisions: list[str] | None = None, unassigned: bool = False,
+                          limit: int = 50, offset: int = 0) -> tuple[list[ObservationRecord], int]:
+        """Newest first, with the total count before paging."""
+        where, args = " WHERE 1=1", []
+        if decisions:
+            where += f" AND decision IN ({','.join('?' * len(decisions))})"
+            args += decisions
+        if unassigned:
+            where += " AND tree_id IS NULL"
+        total = self._conn.execute("SELECT COUNT(*) FROM observations" + where, args).fetchone()[0]
+        rows = self._conn.execute("SELECT * FROM observations" + where + " ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+                                  args + [limit, offset]).fetchall()
+        return [self._obs(r, True) for r in rows], total
 
     def get_observation(self, observation_id: str) -> ObservationRecord | None:
         r = self._conn.execute("SELECT * FROM observations WHERE observation_id=?", (observation_id,)).fetchone()

@@ -91,6 +91,12 @@ pytest -q -m "not slow"                                 # fast suite (no weights
 pytest -q                                               # + training/export regression (downloads ImageNet weights)
 ```
 
+## Backend API for the mobile app
+
+`hemlock-api` serves the production model to a React Native / Expo app over a JSON API
+(interactive docs at `http://localhost:8000/docs`), with a typed TypeScript client in
+`client/` and a `Dockerfile`. Guide: [`docs/api.md`](docs/api.md).
+
 ## Try the app (demo mode, no trained model)
 
 ```bash

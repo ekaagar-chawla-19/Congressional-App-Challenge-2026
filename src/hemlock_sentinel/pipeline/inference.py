@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..acquisition.interfaces import GPS, DepthFrame, EnvironmentalSensors, Frame, ModelRuntime, Storage
+from ..acquisition.interfaces import GPS, DepthFrame, EnvironmentalSensors, Frame, GeoFix, ModelRuntime, Storage
 from ..acquisition.privacy import blur_faces
 from ..acquisition.protocol import GUIDED_VIEWS, MIN_VIEWS, is_identity_view, spec_for
 from ..acquisition.quality import QualityReport, QualityThresholds, assess, heading_problem
@@ -134,14 +134,15 @@ class HemlockSentinel:
         if self.matcher is not None and spec.identity_view:
             vr.local = self.matcher.extract(rgb)
         if self.cfg.store_images:
-            if faces or frame.encoded is None:
+            if faces > 0 or frame.encoded is None:  # -1 = detector unavailable: keep original
                 vr.image_bytes = _encode_jpeg(rgb)
             else:
                 vr.image_bytes = frame.encoded  # store the original bytes, no re-encode
         return vr
 
     # --------------------------------------------------------------- identify
-    def identify(self, views: list[ViewResult], commit: bool = True, now: float | None = None) -> ObservationResult:
+    def identify(self, views: list[ViewResult], commit: bool = True, now: float | None = None,
+                 fix: GeoFix | None = None) -> ObservationResult:
         t0 = time.perf_counter()
         now = time.time() if now is None else now
         good = [v for v in views if v.accepted]
@@ -154,10 +155,10 @@ class HemlockSentinel:
         if species.species == "unknown":
             return self._finish(views, species, None, "rejected_species", None,
                                 f"species uncertain ({species.confidence:.0%}); retake photos or species not supported",
-                                commit, now, t0)
+                                commit, now, t0, fix)
         if not species.reid_allowed:
             return self._finish(views, species, None, "unsupported_species", None,
-                                f"{species.common_name}: individual tracking not supported yet", commit, now, t0)
+                                f"{species.common_name}: individual tracking not supported yet", commit, now, t0, fix)
 
         embs = np.stack([v.embedding for v in id_views])
         agg = aggregate_mean(embs, np.array([v.quality.weight for v in id_views]))
@@ -184,7 +185,7 @@ class HemlockSentinel:
         res = self._finish(views, species, decision, decision.kind, agg, msg, False, now, t0)
         res.timings_ms.update(timings)
         if commit:
-            self.commit(views, res, now)
+            self.commit(views, res, now, fix)
         return res
 
     # ---------------------------------------------------------------- helpers
@@ -218,16 +219,18 @@ class HemlockSentinel:
                 best = s
         return None if np.isnan(best) else best
 
-    def _finish(self, views, species, decision, status, agg, message, commit, now, t0) -> ObservationResult:
+    def _finish(self, views, species, decision, status, agg, message, commit, now, t0, fix=None) -> ObservationResult:
         tree_id = decision.tree_id if decision is not None and decision.kind == "existing" else None
         res = ObservationResult(status, tree_id, species, decision, None, message,
                                 {"identify_total_ms": (time.perf_counter() - t0) * 1000}, agg)
         if commit:
-            self.commit(views, res, now)
+            self.commit(views, res, now, fix)
         return res
 
-    def commit(self, views: list[ViewResult], res: ObservationResult, now: float | None = None) -> ObservationResult:
-        """Persist an identification result (new tree ID, observation, views, blobs). Idempotent."""
+    def commit(self, views: list[ViewResult], res: ObservationResult, now: float | None = None,
+               fix: GeoFix | None = None) -> ObservationResult:
+        """Persist an identification result (new tree ID, observation, views, blobs). Idempotent.
+        ``fix`` (e.g. the phone's GPS sent with the request) overrides the GPS device."""
         if res.committed or res.status == "recapture":
             return res
         now = time.time() if now is None else now
@@ -235,7 +238,8 @@ class HemlockSentinel:
         if status == "new":
             res.tree_id = self.repo.create_tree(species.species, ID_PREFIX.get(species.species, "T"), now)
             res.message = f"New tree registered as {res.tree_id}"
-        fix = self.gps.fix() if self.gps else None
+        if fix is None and self.gps:
+            fix = self.gps.fix()
         env = self.sensors.read().values if self.sensors else {}
         vrecs = []
         for v in views:

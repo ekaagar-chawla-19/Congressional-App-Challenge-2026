@@ -1,0 +1,17 @@
+{
+  "image_size": 322,
+  "embedding_dim": 384,
+  "species_labels": [
+    "tsuga_canadensis",
+    "pinus_strobus",
+    "pinus_resinosa",
+    "pinus_rigida",
+    "fagus_grandifolia",
+    "acer_rubrum",
+    "acer_platanoides",
+    "populus_grandidentata"
+  ],
+  "version": "hemlock-dino_plus_recapture-20261007",
+  "backbone": "vit_small_patch14_dinov2.lvd142m",
+  "preprocessing": "RGB, resize short side to image_size (INTER_AREA), centre crop, /255, ImageNet mean/std"
+}

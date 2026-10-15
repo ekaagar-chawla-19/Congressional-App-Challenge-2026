@@ -15,13 +15,15 @@ unscreened images are identifiable later.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 log = logging.getLogger(__name__)
-MODEL_PATH = Path(__file__).resolve().parents[3] / "models" / "third_party" / "face_detection_yunet_2023mar.onnx"
+MODEL_PATH = Path(os.environ.get("HEMLOCK_FACE_MODEL") or Path(__file__).resolve().parents[3] / "models"
+                  / "third_party" / "face_detection_yunet_2023mar.onnx")
 _detector = None
 
 
