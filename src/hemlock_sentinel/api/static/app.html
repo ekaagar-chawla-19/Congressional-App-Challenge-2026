@@ -213,12 +213,12 @@ function summaryHtml(s) {
     ${sevBar(s.severity_counts, s.trees)}
     <h3>Conditions (trees)</h3><table>${conds.map(([k, v]) => `<tr><td>${esc(v.name)}</td><td>${v.likely} likely · ${v.possible} possible · ${v.assessed} checked</td></tr>`).join("")}</table>
     <p class="small muted">Most prominent: <b>${esc(condName(s.most_prominent_condition))}</b>. Trees never checked on twig undersides count as not assessed, not healthy.</p>
-    <h3>Pi sensors (latest per tree)</h3><table>
+    <h3>ESP32 sensors (latest per tree)</h3><table>
       <tr><td>Soil moisture</td><td>${s.sensor_means.soil_moisture_pct ? s.sensor_means.soil_moisture_pct.mean + " %" : na(null)}</td></tr>
       <tr><td>Air temperature</td><td>${s.sensor_means.air_temp_c ? s.sensor_means.air_temp_c.mean + " °C" : na(null)}</td></tr>
       <tr><td>Humidity</td><td>${s.sensor_means.humidity_pct ? s.sensor_means.humidity_pct.mean + " %" : na(null)}</td></tr>
       <tr><td>Light</td><td>${s.sensor_means.light_lux ? s.sensor_means.light_lux.mean + " lux" : na(null)}</td></tr></table>
-    <div class="muted small">${s.trees_with_sensor_data} of ${s.trees} trees have Pi readings; ${s.trees_with_photos} have photos.</div>`;
+    <div class="muted small">${s.trees_with_sensor_data} of ${s.trees} trees have ESP32 readings; ${s.trees_with_photos} have photos.</div>`;
 }
 
 function zonesTab(T, a) {
@@ -262,14 +262,14 @@ async function treeView() {
     <div class="muted small">${t.observation_count} visits · first ${day(t.created_at)} · last ${day(t.last_seen_at)}${t.location ? ` · ${t.location.lat.toFixed(5)}, ${t.location.lon.toFixed(5)}` : ""}</div>
     ${t.notes ? `<p><em>${esc(t.notes)}</em></p>` : ""}
     <h3>Current health</h3>${t.current_conditions.length ? t.current_conditions.map((f) => `<div>${chip(f)}<div class="muted small">${f.evidence.map(esc).join("; ")}</div></div>`).join("") : '<p class="muted small">Not assessed yet: check twig undersides and add a visit.</p>'}
-    <h3>Latest Pi reading</h3>${sensorTable(ls)}
+    <h3>Latest ESP32 reading</h3>${sensorTable(ls)}
     <button class="block" id="addVisit">+ Add visit (sensors / signs, no photos)</button></div>
     <h3 style="margin:16px 0 8px">Visits</h3>
     ${t.observations.slice().reverse().map((o) => `<div class="card">
       <div class="row"><b>${day(o.timestamp)}</b><span class="muted small">${esc(o.status)}${o.match_probability != null ? " · match " + Math.round(o.match_probability * 100) + "%" : ""}</span></div>
       <div class="muted small">Severity: ${o.severity == null ? na(null) : SEV[o.severity]}${o.health_notes ? " · " + esc(o.health_notes) : ""}</div>
       <h3>Photos</h3>${o.has_photos ? `<div class="thumbs" data-imgs='${JSON.stringify(o.views.map((v) => v.image_url).filter(Boolean))}'></div>` : '<span class="na">N/A (no photos this visit)</span>'}
-      <h3>Pi sensors</h3>${sensorTable(o.sensors)}
+      <h3>ESP32 sensors</h3>${sensorTable(o.sensors)}
       <h3>Signs observed</h3>${o.signs.length ? o.signs.map((s) => `<span class="chip">${esc(S.guide.signs[s] ? s.replace(/_/g, " ") : s)}</span>`).join("") : '<span class="na">N/A</span>'}
       ${o.ai_inspection ? `<p class="small"><b>AI photo check:</b> ${esc(o.ai_inspection.summary)}</p>` : ""}
       <h3>Assessment</h3>${o.findings.map(chip).join("") || '<span class="na">N/A</span>'}
@@ -306,12 +306,32 @@ function bindSev(id) {
 }
 const sensorInputs = () => `<div class="row"><label style="flex:1">Soil %<input id="soil" type="number" inputmode="decimal"></label><label style="flex:1">Temp °C<input id="temp" type="number" inputmode="decimal"></label></div>
   <div class="row"><label style="flex:1">Humidity %<input id="hum" type="number" inputmode="decimal"></label><label style="flex:1">Light lux<input id="lux" type="number" inputmode="decimal"></label></div>`;
+// ESP32 sensor node over Web Bluetooth (Chrome on Android/desktop; needs https or localhost;
+// iPhone Safari has no Web Bluetooth: use the Bluefy browser or type the values)
+const ESP = { svc: "6e1f0001-6d6c-4f2b-9a35-1c3a5e6b7d01", reading: "6e1f0002-6d6c-4f2b-9a35-1c3a5e6b7d01", cmd: "6e1f0003-6d6c-4f2b-9a35-1c3a5e6b7d01" };
+const esp32Button = () => `<button class="block" type="button" onclick="readEsp32(this)">Read ESP32 sensors (Bluetooth)</button>`;
+async function readEsp32(btn) {
+  if (!navigator.bluetooth) { btn.textContent = window.isSecureContext ? "This browser has no Bluetooth: type the values" : "Bluetooth needs https: type the values"; return; }
+  try {
+    btn.textContent = "Choose the HS-ESP32 device…";
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [ESP.svc] }, { namePrefix: "HS-ESP32" }], optionalServices: [ESP.svc] });
+    btn.textContent = "Reading " + dev.name + "…";
+    const gatt = await dev.gatt.connect(), svc = await gatt.getPrimaryService(ESP.svc);
+    await (await svc.getCharacteristic(ESP.cmd)).writeValueWithoutResponse(new TextEncoder().encode("r"));
+    await new Promise((r) => setTimeout(r, 3000));
+    const d = JSON.parse(new TextDecoder().decode(await (await svc.getCharacteristic(ESP.reading)).readValue()));
+    gatt.disconnect();
+    const set = (id, v) => { $(id).value = v == null ? "" : v; };
+    set("#soil", d.soil_moisture_pct); set("#temp", d.air_temp_c); set("#hum", d.humidity_pct); set("#lux", d.light_lux);
+    btn.textContent = `Read from ${dev.name} ✓ (empty = sensor not working)`;
+  } catch (e) { btn.textContent = "ESP32 read failed: " + e.message; }
+}
 const num = (id) => { const v = $(id).value; return v === "" ? null : +v; };
 const readSensors = () => ({ soil_moisture_pct: num("#soil"), air_temp_c: num("#temp"), humidity_pct: num("#hum"), light_lux: num("#lux") });
 
 async function visitForm(treeId) {
-  V.innerHTML = `<div class="card"><h2>Visit to ${treeId}</h2><p class="muted small">For a visit without photos, e.g. a Raspberry Pi reading. Leave blank what you don't have.</p>
-    <h3>Pi sensor readings</h3>${sensorInputs()}<h3>Severity</h3>${sevPicker("vs")}<h3>Signs</h3>${signChecks()}
+  V.innerHTML = `<div class="card"><h2>Visit to ${treeId}</h2><p class="muted small">For a visit without photos, e.g. an ESP32 sensor reading. Leave blank what you don't have.</p>
+    <h3>ESP32 sensor readings</h3>${esp32Button()}${sensorInputs()}<h3>Severity</h3>${sevPicker("vs")}<h3>Signs</h3>${signChecks()}
     <label>Notes<textarea id="vn" rows="2"></textarea></label><button class="primary block" id="save">Save visit</button></div>`;
   const sev = bindSev("vs");
   $("#save").onclick = async () => {
@@ -333,9 +353,9 @@ async function captureView() {
   V.innerHTML = `<div class="card"><h2>Photos</h2><p class="muted small">Same spots every visit: start on the north side, then walk clockwise.</p>
     ${steps.map((v, i) => `<label><b>${i + 1}. ${esc(v.title)}</b><br>${esc(v.instruction)}<input type="file" accept="image/*" capture="environment" data-k="${v.key}"></label>`).join("")}</div>
     <div class="card"><h2>Health</h2><h3>Severity</h3>${sevPicker("cs")}<h3>Signs you see</h3>${signChecks()}</div>
-    <div class="card"><h2>Location & Pi sensors</h2><button id="gps" class="block">Use my location</button>
+    <div class="card"><h2>Location & ESP32 sensors</h2><button id="gps" class="block">Use my location</button>
     <div class="row"><label style="flex:1">Lat<input id="lat" type="number" inputmode="decimal"></label><label style="flex:1">Lon<input id="lon" type="number" inputmode="decimal"></label></div>
-    ${sensorInputs()}<p class="muted small">Leave sensor fields empty if the Pi wasn't used (shown as N/A). The Pi can also send readings over Bluetooth.</p></div>
+    ${esp32Button()}${sensorInputs()}<p class="muted small">Tap “Read ESP32” near the sensor node, or type values. Leave empty if it wasn't used (shown as N/A).</p></div>
     <button class="primary block" id="send">Identify tree</button><div id="res"></div>`;
   const sev = bindSev("cs");
   $("#gps").onclick = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(
@@ -385,7 +405,7 @@ async function chatView() {
     <div class="card" style="margin-top:12px"><textarea id="q" rows="2" placeholder="Where are trees suffering most? What should we do?"></textarea>
     <div class="row" style="margin-top:8px"><button id="newc">New chat</button><button class="primary" id="ask">Send</button></div></div>`;
   const draw = () => { $("#msgs").innerHTML = S.chat.map((m) => `<div class="msg ${m.me ? "me" : "ai"}">${esc(m.t)}</div>`).join("")
-    || `<div class="msg ai">Hi! I can look through your forests, trees and Pi readings. Try: "Which section is worst and why?" or "What should we do about the adelgid?"</div>`; };
+    || `<div class="msg ai">Hi! I can look through your forests, trees and ESP32 readings. Try: "Which section is worst and why?" or "What should we do about the adelgid?"</div>`; };
   draw();
   $("#newc").onclick = () => { S.chat = []; S.conv = null; draw(); };
   $("#ask").onclick = async () => {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Hemlock Sentinel API",
-    "description": "Hemlock Sentinel mobile API (v1): the backend a React Native / Expo app talks to.\n\nThe phone (or the Raspberry Pi, over Bluetooth via hemlock-bt-receiver) takes the\nphotos; this server runs the trained model (ONNX), decides existing / new /\nuncertain tree, and keeps the tree database. Interactive docs are served at /docs\nand the machine-readable contract at /openapi.json. A demo forest map is at /map.",
+    "description": "Hemlock Sentinel mobile API (v1): the backend a React Native / Expo app talks to.\n\nThe phone takes the photos (and reads the ESP32 sensor node over Bluetooth LE); this server runs the trained model (ONNX), decides existing / new /\nuncertain tree, and keeps the tree database. Interactive docs are served at /docs\nand the machine-readable contract at /openapi.json. A demo forest map is at /map.",
     "version": "1.1.0"
   },
   "paths": {
@@ -3243,7 +3243,7 @@
           "health"
         ],
         "summary": "Set Observation Sensors",
-        "description": "Attach Raspberry Pi readings to an existing visit.",
+        "description": "Attach ESP32 sensor readings to an existing visit.",
         "operationId": "set_observation_sensors_api_v1_observations__observation_id__sensors_put",
         "security": [
           {
@@ -3485,7 +3485,7 @@
           "health"
         ],
         "summary": "Add Visit",
-        "description": "A visit without photos: Pi sensor readings and/or observer signs and severity at a known tree.",
+        "description": "A visit without photos: ESP32 sensor readings and/or observer signs and severity at a known tree.",
         "operationId": "add_visit_api_v1_trees__tree_id__visits_post",
         "security": [
           {
@@ -5166,7 +5166,7 @@
                 "type": "null"
               }
             ],
-            "description": "null = no Pi reading on this visit (N/A)"
+            "description": "null = no ESP32 reading on this visit (N/A)"
           },
           "signs": {
             "items": {
@@ -5465,7 +5465,7 @@
         },
         "type": "object",
         "title": "Sensors",
-        "description": "Raspberry Pi readings for one visit (any may be missing)."
+        "description": "ESP32 sensor-node readings for one visit (any may be missing)."
       },
       "SignsUpdate": {
         "properties": {
@@ -6028,7 +6028,7 @@
         },
         "type": "object",
         "title": "VisitCreate",
-        "description": "A visit without photos (e.g. Pi sensor reading at a known tree, or an observer check)."
+        "description": "A visit without photos (e.g. ESP32 sensor reading at a known tree, or an observer check)."
       }
     },
     "securitySchemes": {

@@ -123,7 +123,7 @@ SEVERITY_DOC = "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (
 
 
 class Sensors(BaseModel):
-    """Raspberry Pi readings for one visit (any may be missing)."""
+    """ESP32 sensor-node readings for one visit (any may be missing)."""
     soil_moisture_pct: float | None = Field(None, ge=0, le=100)
     air_temp_c: float | None = Field(None, ge=-40, le=60)
     humidity_pct: float | None = Field(None, ge=0, le=100)
@@ -159,7 +159,7 @@ class Finding(BaseModel):
 
 
 class VisitCreate(BaseModel):
-    """A visit without photos (e.g. Pi sensor reading at a known tree, or an observer check)."""
+    """A visit without photos (e.g. ESP32 sensor reading at a known tree, or an observer check)."""
     sensors: Sensors | None = None
     signs: list[str] = Field([], description=SIGNS_DOC)
     severity: Severity | None = Field(None, description=SEVERITY_DOC)
@@ -225,7 +225,7 @@ class Observation(BaseModel):
     severity: int | None = Field(None, description=SEVERITY_DOC)
     health_notes: str | None = None
     has_photos: bool
-    sensors: Sensors | None = Field(None, description="null = no Pi reading on this visit (N/A)")
+    sensors: Sensors | None = Field(None, description="null = no ESP32 reading on this visit (N/A)")
     signs: list[str] = []
     findings: list[Finding] = []
     ai_inspection: dict | None = None

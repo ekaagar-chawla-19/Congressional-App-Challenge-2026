@@ -1,3 +1,5 @@
+> **Note:** the field hardware is now a phone plus an ESP32 sensor node (docs/api.md, "ESP32 sensor node"). The ESP32 cannot run the model; it runs on a laptop or server. The Raspberry Pi notes below apply only if you choose to run the backend itself on a Pi.
+
 # Deployment
 
 Training happens on a workstation or cloud machine. Inference runs on the

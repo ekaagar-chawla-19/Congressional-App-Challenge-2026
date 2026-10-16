@@ -1,12 +1,13 @@
-# Hemlock Sentinel API (backend for the mobile app and the Raspberry Pi)
+# Hemlock Sentinel API (backend for the mobile app and the ESP32 sensor node)
 
-The phone app (React Native / Expo) or the Raspberry Pi takes the photos. This
-backend runs the trained model and keeps each account's forests and trees:
+The phone app (React Native / Expo) takes the photos and reads the ESP32 sensor node
+over Bluetooth LE. This backend runs the trained model and keeps each account's forests
+and trees:
 
 ```
- phone (React Native) ── Wi-Fi/HTTP ──┐
-                                      ▼
- Raspberry Pi + camera ─ Bluetooth ─▶ hemlock-bt-receiver ─▶ hemlock-api (this repo, Python)
+ ESP32 sensor node ─ BLE ─▶ phone (React Native) ── photos + readings, HTTP ──▶ hemlock-api (this repo, Python)
+ (soil, temp, humidity,                                                         ▲
+  light; no camera)  └──── optional: Wi-Fi POST of readings for one tree ──────┘
                                                               • sign-in, forests (one tree database per forest)
                                                               • quality checks, face blur
                                                               • DINOv2-S model (models/production/hemlock.onnx)
@@ -38,9 +39,9 @@ the coordinates or use a tunnel (`ngrok http 8000`).
 
 Screens: forests → forest (Map colored by severity / main condition / sections, "Analyze visible
 area", Sections ranked worst first, Trees, Insights with recommendations) → tree (current health
-with evidence, latest Pi reading, every visit with photos / sensors / signs / assessment, `N/A`
+with evidence, latest ESP32 reading, every visit with photos / sensors / signs / assessment, `N/A`
 where a visit had none) → Survey tree (3 trunk photos + optional twig close-up, severity, signs,
-Pi readings) → result (existing / new / not sure: "Use H-004 (71%)" best guess, other candidates,
+ESP32 readings) → result (existing / new / not sure: "Use H-004 (71%)" best guess, other candidates,
 or new tree) → Ask AI.
 
 ## Tree health: what is assessed and how sure it can be
@@ -55,8 +56,8 @@ with a 0–1 likelihood and the evidence, or `unknown`.
 | Observer signs (checklist) | Confirms HWA (wool at needle bases) and EHS (scale covers) — the only reliable way |
 | Twig-underside close-up + AI photo check | Suggests wool/scales; capped at "possible" until a person confirms |
 | Trunk-bark photos (identity model) | Cannot show HWA or EHS → they stay `unknown`, never "healthy"; can show borer holes / root rot when ticked |
-| Pi soil moisture, temperature, humidity (VPD) | Drought stress risk only; never diagnoses a pest. DHT11 can't read below 0 °C |
-| Pi light | Flags visits too dark to trust visual checks |
+| ESP32 soil moisture, temperature, humidity (VPD) | Drought stress risk only; never diagnoses a pest. DHT11 can't read below 0 °C |
+| ESP32 light | Flags visits too dark to trust visual checks |
 
 Recommendations never include pesticide doses: they point to the label, licensed applicators,
 the Georgia Forestry Commission, UGA Extension and Save Georgia's Hemlocks. Thresholds are
@@ -70,13 +71,6 @@ heuristic and documented as such.
 guide). It cannot see other accounts. It needs `ANTHROPIC_API_KEY` from console.anthropic.com
 (pay per use; Haiku is the cheapest model); without it the endpoint returns
 `503 assistant_not_configured` and the app says so. A Claude.ai subscription cannot be used for this.
-
-## Raspberry Pi sensors
-
-`hemlock-bt-send ... --sensors` reads soil moisture (capacitive probe via ADS1115), DHT11 temperature
-and humidity, and BH1750 light (wiring and calibration in `src/hemlock_sentinel/bluetooth/pi_sensors.py`)
-and sends them with the photos. `--visit H-012 --sensors` sends readings for a known tree without photos.
-A missing sensor is sent as null and shown as N/A.
 
 ## Run it
 
@@ -153,54 +147,52 @@ works in Expo Go during development. A release build needs HTTPS (iOS) or
 `usesCleartextTraffic` (Android). For testing away from home Wi-Fi, a tunnel
 such as `ngrok http 8000` gives an HTTPS URL.
 
-## Raspberry Pi → model over Bluetooth
+## ESP32 sensor node
 
-The Pi only takes photos; the model runs on the computer with the backend.
-Photos travel over Bluetooth Classic (RFCOMM, a wireless serial link; ~2 MB per
-3-photo capture takes several seconds) and the identification comes back to the
-Pi over the same link.
+The ESP32 replaces the Raspberry Pi. It reads the field sensors; the phone takes the photos and the
+model runs on the computer with the backend. Firmware: [`firmware/esp32_sensors/esp32_sensors.ino`](../firmware/esp32_sensors/esp32_sensors.ino)
+(Arduino; checked to compile for "ESP32 Dev Module", esp32 core 3.0.7).
 
-```
-Pi:  hemlock-bt-send  ── photos ──▶  computer: hemlock-bt-receiver ──HTTP──▶ hemlock-api
-     prints "Existing tree H-017"  ◀── result ──┘
-```
+| Sensor | Pin | Notes |
+|---|---|---|
+| Capacitive soil-moisture probe | GPIO34 (ADC1) | calibrate `SOIL_RAW_DRY` (in air) / `SOIL_RAW_WET` (in water) |
+| DHT11 temperature + humidity | GPIO4 | 0–50 °C ±2 °C, 20–90 % RH ±5 %: cannot see winter lows |
+| BH1750 light | SDA 21 / SCL 22 | lux |
 
-**Computer (Linux with Bluetooth, e.g. a laptop or a second Pi):**
+Flash it: Arduino IDE → Boards Manager "esp32" (Espressif) → board "ESP32 Dev Module"; Library
+Manager: "DHT sensor library", "Adafruit Unified Sensor", "BH1750" → Upload. The Serial Monitor
+(115200) prints a JSON line every 10 s; type `r` to read now:
 
-```bash
-hemlock-api &
-bluetoothctl   # then: power on, discoverable on, pairable on   (pair once with the Pi)
-hemlock-bt-receiver --email demo@hemlock.test --password hemlock-demo --forest 1
-# prints: waiting for the Pi on Bluetooth RFCOMM channel 1
-```
-
-**Raspberry Pi (Raspberry Pi OS):**
-
-```bash
-bluetoothctl   # then: scan on, pair <MAC of the computer>, trust <MAC>
-git clone -b backend/api https://github.com/ekaagar-chawla-19/Congressional-App-Challenge-2026
-cd Congressional-App-Challenge-2026
-export PYTHONPATH=src            # the sender needs only the Python standard library
-python3 -m hemlock_sentinel.bluetooth.pi_sender --address <MAC> --ping
-python3 -m hemlock_sentinel.bluetooth.pi_sender --address <MAC> --camera 3 --lat 34.83 --lon -85.48 --severity 1
-#   [1/3] Stand 1 m from the tree, NORTH side of the trunk... Press Enter
-#   ...
-#   Eastern hemlock (98%)
-#   Existing tree H-017 (p=0.99)
-python3 -m hemlock_sentinel.bluetooth.pi_sender --address <MAC> photo1.jpg photo2.jpg photo3.jpg   # from files
+```json
+{"v":1,"device":"HS-ESP32-1A2B","soil_moisture_pct":23.4,"air_temp_c":21.0,"humidity_pct":64,"light_lux":5400,"soil_raw":2210,"uptime_s":42}
 ```
 
-`--camera` uses the Pi camera through `picamera2` (preinstalled on Raspberry Pi
-OS). If the computer has no Bluetooth or is not Linux (macOS Python has no
-RFCOMM sockets), run the same link over Wi-Fi: `hemlock-bt-receiver --tcp 9000`
-on the computer and `--tcp <computer-ip>:9000` on the Pi.
+A failed sensor is `null` → stored and shown as N/A. Three ways to get readings into the app:
 
-What has been tested: the wire format, and the whole path Pi sender → receiver
-→ backend → model → result back to the Pi, over TCP with the real model (a
-held-out hemlock registered as new, then recognised from different photos at
-p = 0.99). **Not yet tested on real Bluetooth hardware**: the RFCOMM socket
-code is the standard Linux API, but pairing and throughput need a check on the
-actual Pi.
+1. **Phone over Bluetooth LE (main path).** The node advertises as `HS-ESP32-xxxx` with service
+   `6e1f0001-6d6c-4f2b-9a35-1c3a5e6b7d01`: write `r` to `…0003` (measure now), wait ~3 s, read the
+   JSON from `…0002` (also notified). The phone sends the values with the photos
+   (`POST /identify` fields `soil_moisture_pct`, `air_temp_c`, `humidity_pct`, `light_lux`) or
+   alone (`POST /trees/{id}/visits`). React Native: `client/src/esp32.ts` has the UUIDs and
+   `parseEsp32Reading()` for `react-native-ble-plx`. The demo web app's "Read ESP32 sensors" button
+   uses Web Bluetooth: Chrome on Android or a laptop, over https or localhost (iPhone Safari has
+   no Web Bluetooth; use the Bluefy browser or type the values).
+2. **Laptop:** `pip install -e ".[esp32]"`, then
+   ```bash
+   hemlock-esp32 scan
+   hemlock-esp32 read                                  # Bluetooth (macOS, Windows, Linux)
+   hemlock-esp32 read --serial /dev/cu.usbserial-0001  # USB cable
+   hemlock-esp32 visit H-012 --forest 1 --email demo@hemlock.test --password hemlock-demo
+   hemlock-esp32 identify p1.jpg p2.jpg p3.jpg --forest 1 --email ... --password ... --lat 34.83 --lon -85.48
+   ```
+3. **Wi-Fi upload (optional, a node left at one tree):** set `WIFI_UPLOAD 1`, Wi-Fi name/password,
+   `API_BASE`, `TREE_ID`, `FOREST_ID` and a token from `POST /api/v1/auth/login` (valid 30 days) in
+   the sketch, and choose Partition Scheme "Huge APP" (BLE + Wi-Fi don't fit the default layout).
+   It posts `{"sensors": <reading>}` to `/trees/{TREE_ID}/visits` every hour.
+
+Tested here: the reading format, USB and BLE reading logic (with fake transports), the exact
+Wi-Fi upload payload against the API, and `hemlock-esp32` against a live backend. **Not tested on a
+real ESP32 or real sensors** (none available in this environment).
 
 ## TypeScript client (for the React Native app)
 
@@ -335,7 +327,7 @@ All errors have one shape, `{"error": {"code": "...", "message": "..."}}`:
 
 ```bash
 pytest tests/integration/test_api_v1.py tests/integration/test_accounts_forests.py \
-       tests/integration/test_bluetooth_link.py          # API, accounts, Pi link (mock model, fast)
+       tests/integration/test_field_health.py tests/integration/test_esp32.py   # mock model, fast
 pytest tests/end_to_end/test_api_real_model.py           # production model on held-out BarkNet trees
 python scripts/export_openapi.py && (cd client && npm run gen && npm run typecheck)   # after API changes
 ```

@@ -8,6 +8,7 @@
  * Types in ./schema.d.ts are generated from the server's OpenAPI spec (npm run gen).
  */
 import type { components } from "./schema";
+export { ESP32, parseEsp32Reading, type Esp32Reading } from "./esp32";
 
 type Schemas = components["schemas"];
 export type Health = Schemas["Health"];

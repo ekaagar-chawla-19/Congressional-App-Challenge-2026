@@ -1,6 +1,6 @@
 """Per-visit field data stored next to a forest's tree database.
 
-A visit (= one observation row) can have photos, Raspberry Pi sensor readings,
+A visit (= one observation row) can have photos, ESP32 sensor-node readings,
 observer-checked signs, or any combination. Missing parts are simply absent and
 the API reports them as null ("N/A" in the app).
 
@@ -61,7 +61,7 @@ def clean_sensors(d: dict | None) -> dict | None:
     return out or None
 
 
-def set_sensors(repo: TreeRepository, oid: str, sensors: dict, source: str = "rpi") -> None:
+def set_sensors(repo: TreeRepository, oid: str, sensors: dict, source: str = "esp32") -> None:
     with repo.tx() as c:
         c.execute("INSERT OR REPLACE INTO visit_sensors(observation_id, soil_moisture_pct, air_temp_c, humidity_pct,"
                   " light_lux, source, recorded_at) VALUES(?,?,?,?,?,?,?)",

@@ -95,8 +95,9 @@ pytest -q                                               # + training/export regr
 
 `hemlock-api` serves the production model to a React Native / Expo app over a JSON API:
 sign-in, one tree database per forest, severity ratings, a forest map (`/map`, demo
-account `demo@hemlock.test` / `hemlock-demo`) and interactive docs (`/docs`). A Raspberry Pi
-can send photos to it over Bluetooth (`hemlock-bt-send` → `hemlock-bt-receiver`). Typed
+account `demo@hemlock.test` / `hemlock-demo`), a phone app (`/app`) and interactive docs (`/docs`).
+An ESP32 sensor node (`firmware/esp32_sensors`) supplies soil moisture, temperature, humidity and
+light over Bluetooth LE (`hemlock-esp32` on a laptop). Typed
 TypeScript client in `client/`, `Dockerfile` included. Guide: [`docs/api.md`](docs/api.md).
 
 ## Try the app (demo mode, no trained model)

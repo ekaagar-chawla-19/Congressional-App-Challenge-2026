@@ -6,7 +6,7 @@ What can tell us what (sources: docs/research/hemlock_health.md):
   Trunk-bark photos (what the identity model uses) cannot show either.
 * Crown symptoms (gray-green foliage, needle loss, no new growth, dieback) say the
   tree is declining, not why: they are shared by HWA, EHS and drought.
-* Pi sensors measure conditions, not disease: low soil moisture + heat + dry air
+* ESP32 sensors measure conditions, not disease: low soil moisture + heat + dry air
   = drought stress (which speeds decline under HWA); a very cold reading lowers
   HWA winter survival. They raise or lower RISK only, never confirm anything.
 
@@ -81,7 +81,7 @@ CONDITIONS: dict[str, dict] = {
         "name": "Drought stress and secondary decline (root rot, borers)",
         "type": "abiotic stress, then fungi/insects",
         "summary": "Hemlocks are shallow-rooted streamside trees; drought weakens them, speeds HWA decline, lowers "
-                   "insecticide uptake, and invites Armillaria root rot and hemlock borer. The only threat the Pi "
+                   "insecticide uptake, and invites Armillaria root rot and hemlock borer. The only threat the ESP32 "
                    "sensors can measure directly.",
         "confirm": "Repeated low soil-moisture readings in a dry season with whole-crown dulling, and no insects on "
                    "the twigs. Check the trunk base for fungal fans/mushrooms and the bark for small exit holes. "

@@ -1,7 +1,6 @@
 """Hemlock Sentinel mobile API (v1): the backend a React Native / Expo app talks to.
 
-The phone (or the Raspberry Pi, over Bluetooth via hemlock-bt-receiver) takes the
-photos; this server runs the trained model (ONNX), decides existing / new /
+The phone takes the photos (and reads the ESP32 sensor node over Bluetooth LE); this server runs the trained model (ONNX), decides existing / new /
 uncertain tree, and keeps the tree database. Interactive docs are served at /docs
 and the machine-readable contract at /openapi.json. A demo forest map is at /map.
 
@@ -787,7 +786,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
 
     @api.put("/observations/{observation_id}/sensors", response_model=S.Observation, tags=["health"])
     def set_observation_sensors(observation_id: str, body: S.Sensors, ws: Workspace = WS):
-        """Attach Raspberry Pi readings to an existing visit."""
+        """Attach ESP32 sensor readings to an existing visit."""
         find_observation(ws, observation_id)
         sensors = F.clean_sensors(body.model_dump())
         if not sensors:
@@ -817,7 +816,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
 
     @api.post("/trees/{tree_id}/visits", response_model=S.Observation, status_code=201, tags=["health"])
     def add_visit(tree_id: str, body: S.VisitCreate, ws: Workspace = WS):
-        """A visit without photos: Pi sensor readings and/or observer signs and severity at a known tree."""
+        """A visit without photos: ESP32 sensor readings and/or observer signs and severity at a known tree."""
         t = get_tree(ws, tree_id)
         sensors = F.clean_sensors(body.sensors.model_dump()) if body.sensors else None
         if not (sensors or body.signs or body.severity is not None or body.health_notes):

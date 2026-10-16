@@ -532,7 +532,7 @@ export interface paths {
         get?: never;
         /**
          * Set Observation Sensors
-         * @description Attach Raspberry Pi readings to an existing visit.
+         * @description Attach ESP32 sensor readings to an existing visit.
          */
         put: operations["set_observation_sensors_api_v1_observations__observation_id__sensors_put"];
         post?: never;
@@ -574,7 +574,7 @@ export interface paths {
         put?: never;
         /**
          * Add Visit
-         * @description A visit without photos: Pi sensor readings and/or observer signs and severity at a known tree.
+         * @description A visit without photos: ESP32 sensor readings and/or observer signs and severity at a known tree.
          */
         post: operations["add_visit_api_v1_trees__tree_id__visits_post"];
         delete?: never;
@@ -1104,7 +1104,7 @@ export interface components {
             health_notes?: string | null;
             /** Has Photos */
             has_photos: boolean;
-            /** @description null = no Pi reading on this visit (N/A) */
+            /** @description null = no ESP32 reading on this visit (N/A) */
             sensors?: components["schemas"]["Sensors"] | null;
             /**
              * Signs
@@ -1183,7 +1183,7 @@ export interface components {
         };
         /**
          * Sensors
-         * @description Raspberry Pi readings for one visit (any may be missing).
+         * @description ESP32 sensor-node readings for one visit (any may be missing).
          */
         Sensors: {
             /** Soil Moisture Pct */
@@ -1362,7 +1362,7 @@ export interface components {
         };
         /**
          * VisitCreate
-         * @description A visit without photos (e.g. Pi sensor reading at a known tree, or an observer check).
+         * @description A visit without photos (e.g. ESP32 sensor reading at a known tree, or an observer check).
          */
         VisitCreate: {
             sensors?: components["schemas"]["Sensors"] | null;
