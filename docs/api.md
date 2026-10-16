@@ -23,6 +23,61 @@ individual trees. Severity (0 none, 1 light, 2 moderate, 3 severe, e.g. hemlock
 woolly adelgid infestation) is the observer's rating, sent with the photos or
 set later. The map shows each tree's most recent rating.
 
+## Try it on your phone (the app at /app)
+
+```bash
+python -m pip install -e ".[onnx,app,assistant]"
+export ANTHROPIC_API_KEY=sk-ant-...      # optional: enables the AI assistant + AI photo check
+hemlock-api
+```
+
+On the computer: http://localhost:8000/app. On your phone (same Wi-Fi): http://<computer-ip>:8000/app
+(macOS: `ipconfig getifaddr en0`). Sign in with `demo@hemlock.test` / `hemlock-demo`. The camera
+works through the photo buttons over plain http; "Use my location" needs HTTPS on phones, so type
+the coordinates or use a tunnel (`ngrok http 8000`).
+
+Screens: forests → forest (Map colored by severity / main condition / sections, "Analyze visible
+area", Sections ranked worst first, Trees, Insights with recommendations) → tree (current health
+with evidence, latest Pi reading, every visit with photos / sensors / signs / assessment, `N/A`
+where a visit had none) → Survey tree (3 trunk photos + optional twig close-up, severity, signs,
+Pi readings) → result (existing / new / not sure: "Use H-004 (71%)" best guess, other candidates,
+or new tree) → Ask AI.
+
+## Tree health: what is assessed and how sure it can be
+
+Three threats, from the research in [`docs/research/hemlock_health.md`](research/hemlock_health.md):
+hemlock woolly adelgid (HWA), elongate hemlock scale (EHS), and drought stress with secondary
+decline (root rot, borers). Each visit gets a finding per condition: `likely` / `possible` / `low`
+with a 0–1 likelihood and the evidence, or `unknown`.
+
+| Evidence | What it can show |
+|---|---|
+| Observer signs (checklist) | Confirms HWA (wool at needle bases) and EHS (scale covers) — the only reliable way |
+| Twig-underside close-up + AI photo check | Suggests wool/scales; capped at "possible" until a person confirms |
+| Trunk-bark photos (identity model) | Cannot show HWA or EHS → they stay `unknown`, never "healthy"; can show borer holes / root rot when ticked |
+| Pi soil moisture, temperature, humidity (VPD) | Drought stress risk only; never diagnoses a pest. DHT11 can't read below 0 °C |
+| Pi light | Flags visits too dark to trust visual checks |
+
+Recommendations never include pesticide doses: they point to the label, licensed applicators,
+the Georgia Forestry Commission, UGA Extension and Save Georgia's Hemlocks. Thresholds are
+heuristic and documented as such.
+
+## AI assistant
+
+`POST /api/v1/assistant/chat {message, conversation_id?, forest_id?, tree_id?}` → Claude Haiku
+(`claude-haiku-5-5`, adaptive thinking) with read-only tools over the signed-in user's own data
+(account overview, forest analysis, ranked sections, tree lists, a tree's full history, the health
+guide). It cannot see other accounts. It needs `ANTHROPIC_API_KEY` from console.anthropic.com
+(pay per use; Haiku is the cheapest model); without it the endpoint returns
+`503 assistant_not_configured` and the app says so. A Claude.ai subscription cannot be used for this.
+
+## Raspberry Pi sensors
+
+`hemlock-bt-send ... --sensors` reads soil moisture (capacitive probe via ADS1115), DHT11 temperature
+and humidity, and BH1750 light (wiring and calibration in `src/hemlock_sentinel/bluetooth/pi_sensors.py`)
+and sends them with the photos. `--visit H-012 --sensors` sends readings for a known tree without photos.
+A missing sensor is sent as null and shown as N/A.
+
 ## Run it
 
 **Option A: Python** (Python 3.10+)

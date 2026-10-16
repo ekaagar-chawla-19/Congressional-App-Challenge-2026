@@ -51,7 +51,16 @@ EXTRA_TRUNK_VIEWS: tuple[ViewSpec, ...] = (
              "Back on the NORTH side: bark at head height.", False, True),
 )
 
-ALL_VIEWS = {v.key: v for v in GUIDED_VIEWS + EXTRA_TRUNK_VIEWS}
+# Health views: not used for identity. Insects live on twigs, so only these can show HWA / EHS.
+HEALTH_VIEWS: tuple[ViewSpec, ...] = (
+    ViewSpec("twig_underside", "Twig underside close-up",
+             "Turn a low outer branch over and photograph the underside of the twig from 10-30 cm, sharp and "
+             "filling the frame (shows adelgid wool and scales).", False, False),
+    ViewSpec("trunk_base", "Trunk base",
+             "Photograph the base of the trunk and root collar (shows root rot, borer holes, resin).", False, False),
+)
+
+ALL_VIEWS = {v.key: v for v in GUIDED_VIEWS + EXTRA_TRUNK_VIEWS + HEALTH_VIEWS}
 MIN_VIEWS = sum(v.required for v in GUIDED_VIEWS)
 MAX_VIEWS = len(GUIDED_VIEWS)  # standard protocol length (progress ring = this)
 MAX_TOTAL_VIEWS = len(ALL_VIEWS)

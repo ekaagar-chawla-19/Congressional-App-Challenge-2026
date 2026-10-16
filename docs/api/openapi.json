@@ -28,6 +28,26 @@
         }
       }
     },
+    "/api/v1/health-guide": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Guide",
+        "description": "Conditions, signs checklist, severity scale, sensor thresholds and general advice (no sign-in).",
+        "operationId": "health_guide_api_v1_health_guide_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/model": {
       "get": {
         "tags": [
@@ -820,6 +840,275 @@
         }
       }
     },
+    "/api/v1/forests/{forest_id}/analysis": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Forest Analysis",
+        "description": "Same as /analysis for a given forest (optionally an area inside it).",
+        "operationId": "forest_analysis_api_v1_forests__forest_id__analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Forest Id"
+            }
+          },
+          {
+            "name": "west",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "West"
+            }
+          },
+          {
+            "name": "south",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "South"
+            }
+          },
+          {
+            "name": "east",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "East"
+            }
+          },
+          {
+            "name": "north",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "North"
+            }
+          },
+          {
+            "name": "cell_m",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 5000,
+              "minimum": 20,
+              "default": 150,
+              "title": "Cell M"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/chat": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Assistant Chat",
+        "description": "Ask the AI assistant (Claude Haiku) about your forests. Send conversation_id back to continue.",
+        "operationId": "assistant_chat_api_v1_assistant_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatReply"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/forests/{forest_id}/map": {
       "get": {
         "tags": [
@@ -852,6 +1141,187 @@
                 "schema": {
                   "$ref": "#/components/schemas/ForestMap"
                 }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/analysis": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Current Analysis",
+        "description": "Analysis of the current forest, or of the area west/south/east/north inside it: severity, condition\nprevalence, sensor averages, ranked zones (where trees suffer most), worst trees, recommendations.",
+        "operationId": "current_analysis_api_v1_analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "west",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "West"
+            }
+          },
+          {
+            "name": "south",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "South"
+            }
+          },
+          {
+            "name": "east",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "East"
+            }
+          },
+          {
+            "name": "north",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "North"
+            }
+          },
+          {
+            "name": "cell_m",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 5000,
+              "minimum": 20,
+              "default": 150,
+              "title": "Cell M"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -2641,6 +3111,500 @@
         }
       }
     },
+    "/api/v1/observations/{observation_id}/signs": {
+      "put": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Set Observation Signs",
+        "description": "Record the signs the observer checked on this visit (replaces the list); findings are recomputed.",
+        "operationId": "set_observation_signs_api_v1_observations__observation_id__signs_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observation"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/observations/{observation_id}/sensors": {
+      "put": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Set Observation Sensors",
+        "description": "Attach Raspberry Pi readings to an existing visit.",
+        "operationId": "set_observation_sensors_api_v1_observations__observation_id__sensors_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Sensors"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observation"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/observations/{observation_id}/inspect": {
+      "post": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Inspect Observation",
+        "description": "AI photo check (Claude Haiku) of this visit's twig-underside close-ups for adelgid wool and scales.\nSuggestions are stored separately from observer signs and count as weaker evidence.",
+        "operationId": "inspect_observation_api_v1_observations__observation_id__inspect_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observation"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/trees/{tree_id}/visits": {
+      "post": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Add Visit",
+        "description": "A visit without photos: Pi sensor readings and/or observer signs and severity at a known tree.",
+        "operationId": "add_visit_api_v1_trees__tree_id__visits_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tree_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tree Id"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observation"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
     "/api/v1/observations/{observation_id}/assign": {
       "post": {
         "tags": [
@@ -2950,6 +3914,36 @@
         ],
         "title": "AssignResult"
       },
+      "BestGuess": {
+        "properties": {
+          "tree_id": {
+            "type": "string",
+            "title": "Tree Id"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tree_id",
+          "probability",
+          "note"
+        ],
+        "title": "BestGuess"
+      },
       "Body_capture_view_api_v1_captures__capture_id__views_post": {
         "properties": {
           "image": {
@@ -3000,7 +3994,7 @@
             },
             "type": "array",
             "title": "Images",
-            "description": "3-7 photos in protocol order"
+            "description": "3-9 photos in protocol order"
           },
           "view_keys": {
             "anyOf": [
@@ -3089,6 +4083,68 @@
               }
             ],
             "title": "Health Notes"
+          },
+          "soil_moisture_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soil Moisture Pct"
+          },
+          "air_temp_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Temp C"
+          },
+          "humidity_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Pct"
+          },
+          "light_lux": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Light Lux"
+          },
+          "signs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signs",
+            "description": "comma-separated observed signs (keys from GET /api/v1/health-guide signs)"
+          },
+          "accept_best_guess": {
+            "type": "boolean",
+            "title": "Accept Best Guess",
+            "description": "if uncertain, assign the top candidate",
+            "default": false
           },
           "commit": {
             "type": "boolean",
@@ -3250,6 +4306,100 @@
         ],
         "title": "CaptureState"
       },
+      "ChatReply": {
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "tools_used": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Tools Used"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conversation_id",
+          "reply",
+          "tools_used",
+          "stop_reason",
+          "model"
+        ],
+        "title": "ChatReply"
+      },
+      "ChatRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "forest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forest Id",
+            "description": "the forest the user is looking at (context)"
+          },
+          "tree_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tree Id",
+            "description": "the tree the user is looking at (context)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
       "Consistency": {
         "properties": {
           "per_view_top": {
@@ -3316,6 +4466,49 @@
           "error"
         ],
         "title": "ErrorResponse"
+      },
+      "Finding": {
+        "properties": {
+          "condition": {
+            "type": "string",
+            "title": "Condition"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "likelihood": {
+            "type": "number",
+            "title": "Likelihood",
+            "description": "0-1"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "likely",
+              "possible",
+              "low",
+              "unknown"
+            ],
+            "title": "Level"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "condition",
+          "name",
+          "likelihood",
+          "level",
+          "evidence"
+        ],
+        "title": "Finding"
       },
       "ForestCreate": {
         "properties": {
@@ -3542,6 +4735,12 @@
             "description": "store an uncertain result for review instead of asking for another trunk view",
             "default": false
           },
+          "accept_best_guess": {
+            "type": "boolean",
+            "title": "Accept Best Guess",
+            "description": "if uncertain, assign the top candidate (marked best_guess)",
+            "default": false
+          },
           "location": {
             "anyOf": [
               {
@@ -3581,6 +4780,25 @@
               }
             ],
             "title": "Health Notes"
+          },
+          "sensors": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Sensors"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signs",
+            "description": "observed signs (keys from GET /api/v1/health-guide signs)",
+            "default": []
           }
         },
         "type": "object",
@@ -3687,6 +4905,26 @@
                 "type": "null"
               }
             ]
+          },
+          "best_guess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BestGuess"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "top candidate when not auto-accepted, with confidence"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "array",
+            "title": "Findings",
+            "description": "health assessment of this visit",
+            "default": []
           },
           "views": {
             "items": {
@@ -3915,6 +5153,49 @@
             ],
             "title": "Health Notes"
           },
+          "has_photos": {
+            "type": "boolean",
+            "title": "Has Photos"
+          },
+          "sensors": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Sensors"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = no Pi reading on this visit (N/A)"
+          },
+          "signs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signs",
+            "default": []
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "ai_inspection": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Inspection"
+          },
           "tree_id": {
             "anyOf": [
               {
@@ -4008,6 +5289,7 @@
         "type": "object",
         "required": [
           "observation_id",
+          "has_photos",
           "tree_id",
           "timestamp",
           "status",
@@ -4126,6 +5408,82 @@
         ],
         "title": "RegisterRequest"
       },
+      "Sensors": {
+        "properties": {
+          "soil_moisture_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soil Moisture Pct"
+          },
+          "air_temp_c": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": -40.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Temp C"
+          },
+          "humidity_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Humidity Pct"
+          },
+          "light_lux": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 200000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Light Lux"
+          }
+        },
+        "type": "object",
+        "title": "Sensors",
+        "description": "Raspberry Pi readings for one visit (any may be missing)."
+      },
+      "SignsUpdate": {
+        "properties": {
+          "signs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signs",
+            "description": "observed signs (keys from GET /api/v1/health-guide signs)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "signs"
+        ],
+        "title": "SignsUpdate"
+      },
       "Species": {
         "properties": {
           "label": {
@@ -4162,6 +5520,17 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "main_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Condition"
           },
           "severity": {
             "anyOf": [
@@ -4218,6 +5587,27 @@
               }
             ],
             "title": "Thumbnail Url"
+          },
+          "current_conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "array",
+            "title": "Current Conditions",
+            "description": "latest assessed finding per condition",
+            "default": []
+          },
+          "latest_sensors": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Sensors"
           },
           "observations": {
             "items": {
@@ -4285,6 +5675,17 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "main_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Condition"
           },
           "severity": {
             "anyOf": [
@@ -4562,6 +5963,72 @@
           "identity_view"
         ],
         "title": "ViewSpecOut"
+      },
+      "VisitCreate": {
+        "properties": {
+          "sensors": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Sensors"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signs",
+            "description": "observed signs (keys from GET /api/v1/health-guide signs)",
+            "default": []
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "health_notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Notes"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "VisitCreate",
+        "description": "A visit without photos (e.g. Pi sensor reading at a known tree, or an observer check)."
       }
     },
     "securitySchemes": {

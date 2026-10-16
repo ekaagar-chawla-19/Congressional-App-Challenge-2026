@@ -5,6 +5,10 @@ them to the backend computer, then print the identification it sends back.
     hemlock-bt-send --address AA:BB:CC:DD:EE:FF photo1.jpg photo2.jpg photo3.jpg --severity 1
     # take them with the Pi camera (press Enter at each position around the tree)
     hemlock-bt-send --address AA:BB:CC:DD:EE:FF --camera 3 --lat 34.83 --lon -85.48
+    # also read the Pi's sensors (soil moisture, DHT11 temp/humidity, light) and attach them
+    hemlock-bt-send --address AA:BB:CC:DD:EE:FF --camera 3 --sensors
+    # sensor reading only, for a tree already in the database
+    hemlock-bt-send --address AA:BB:CC:DD:EE:FF --visit H-012 --sensors
     # over Wi-Fi instead of Bluetooth
     hemlock-bt-send --tcp 192.168.1.20:9000 photo1.jpg photo2.jpg photo3.jpg
 
@@ -72,6 +76,12 @@ def describe(reply: dict) -> str:
         e = reply.get("error", {})
         return f"ERROR {e.get('code')}: {e.get('message')}"
     r = reply["result"]
+    if "has_photos" in r:  # a sensor/observer visit (an observation, not an identification)
+        lines = [f"Visit stored for {r.get('tree_id')}"]
+        for f in r.get("findings", []):
+            if f["level"] != "unknown":
+                lines.append(f"  {f['name']}: {f['level']} ({f['likelihood']:.0%})")
+        return "\n".join(lines)
     sp = r.get("species") or {}
     lines = [f"{sp.get('name', 'unknown species')} ({sp.get('confidence', 0):.0%})" if sp else "species: -"]
     if r["status"] == "existing":
@@ -83,6 +93,11 @@ def describe(reply: dict) -> str:
                      + ", ".join(c["tree_id"] for c in r.get("candidates", [])))
     else:
         lines.append(r.get("message", r["status"]))
+    if r.get("best_guess") and not r.get("tree_id"):
+        lines.append(r["best_guess"]["note"])
+    for f in r.get("findings", []):
+        if f["level"] in ("likely", "possible"):
+            lines.append(f"  {f['name']}: {f['level']} ({f['likelihood']:.0%})")
     bad = [v for v in r.get("views", []) if not v["accepted"]]
     for v in bad:
         lines.append(f"  photo {v['index'] + 1} rejected: {'; '.join(v['problems'])}")
@@ -102,6 +117,10 @@ def main() -> None:
     ap.add_argument("--accuracy-m", type=float)
     ap.add_argument("--severity", type=int, choices=[0, 1, 2, 3], help="0 none, 1 light, 2 moderate, 3 severe")
     ap.add_argument("--notes")
+    ap.add_argument("--sensors", action="store_true", help="read and attach the Pi sensors")
+    ap.add_argument("--visit", metavar="TREE_ID", help="send only sensor readings for this tree (no photos)")
+    ap.add_argument("--signs", help="comma-separated observed signs, e.g. hwa_wool,needle_loss")
+    ap.add_argument("--best-guess", action="store_true", help="if uncertain, assign the most likely tree")
     ap.add_argument("--ping", action="store_true", help="only check the link")
     ap.add_argument("--json", action="store_true", help="print the raw result")
     ap.add_argument("--timeout", type=float, default=120)
@@ -113,13 +132,25 @@ def main() -> None:
             send_message(sock, {"type": "ping"})
             print("link OK" if recv_message(sock)[0].get("type") == "pong" else "unexpected reply")
             return
-        photos = take_photos(args.camera) if args.camera else [p.read_bytes() for p in args.photos]
-        if not 3 <= len(photos) <= 7:
-            ap.error("need 3-7 photos")
-        print(f"sending {len(photos)} photos ({sum(map(len, photos)) // 1024} KB)...")
-        reply = send_capture(sock, photos, {"forest_id": args.forest, "lat": args.lat, "lon": args.lon,
-                                            "accuracy_m": args.accuracy_m, "severity": args.severity,
-                                            "health_notes": args.notes})
+        sensors = None
+        if args.sensors:
+            from .pi_sensors import read_all
+
+            sensors = read_all()
+            print("sensors:", ", ".join(f"{k}={'N/A' if v is None else v}" for k, v in sensors.items()))
+        signs = [x.strip() for x in args.signs.split(",")] if args.signs else None
+        meta = {"forest_id": args.forest, "lat": args.lat, "lon": args.lon, "accuracy_m": args.accuracy_m,
+                "severity": args.severity, "health_notes": args.notes, "sensors": sensors, "signs": signs}
+        if args.visit:
+            send_message(sock, {"type": "visit", "tree_id": args.visit,
+                                **{k: v for k, v in meta.items() if v is not None}})
+            reply, _ = recv_message(sock)
+        else:
+            photos = take_photos(args.camera) if args.camera else [p.read_bytes() for p in args.photos]
+            if not 3 <= len(photos) <= 8:
+                ap.error("need 3-8 photos")
+            print(f"sending {len(photos)} photos ({sum(map(len, photos)) // 1024} KB)...")
+            reply = send_capture(sock, photos, {**meta, "accept_best_guess": args.best_guess or None})
     print(json.dumps(reply, indent=1) if args.json else describe(reply))
     sys.exit(0 if reply.get("ok") else 1)
 

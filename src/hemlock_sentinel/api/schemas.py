@@ -122,12 +122,68 @@ Severity = Literal[0, 1, 2, 3]
 SEVERITY_DOC = "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
 
 
+class Sensors(BaseModel):
+    """Raspberry Pi readings for one visit (any may be missing)."""
+    soil_moisture_pct: float | None = Field(None, ge=0, le=100)
+    air_temp_c: float | None = Field(None, ge=-40, le=60)
+    humidity_pct: float | None = Field(None, ge=0, le=100)
+    light_lux: float | None = Field(None, ge=0, le=200000)
+
+
+SIGNS_DOC = "observed signs (keys from GET /api/v1/health-guide signs)"
+
+
 class IdentifyRequest(BaseModel):
     force_commit: bool = Field(False, description="store an uncertain result for review instead of asking for "
                                                   "another trunk view")
+    accept_best_guess: bool = Field(False, description="if uncertain, assign the top candidate (marked best_guess)")
     location: Location | None = None
     severity: Severity | None = Field(None, description=SEVERITY_DOC)
     health_notes: str | None = Field(None, max_length=2000)
+    sensors: Sensors | None = None
+    signs: list[str] = Field([], description=SIGNS_DOC)
+
+
+class BestGuess(BaseModel):
+    tree_id: str
+    probability: float | None
+    note: str
+
+
+class Finding(BaseModel):
+    condition: str
+    name: str
+    likelihood: float = Field(description="0-1")
+    level: Literal["likely", "possible", "low", "unknown"]
+    evidence: list[str]
+
+
+class VisitCreate(BaseModel):
+    """A visit without photos (e.g. Pi sensor reading at a known tree, or an observer check)."""
+    sensors: Sensors | None = None
+    signs: list[str] = Field([], description=SIGNS_DOC)
+    severity: Severity | None = Field(None, description=SEVERITY_DOC)
+    health_notes: str | None = Field(None, max_length=2000)
+    location: Location | None = None
+
+
+class SignsUpdate(BaseModel):
+    signs: list[str] = Field(description=SIGNS_DOC)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    conversation_id: str | None = None
+    forest_id: int | None = Field(None, description="the forest the user is looking at (context)")
+    tree_id: str | None = Field(None, description="the tree the user is looking at (context)")
+
+
+class ChatReply(BaseModel):
+    conversation_id: str
+    reply: str
+    tools_used: list[dict]
+    stop_reason: str | None
+    model: str
 
 
 class IdentifyResult(BaseModel):
@@ -141,6 +197,8 @@ class IdentifyResult(BaseModel):
     candidates: list[Candidate] = []
     consistency: Consistency | None = None
     next_view: ViewSpecOut | None = None
+    best_guess: BestGuess | None = Field(None, description="top candidate when not auto-accepted, with confidence")
+    findings: list[Finding] = Field([], description="health assessment of this visit")
     views: list[ViewQuality] = []
     timings_ms: dict[str, float] = {}
 
@@ -166,6 +224,11 @@ class Observation(BaseModel):
     observation_id: str
     severity: int | None = Field(None, description=SEVERITY_DOC)
     health_notes: str | None = None
+    has_photos: bool
+    sensors: Sensors | None = Field(None, description="null = no Pi reading on this visit (N/A)")
+    signs: list[str] = []
+    findings: list[Finding] = []
+    ai_inspection: dict | None = None
     tree_id: str | None
     timestamp: str = Field(description="ISO 8601, UTC")
     status: str = Field(description="existing | new | uncertain | rejected_species | unsupported_species | "
@@ -190,6 +253,7 @@ class TreeSummary(BaseModel):
     tree_id: str
     species: str
     name: str
+    main_condition: str | None = None
     severity: int | None = Field(None, description="most recent rating; " + SEVERITY_DOC)
     location: Location | None = None
     created_at: str
@@ -207,6 +271,8 @@ class TreePage(BaseModel):
 
 
 class TreeDetail(TreeSummary):
+    current_conditions: list[Finding] = Field([], description="latest assessed finding per condition")
+    latest_sensors: dict | None = None
     observations: list[Observation]
 
 

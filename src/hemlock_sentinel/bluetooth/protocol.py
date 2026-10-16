@@ -8,8 +8,12 @@ One message =
 
 Requests (Pi -> backend):  {"type": "ping"}
                            {"type": "capture", "forest_id": 3?, "view_keys": [...]?, "headings": [...]?,
-                            "lat": .., "lon": .., "accuracy_m": .., "severity": 0-3?, "health_notes": ""?}
-                           + 3-7 photos
+                            "lat": .., "lon": .., "accuracy_m": .., "severity": 0-3?, "health_notes": ""?,
+                            "sensors": {"soil_moisture_pct", "air_temp_c", "humidity_pct", "light_lux"}?,
+                            "signs": [...]?, "accept_best_guess": bool?}
+                           + 3-9 photos (trunk views first; optional twig_underside / trunk_base)
+                           {"type": "visit", "tree_id": "H-012", "sensors": {...}, "severity"?, "signs"?}
+                           (sensor readings at a known tree, no photos)
 Responses (backend -> Pi): {"type": "pong"} | {"type": "result", "ok": true, "result": {...API result...}}
                            | {"type": "result", "ok": false, "error": {"code": .., "message": ..}}
 """

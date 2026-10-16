@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f5d3a">
+<title>Hemlock Sentinel</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--bg:#f5f6f2;--card:#fff;--ink:#1c271e;--muted:#5d695f;--line:#dde2d9;--accent:#2f5d3a;--accent2:#e6efe7;
+--s0:#2e7d32;--s1:#c99a06;--s2:#e8710a;--s3:#c62828;--sn:#8a8f8b;--hwa:#7b3fa0;--ehs:#00838f;--drought:#b0662a}
+@media (prefers-color-scheme:dark){:root{--bg:#121613;--card:#1b211d;--ink:#e6ebe6;--muted:#9aa59c;--line:#2c352f;--accent:#7fbf8c;--accent2:#223127}}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{position:sticky;top:0;z-index:600;background:var(--accent);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button{background:transparent;border:0;color:#fff;font-size:15px;padding:4px 6px}
+main{padding:12px 16px 96px;max-width:760px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 12px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.muted{color:var(--muted);font-size:13px}.small{font-size:12px}
+h2{font-size:17px;margin:0 0 6px}h3{font-size:15px;margin:10px 0 6px}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:9px 12px}
+.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.block{width:100%;margin-top:8px}
+input,select,textarea{font:inherit;width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+label{display:block;font-size:12px;color:var(--muted);margin-top:10px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px}
+.tabs button{flex:1;white-space:nowrap}.tabs .on{background:var(--accent2);border-color:var(--accent);font-weight:600}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--line);margin:6px 0}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin:2px 4px 2px 0}
+.lv-likely{background:#fde3e1;border-color:#e9a39d;color:#7a1b14}.lv-possible{background:#fff1d6;border-color:#e6c27a;color:#6b4a00}
+.lv-low{background:#e5f2e6;border-color:#a8cfac;color:#1f5223}.lv-unknown{background:transparent;color:var(--muted)}
+@media (prefers-color-scheme:dark){.lv-likely{background:#4a1f1c;color:#ffd0cc}.lv-possible{background:#4a3a14;color:#ffe3a3}.lv-low{background:#1e3a22;color:#cde9d0}}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
+#map{height:52vh;border-radius:12px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px}td{padding:4px 0;border-bottom:1px solid var(--line)}td:last-child{text-align:right}
+.na{color:var(--muted)}.thumbs{display:flex;gap:6px;overflow-x:auto}.thumbs img{height:84px;border-radius:8px}
+.fab{position:fixed;right:16px;bottom:20px;z-index:700;border-radius:999px;padding:13px 16px;background:var(--accent);color:#fff;border:0;box-shadow:0 4px 14px #0004}
+.fab2{right:auto;left:16px;background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.chat{display:flex;flex-direction:column;gap:8px}.msg{padding:10px 12px;border-radius:12px;max-width:88%;white-space:pre-wrap}
+.me{align-self:flex-end;background:var(--accent);color:#fff}.ai{align-self:flex-start;background:var(--card);border:1px solid var(--line)}
+.err{color:var(--s3);margin-top:8px}.ok{color:var(--s0)}
+.list-item{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.checks label{display:flex;gap:8px;align-items:flex-start;color:var(--ink);font-size:14px}.checks input{width:auto;margin-top:3px}
+.sev{display:flex;gap:6px}.sev button{flex:1}.sev .on{outline:2px solid var(--accent)}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header><button id="back" class="hidden" aria-label="Back">‹</button><h1 id="title">Hemlock Sentinel</h1><button id="logout" class="hidden">Sign out</button></header>
+<main id="view"></main>
+<button class="fab hidden" id="fabChat">Ask AI</button>
+<button class="fab fab2 hidden" id="fabCap">+ Survey tree</button>
+<script>
+"use strict";
+const SEV = ["none", "light", "moderate", "severe"], SEVC = ["#2e7d32", "#c99a06", "#e8710a", "#c62828"];
+const CONDC = { hwa: "#7b3fa0", ehs: "#00838f", drought_stress: "#b0662a" };
+const S = { token: null, guide: null, forest: null, tree: null, stack: [], conv: null, chat: [] };
+const $ = (q) => document.querySelector(q), V = $("#view");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const day = (iso) => (iso ? new Date(iso).toLocaleDateString() : "–");
+const na = (v, unit = "") => (v == null ? '<span class="na">N/A</span>' : `${v}${unit}`);
+const sevColor = (s) => (s == null ? "#8a8f8b" : SEVC[s]);
+try { S.token = localStorage.getItem("hs_token"); } catch (e) {}
+
+async function api(path, opts = {}) {
+  const h = { Accept: "application/json", ...(opts.headers || {}) };
+  if (S.token) h.Authorization = "Bearer " + S.token;
+  if (S.forest && !opts.noForest) h["X-Forest-Id"] = String(S.forest.forest_id);
+  let body = opts.body;
+  if (body && !(body instanceof FormData)) { h["Content-Type"] = "application/json"; body = JSON.stringify(body); }
+  const r = await fetch("/api/v1" + path, { method: opts.method || "GET", headers: h, body });
+  if (r.status === 204) return null;
+  const d = await r.json().catch(() => null);
+  if (!r.ok) { const e = new Error(d?.error?.message || "HTTP " + r.status); e.code = d?.error?.code; e.status = r.status; throw e; }
+  return d;
+}
+async function img(el, url) {
+  if (!url) return;
+  const r = await fetch(url, { headers: { Authorization: "Bearer " + S.token, "X-Forest-Id": String(S.forest?.forest_id ?? "") } });
+  if (r.ok) { const i = new Image(); i.src = URL.createObjectURL(await r.blob()); el.appendChild(i); }
+}
+function nav(fn, title, push = true) {
+  if (push && S.current) S.stack.push(S.current);
+  S.current = { fn, title };
+  $("#title").textContent = title;
+  $("#back").classList.toggle("hidden", !S.stack.length);
+  window.scrollTo(0, 0);
+  fn().catch(showErr);
+}
+$("#back").onclick = () => { const p = S.stack.pop(); if (p) { S.current = null; nav(p.fn, p.title, false); } };
+function showErr(e) {
+  if (e.status === 401) { S.token = null; try { localStorage.removeItem("hs_token"); } catch (x) {} return loginView(); }
+  V.insertAdjacentHTML("afterbegin", `<div class="card err">${esc(e.message)}</div>`);
+}
+const sevBar = (c, n) => `<div class="bar">${["none", "light", "moderate", "severe", "unrated"].map((k, i) =>
+  `<div style="width:${100 * (c[k] || 0) / Math.max(1, n)}%;background:${i < 4 ? SEVC[i] : "#8a8f8b"}"></div>`).join("")}</div>`;
+const condName = (c) => S.guide?.conditions[c]?.name || c || "–";
+const chip = (f) => `<span class="chip lv-${f.level}">${esc(f.name || condName(f.condition))}: ${f.level}${f.level !== "unknown" ? " " + Math.round(f.likelihood * 100) + "%" : ""}</span>`;
+
+// ------------------------------------------------------------------ login
+function loginView() {
+  S.stack = []; S.current = null; S.forest = null;
+  ["#fabChat", "#fabCap", "#logout", "#back"].forEach((q) => $(q).classList.add("hidden"));
+  $("#title").textContent = "Hemlock Sentinel";
+  V.innerHTML = `<div class="card"><h2>Sign in</h2><p class="muted">Track individual hemlocks, their health and your forests.</p>
+    <label>Email<input id="em" value="demo@hemlock.test" autocomplete="username"></label>
+    <label>Password<input id="pw" type="password" value="hemlock-demo" autocomplete="current-password"></label>
+    <button class="primary block" id="go">Sign in</button>
+    <button class="block" id="reg">Create account</button><div class="err" id="le"></div></div>`;
+  const go = async (path, extra = {}) => {
+    try {
+      const r = await api(path, { method: "POST", body: { email: $("#em").value, password: $("#pw").value, ...extra } });
+      S.token = r.token; try { localStorage.setItem("hs_token", S.token); } catch (e) {}
+      start();
+    } catch (e) { $("#le").textContent = e.message; }
+  };
+  $("#go").onclick = () => go("/auth/login");
+  $("#reg").onclick = () => { const n = prompt("Your name or team name"); if (n) go("/auth/register", { name: n }); };
+}
+$("#logout").onclick = async () => { try { await api("/auth/logout", { method: "POST", noForest: true }); } catch (e) {} S.token = null; try { localStorage.removeItem("hs_token"); } catch (e) {} loginView(); };
+
+async function start() {
+  S.guide = S.guide || await api("/health-guide", { noForest: true });
+  ["#fabChat", "#logout"].forEach((q) => $(q).classList.remove("hidden"));
+  S.stack = []; S.current = null; S.forest = null;
+  nav(homeView, "My forests", false);
+}
+
+// ------------------------------------------------------------------ home
+async function homeView() {
+  S.forest = null; $("#fabCap").classList.add("hidden");
+  const me = await api("/me", { noForest: true });
+  const t = me.totals;
+  V.innerHTML = `<div class="card"><div class="row"><h2>${esc(me.user.name)}</h2></div>
+    <div class="muted">${t.forests} forests · ${t.trees} hemlocks · ${t.observations} visits</div>
+    ${sevBar(t, t.trees)}<div class="muted small">${["none", "light", "moderate", "severe", "unrated"].filter((k) => t[k]).map((k) => `${t[k]} ${k}`).join(" · ")}</div></div>
+    ${me.forests.map((f) => `<div class="card list-item" data-f="${f.forest_id}" style="display:block">
+      <div class="row"><strong>${esc(f.name)}</strong><span class="muted">${f.tree_count} trees</span></div>
+      ${sevBar(f.severity_counts, f.tree_count)}
+      <div class="muted small">last visit ${day(f.last_visit_at)}</div></div>`).join("")}
+    <button class="block" id="nf">+ New forest</button>`;
+  V.querySelectorAll("[data-f]").forEach((el) => el.onclick = () => {
+    S.forest = me.forests.find((f) => f.forest_id === +el.dataset.f);
+    nav(() => forestView("map"), S.forest.name);
+  });
+  $("#nf").onclick = async () => {
+    const n = prompt("Forest name"); if (!n) return;
+    try { await api("/forests", { method: "POST", body: { name: n }, noForest: true }); nav(homeView, "My forests", false); } catch (e) { showErr(e); }
+  };
+}
+
+// ---------------------------------------------------------------- forest
+async function forestView(tab) {
+  S.tree = null; $("#fabCap").classList.remove("hidden");
+  const tabs = [["map", "Map"], ["zones", "Sections"], ["trees", "Trees"], ["insights", "Insights"]];
+  V.innerHTML = `<div class="tabs">${tabs.map(([k, l]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div><div id="tab"></div>`;
+  V.querySelectorAll("[data-t]").forEach((b) => b.onclick = () => { S.current.fn = () => forestView(b.dataset.t); forestView(b.dataset.t).catch(showErr); });
+  const T = $("#tab");
+  if (tab === "map") return mapTab(T);
+  const a = await api(`/forests/${S.forest.forest_id}/analysis`);
+  if (tab === "zones") return zonesTab(T, a);
+  if (tab === "trees") return treesTab(T);
+  return insightsTab(T, a);
+}
+
+let MAP = null;
+async function mapTab(T, area) {
+  T.innerHTML = `<div class="card" style="padding:8px"><div class="row" style="margin-bottom:8px">
+    <select id="colorBy" style="width:auto"><option value="sev">Color: severity</option><option value="cond">Color: main condition</option><option value="zones">Show sections</option></select>
+    <button id="area">Analyze visible area</button></div><div id="map"></div><div id="legend" class="muted small" style="margin-top:6px"></div></div><div id="areaOut"></div>`;
+  const m = await api(`/forests/${S.forest.forest_id}/map`);
+  if (MAP) MAP.remove();
+  MAP = L.map("map");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(MAP);
+  let layer = null, zl = null;
+  const draw = async (mode) => {
+    if (layer) layer.remove(); if (zl) { zl.remove(); zl = null; }
+    layer = L.geoJSON(m, {
+      pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 8, weight: 1.5, color: "#fff", fillOpacity: .92,
+        fillColor: mode === "cond" ? (CONDC[f.properties.main_condition] || "#8a8f8b") : sevColor(f.properties.severity) }),
+      onEachFeature: (f, l) => { const p = f.properties;
+        l.bindPopup(`<b>${esc(p.tree_id)}</b> · ${p.severity_label}<br>${esc(p.main_condition_name || "no condition found")}<br><a href="#" data-tree="${esc(p.tree_id)}">Open tree ›</a>`);
+        l.on("popupopen", (ev) => ev.popup.getElement().querySelector("[data-tree]").onclick = (e) => { e.preventDefault(); openTree(p.tree_id); }); },
+    }).addTo(MAP);
+    if (mode === "zones") {
+      const a = await api(`/forests/${S.forest.forest_id}/analysis`);
+      zl = L.layerGroup(a.zones.map((z) => L.rectangle([[z.bbox[1], z.bbox[0]], [z.bbox[3], z.bbox[2]]],
+        { color: "#000", weight: .5, fillOpacity: .35, fillColor: `hsl(${120 - 120 * z.stress_score},70%,45%)` })
+        .bindPopup(`Section #${z.rank}: ${z.trees} trees, stress ${Math.round(z.stress_score * 100)}<br>${esc(condName(z.most_prominent_condition))}`))).addTo(MAP);
+    }
+    $("#legend").innerHTML = mode === "cond"
+      ? Object.entries(CONDC).map(([k, c]) => `<span class="dot" style="background:${c}"></span>${esc(condName(k))}`).join(" &nbsp; ") + ' &nbsp; <span class="dot" style="background:#8a8f8b"></span>none found'
+      : mode === "zones" ? "Sections shaded green (healthy) → red (suffering most)"
+      : SEV.map((k, i) => `<span class="dot" style="background:${SEVC[i]}"></span>${k}`).join(" &nbsp; ") + ' &nbsp; <span class="dot" style="background:#8a8f8b"></span>unrated';
+  };
+  await draw("sev");
+  if (m.features.length) MAP.fitBounds(layer.getBounds().pad(.2)); else if (m.forest?.center) MAP.setView([m.forest.center.lat, m.forest.center.lon], 15); else MAP.setView([34.8, -84.3], 9);
+  $("#colorBy").onchange = (e) => draw(e.target.value);
+  $("#area").onclick = async () => {
+    const b = MAP.getBounds();
+    const a = await api(`/forests/${S.forest.forest_id}/analysis?west=${b.getWest()}&south=${b.getSouth()}&east=${b.getEast()}&north=${b.getNorth()}`);
+    $("#areaOut").innerHTML = `<div class="card"><h2>This area</h2>${summaryHtml(a.summary)}</div>`;
+  };
+}
+
+function summaryHtml(s) {
+  if (!s.trees) return '<p class="muted">No trees here.</p>';
+  const conds = Object.entries(s.conditions);
+  return `<div class="muted">${s.trees} trees · mean severity ${s.mean_severity ?? "N/A"} · ${s.pct_moderate_or_severe ?? "N/A"}% moderate or severe</div>
+    ${sevBar(s.severity_counts, s.trees)}
+    <h3>Conditions (trees)</h3><table>${conds.map(([k, v]) => `<tr><td>${esc(v.name)}</td><td>${v.likely} likely · ${v.possible} possible · ${v.assessed} checked</td></tr>`).join("")}</table>
+    <p class="small muted">Most prominent: <b>${esc(condName(s.most_prominent_condition))}</b>. Trees never checked on twig undersides count as not assessed, not healthy.</p>
+    <h3>Pi sensors (latest per tree)</h3><table>
+      <tr><td>Soil moisture</td><td>${s.sensor_means.soil_moisture_pct ? s.sensor_means.soil_moisture_pct.mean + " %" : na(null)}</td></tr>
+      <tr><td>Air temperature</td><td>${s.sensor_means.air_temp_c ? s.sensor_means.air_temp_c.mean + " °C" : na(null)}</td></tr>
+      <tr><td>Humidity</td><td>${s.sensor_means.humidity_pct ? s.sensor_means.humidity_pct.mean + " %" : na(null)}</td></tr>
+      <tr><td>Light</td><td>${s.sensor_means.light_lux ? s.sensor_means.light_lux.mean + " lux" : na(null)}</td></tr></table>
+    <div class="muted small">${s.trees_with_sensor_data} of ${s.trees} trees have Pi readings; ${s.trees_with_photos} have photos.</div>`;
+}
+
+function zonesTab(T, a) {
+  T.innerHTML = `<div class="card"><h2>Where trees suffer most</h2><p class="muted small">The forest split into 150 m sections, ranked by stress (severity + likelihood of a condition).</p>
+    ${a.zones.map((z) => `<div class="list-item" data-z="${z.zone_id}"><div><b>#${z.rank}</b> · ${z.trees} tree${z.trees === 1 ? "" : "s"}<br>
+      <span class="muted small">${esc(condName(z.most_prominent_condition))} · mean severity ${z.mean_severity ?? "N/A"}</span></div>
+      <div style="min-width:60px;text-align:right"><b style="color:hsl(${120 - 120 * z.stress_score},70%,40%)">${Math.round(z.stress_score * 100)}</b><div class="muted small">stress</div></div></div>`).join("") || '<p class="muted">No trees with GPS yet.</p>'}</div>`;
+  T.querySelectorAll("[data-z]").forEach((el) => el.onclick = () => {
+    const z = a.zones.find((x) => x.zone_id === el.dataset.z);
+    nav(async () => { V.innerHTML = `<div class="card"><h2>Section #${z.rank}</h2><div class="muted">${z.trees} trees · stress ${Math.round(z.stress_score * 100)}</div>
+      ${sevBar(z.severity_counts, z.trees)}<table>${Object.entries(z.condition_counts).map(([k, v]) => `<tr><td>${esc(condName(k))}</td><td>${v} trees</td></tr>`).join("")}</table>
+      <h3>Trees</h3>${z.tree_ids.map((t) => `<div class="list-item" data-tree="${t}"><span>${t}</span><span>›</span></div>`).join("")}</div>`;
+      V.querySelectorAll("[data-tree]").forEach((e) => e.onclick = () => openTree(e.dataset.tree)); }, `Section #${z.rank}`);
+  });
+}
+
+async function treesTab(T) {
+  const p = await api("/trees?limit=500");
+  T.innerHTML = `<div class="card">${p.items.map((t) => `<div class="list-item" data-tree="${t.tree_id}"><div><b>${t.tree_id}</b><br>
+    <span class="muted small">${t.observation_count} visits · last ${day(t.last_seen_at)}${t.main_condition ? " · " + esc(condName(t.main_condition)) : ""}</span></div>
+    <div><span class="dot" style="background:${sevColor(t.severity)}"></span>${t.severity == null ? "unrated" : SEV[t.severity]}</div></div>`).join("") || '<p class="muted">No trees yet. Tap “Survey tree”.</p>'}</div>`;
+  T.querySelectorAll("[data-tree]").forEach((e) => e.onclick = () => openTree(e.dataset.tree));
+}
+
+function insightsTab(T, a) {
+  const s = a.summary;
+  T.innerHTML = `<div class="card"><h2>Forest health</h2>${summaryHtml(s)}</div>
+    <div class="card"><h2>What to do</h2>${s.recommendations.map((r) => `<h3>${esc(r.name)} · ${r.trees_affected} trees</h3>
+      <ul>${r.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p class="small muted"><b>How to confirm:</b> ${esc(r.how_to_confirm)}</p>`).join("") || '<p class="muted">No conditions found yet.</p>'}
+      <h3>Always</h3><ul>${s.general_advice.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+    <div class="card"><h2>Worst trees</h2>${a.worst_trees.map((t) => `<div class="list-item" data-tree="${t.tree_id}"><span>${t.tree_id} · ${esc(condName(t.main_condition))}</span><b>${Math.round(t.stress_score * 100)}</b></div>`).join("")}</div>`;
+  T.querySelectorAll("[data-tree]").forEach((e) => e.onclick = () => openTree(e.dataset.tree));
+}
+
+// ------------------------------------------------------------------ tree
+function openTree(id) { S.tree = id; nav(treeView, id); }
+async function treeView() {
+  const t = await api(`/trees/${encodeURIComponent(S.tree)}`);
+  const ls = t.latest_sensors;
+  V.innerHTML = `<div class="card"><div class="row"><h2>${t.tree_id} · ${esc(t.name)}</h2><span><span class="dot" style="background:${sevColor(t.severity)}"></span>${t.severity == null ? "unrated" : SEV[t.severity]}</span></div>
+    <div class="muted small">${t.observation_count} visits · first ${day(t.created_at)} · last ${day(t.last_seen_at)}${t.location ? ` · ${t.location.lat.toFixed(5)}, ${t.location.lon.toFixed(5)}` : ""}</div>
+    ${t.notes ? `<p><em>${esc(t.notes)}</em></p>` : ""}
+    <h3>Current health</h3>${t.current_conditions.length ? t.current_conditions.map((f) => `<div>${chip(f)}<div class="muted small">${f.evidence.map(esc).join("; ")}</div></div>`).join("") : '<p class="muted small">Not assessed yet: check twig undersides and add a visit.</p>'}
+    <h3>Latest Pi reading</h3>${sensorTable(ls)}
+    <button class="block" id="addVisit">+ Add visit (sensors / signs, no photos)</button></div>
+    <h3 style="margin:16px 0 8px">Visits</h3>
+    ${t.observations.slice().reverse().map((o) => `<div class="card">
+      <div class="row"><b>${day(o.timestamp)}</b><span class="muted small">${esc(o.status)}${o.match_probability != null ? " · match " + Math.round(o.match_probability * 100) + "%" : ""}</span></div>
+      <div class="muted small">Severity: ${o.severity == null ? na(null) : SEV[o.severity]}${o.health_notes ? " · " + esc(o.health_notes) : ""}</div>
+      <h3>Photos</h3>${o.has_photos ? `<div class="thumbs" data-imgs='${JSON.stringify(o.views.map((v) => v.image_url).filter(Boolean))}'></div>` : '<span class="na">N/A (no photos this visit)</span>'}
+      <h3>Pi sensors</h3>${sensorTable(o.sensors)}
+      <h3>Signs observed</h3>${o.signs.length ? o.signs.map((s) => `<span class="chip">${esc(S.guide.signs[s] ? s.replace(/_/g, " ") : s)}</span>`).join("") : '<span class="na">N/A</span>'}
+      ${o.ai_inspection ? `<p class="small"><b>AI photo check:</b> ${esc(o.ai_inspection.summary)}</p>` : ""}
+      <h3>Assessment</h3>${o.findings.map(chip).join("") || '<span class="na">N/A</span>'}
+      <div class="row" style="margin-top:8px"><button data-signs="${o.observation_id}">Edit signs</button>
+      ${o.views.some((v) => v.view_type === "twig_underside") ? `<button data-ai="${o.observation_id}">AI photo check</button>` : ""}</div></div>`).join("")}`;
+  V.querySelectorAll("[data-imgs]").forEach((el) => JSON.parse(el.dataset.imgs).forEach((u) => img(el, u)));
+  $("#addVisit").onclick = () => nav(() => visitForm(t.tree_id), "Add visit");
+  V.querySelectorAll("[data-signs]").forEach((b) => b.onclick = () => nav(() => signsForm(b.dataset.signs, t), "Signs"));
+  V.querySelectorAll("[data-ai]").forEach((b) => b.onclick = async () => {
+    b.textContent = "Checking…"; b.disabled = true;
+    try { await api(`/observations/${b.dataset.ai}/inspect`, { method: "POST" }); treeView().catch(showErr); }
+    catch (e) { b.textContent = e.code === "assistant_not_configured" ? "AI not set up on server" : "Failed"; }
+  });
+}
+const sensorTable = (s) => `<table>
+  <tr><td>Soil moisture</td><td>${na(s?.soil_moisture_pct, " %")}</td></tr><tr><td>Air temperature</td><td>${na(s?.air_temp_c, " °C")}</td></tr>
+  <tr><td>Humidity</td><td>${na(s?.humidity_pct, " %")}</td></tr><tr><td>Light</td><td>${na(s?.light_lux, " lux")}</td></tr></table>`;
+
+function signChecks(sel = []) {
+  return `<div class="checks">${Object.entries(S.guide.signs).map(([k, d]) => `<label><input type="checkbox" value="${k}" ${sel.includes(k) ? "checked" : ""}>${esc(d)}</label>`).join("")}</div>`;
+}
+const checked = () => [...V.querySelectorAll(".checks input:checked")].map((i) => i.value);
+function sevPicker(id) {
+  return `<div class="sev" id="${id}">${SEV.map((s, i) => `<button data-v="${i}">${i} ${s}</button>`).join("")}</div>
+    <div class="muted small" id="${id}h">Tap a rating</div>`;
+}
+function bindSev(id) {
+  let v = null;
+  V.querySelectorAll(`#${id} button`).forEach((b) => b.onclick = () => {
+    v = +b.dataset.v; V.querySelectorAll(`#${id} button`).forEach((x) => x.classList.toggle("on", x === b));
+    $(`#${id}h`).textContent = S.guide.severity_scale[v];
+  });
+  return () => v;
+}
+const sensorInputs = () => `<div class="row"><label style="flex:1">Soil %<input id="soil" type="number" inputmode="decimal"></label><label style="flex:1">Temp °C<input id="temp" type="number" inputmode="decimal"></label></div>
+  <div class="row"><label style="flex:1">Humidity %<input id="hum" type="number" inputmode="decimal"></label><label style="flex:1">Light lux<input id="lux" type="number" inputmode="decimal"></label></div>`;
+const num = (id) => { const v = $(id).value; return v === "" ? null : +v; };
+const readSensors = () => ({ soil_moisture_pct: num("#soil"), air_temp_c: num("#temp"), humidity_pct: num("#hum"), light_lux: num("#lux") });
+
+async function visitForm(treeId) {
+  V.innerHTML = `<div class="card"><h2>Visit to ${treeId}</h2><p class="muted small">For a visit without photos, e.g. a Raspberry Pi reading. Leave blank what you don't have.</p>
+    <h3>Pi sensor readings</h3>${sensorInputs()}<h3>Severity</h3>${sevPicker("vs")}<h3>Signs</h3>${signChecks()}
+    <label>Notes<textarea id="vn" rows="2"></textarea></label><button class="primary block" id="save">Save visit</button></div>`;
+  const sev = bindSev("vs");
+  $("#save").onclick = async () => {
+    try { await api(`/trees/${encodeURIComponent(treeId)}/visits`, { method: "POST", body: { sensors: readSensors(), signs: checked(), severity: sev(), health_notes: $("#vn").value || null } });
+      $("#back").click(); } catch (e) { showErr(e); }
+  };
+}
+async function signsForm(oid, t) {
+  const o = t.observations.find((x) => x.observation_id === oid);
+  V.innerHTML = `<div class="card"><h2>Signs on ${day(o.timestamp)}</h2>${signChecks(o.signs)}<button class="primary block" id="save">Save</button></div>`;
+  $("#save").onclick = async () => { try { await api(`/observations/${oid}/signs`, { method: "PUT", body: { signs: checked() } }); $("#back").click(); } catch (e) { showErr(e); } };
+}
+
+// --------------------------------------------------------------- capture
+$("#fabCap").onclick = () => nav(captureView, "Survey a tree");
+async function captureView() {
+  const proto = await api("/protocol", { noForest: true });
+  const steps = [...proto.views.slice(0, 3), { key: "twig_underside", title: "Twig underside (optional)", instruction: "Turn a low branch over; close-up of the twig underside from 10-30 cm. This is what can show adelgid wool and scales." }];
+  V.innerHTML = `<div class="card"><h2>Photos</h2><p class="muted small">Same spots every visit: start on the north side, then walk clockwise.</p>
+    ${steps.map((v, i) => `<label><b>${i + 1}. ${esc(v.title)}</b><br>${esc(v.instruction)}<input type="file" accept="image/*" capture="environment" data-k="${v.key}"></label>`).join("")}</div>
+    <div class="card"><h2>Health</h2><h3>Severity</h3>${sevPicker("cs")}<h3>Signs you see</h3>${signChecks()}</div>
+    <div class="card"><h2>Location & Pi sensors</h2><button id="gps" class="block">Use my location</button>
+    <div class="row"><label style="flex:1">Lat<input id="lat" type="number" inputmode="decimal"></label><label style="flex:1">Lon<input id="lon" type="number" inputmode="decimal"></label></div>
+    ${sensorInputs()}<p class="muted small">Leave sensor fields empty if the Pi wasn't used (shown as N/A). The Pi can also send readings over Bluetooth.</p></div>
+    <button class="primary block" id="send">Identify tree</button><div id="res"></div>`;
+  const sev = bindSev("cs");
+  $("#gps").onclick = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(
+    (p) => { $("#lat").value = p.coords.latitude.toFixed(6); $("#lon").value = p.coords.longitude.toFixed(6); },
+    () => { $("#gps").textContent = "Location needs HTTPS on phones: type it in"; }) : null;
+  $("#send").onclick = async () => {
+    const files = [...V.querySelectorAll("input[type=file]")].filter((i) => i.files[0]);
+    if (files.filter((i) => i.dataset.k !== "twig_underside").length < 3) return alert("Take the 3 trunk photos first.");
+    const fd = new FormData();
+    files.forEach((i) => fd.append("images", i.files[0], i.dataset.k + ".jpg"));
+    fd.append("view_keys", files.map((i) => i.dataset.k).join(","));
+    const s = readSensors(); Object.entries(s).forEach(([k, v]) => v != null && fd.append(k, v));
+    if ($("#lat").value && $("#lon").value) { fd.append("lat", $("#lat").value); fd.append("lon", $("#lon").value); }
+    if (sev() != null) fd.append("severity", sev());
+    const sg = checked(); if (sg.length) fd.append("signs", sg.join(","));
+    $("#send").disabled = true; $("#send").textContent = "Identifying…";
+    try { showResult(await api("/identify", { method: "POST", body: fd })); }
+    catch (e) { showErr(e); } finally { $("#send").disabled = false; $("#send").textContent = "Identify tree"; }
+  };
+}
+function showResult(r) {
+  const head = r.status === "existing" ? `<h2 class="ok">Existing tree ${r.tree_id}</h2><div>${Math.round(r.probability * 100)}% confident</div>`
+    : r.status === "new" ? `<h2>New tree registered: ${r.tree_id}</h2>`
+    : r.status === "uncertain" ? `<h2>Not sure which tree</h2>` : `<h2>${esc(r.message)}</h2>`;
+  $("#res").innerHTML = `<div class="card">${head}
+    ${r.species ? `<div class="muted">${esc(r.species.name)} (${Math.round(r.species.confidence * 100)}%)</div>` : ""}
+    ${r.best_guess ? `<p>${esc(r.best_guess.note)}</p><button class="primary block" data-as="${r.best_guess.tree_id}">Use ${r.best_guess.tree_id} (${Math.round((r.best_guess.probability || 0) * 100)}%)</button>
+      ${r.candidates.slice(1).map((c) => `<button class="block" data-as="${c.tree_id}">${c.tree_id} (${Math.round((c.probability || 0) * 100)}%)</button>`).join("")}
+      <button class="block" data-as="new">It's a new tree</button>` : ""}
+    ${r.views.filter((v) => !v.accepted).map((v) => `<p class="err small">Photo ${v.index + 1}: ${esc(v.problems.join("; "))}</p>`).join("")}
+    ${r.findings.length ? `<h3>Health assessment</h3>${r.findings.map(chip).join("")}` : ""}
+    ${r.tree_id ? `<button class="block" id="ot">Open ${r.tree_id}</button>` : ""}</div>`;
+  $("#res").querySelectorAll("[data-as]").forEach((b) => b.onclick = async () => {
+    const a = await api(`/observations/${r.observation_id}/assign`, { method: "POST", body: { tree_id: b.dataset.as } });
+    openTree(a.tree_id);
+  });
+  if ($("#ot")) $("#ot").onclick = () => openTree(r.tree_id);
+  $("#res").scrollIntoView({ behavior: "smooth" });
+}
+
+// -------------------------------------------------------------- assistant
+$("#fabChat").onclick = () => nav(chatView, "Assistant");
+async function chatView() {
+  $("#fabCap").classList.add("hidden");
+  const ctx = S.forest ? `Context: ${esc(S.forest.name)}${S.tree ? " · " + S.tree : ""}` : "Context: all forests";
+  V.innerHTML = `<div class="muted small" style="margin-bottom:8px">${ctx} · powered by Claude Haiku</div><div class="chat" id="msgs"></div>
+    <div class="card" style="margin-top:12px"><textarea id="q" rows="2" placeholder="Where are trees suffering most? What should we do?"></textarea>
+    <div class="row" style="margin-top:8px"><button id="newc">New chat</button><button class="primary" id="ask">Send</button></div></div>`;
+  const draw = () => { $("#msgs").innerHTML = S.chat.map((m) => `<div class="msg ${m.me ? "me" : "ai"}">${esc(m.t)}</div>`).join("")
+    || `<div class="msg ai">Hi! I can look through your forests, trees and Pi readings. Try: "Which section is worst and why?" or "What should we do about the adelgid?"</div>`; };
+  draw();
+  $("#newc").onclick = () => { S.chat = []; S.conv = null; draw(); };
+  $("#ask").onclick = async () => {
+    const q = $("#q").value.trim(); if (!q) return;
+    S.chat.push({ me: true, t: q }, { me: false, t: "Thinking…" }); draw(); $("#q").value = "";
+    try {
+      const r = await api("/assistant/chat", { method: "POST", noForest: true, body: { message: q, conversation_id: S.conv, forest_id: S.forest?.forest_id ?? null, tree_id: S.tree } });
+      S.conv = r.conversation_id; S.chat[S.chat.length - 1].t = r.reply;
+    } catch (e) { S.chat[S.chat.length - 1].t = e.code === "assistant_not_configured" ? "The assistant isn't set up on the server yet (it needs ANTHROPIC_API_KEY)." : "Error: " + e.message; }
+    draw(); window.scrollTo(0, document.body.scrollHeight);
+  };
+}
+
+if (S.token) start().catch(() => loginView()); else loginView();
+</script>
+</body>
+</html>

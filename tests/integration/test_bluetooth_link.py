@@ -95,3 +95,32 @@ def test_pi_to_model_over_link(backend):
     from hemlock_sentinel.api import health
     st = health.tree_status(repo)[0]
     assert st["severity"] == 2 and st["lat"] == pytest.approx(34.801)
+
+
+def test_pi_sends_sensors_with_photos_and_alone(backend):
+    url, acc = backend
+    user = acc.register("pi2@example.org", "field-device-pw", "Pi team")
+    forest = acc.create_forest(user.user_id, "Sensor stand")
+    api = ApiClient(url, "pi2@example.org", "field-device-pw")
+    srv = socket.create_server(("127.0.0.1", 0))
+    stop = threading.Event()
+    threading.Thread(target=serve, args=(srv, api, forest.forest_id, stop), daemon=True).start()
+    pi = socket.create_connection(srv.getsockname(), timeout=30)
+    sensors = {"soil_moisture_pct": 11.0, "air_temp_c": 31.0, "humidity_pct": None, "light_lux": 5000.0}
+    r = send_capture(pi, [_jpeg(tree_view(12, v)) for v in range(3)],
+                     {"sensors": sensors, "signs": ["hwa_wool"], "severity": 2})
+    assert r["ok"] and r["result"]["tree_id"] == "H-001"
+    assert {f["condition"]: f["level"] for f in r["result"]["findings"]}["hwa"] == "likely"
+    assert "Hemlock woolly adelgid" in describe(r)
+    send_message(pi, {"type": "visit", "tree_id": "H-001", "sensors": {"soil_moisture_pct": 28.0}})
+    v, _ = recv_message(pi)
+    assert v["ok"] and v["result"]["has_photos"] is False and v["result"]["sensors"]["soil_moisture_pct"] == 28.0
+    assert "Visit stored for H-001" in describe(v)
+    send_message(pi, {"type": "visit", "tree_id": "H-404", "sensors": {"soil_moisture_pct": 28.0}})
+    assert recv_message(pi)[0]["error"]["code"] == "tree_not_found"
+    pi.close()
+    stop.set()
+    srv.close()
+    first = acc.pipeline(forest).repo.get_observations("H-001")[0].observation_id
+    from hemlock_sentinel.api import field
+    assert field.visit_data(acc.pipeline(forest).repo, [first])[first]["sensors"]["humidity_pct"] is None

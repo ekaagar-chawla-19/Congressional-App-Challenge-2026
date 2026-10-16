@@ -35,6 +35,9 @@ export type ForestSummary = Schemas["ForestSummary"];
 export type ForestMap = Schemas["ForestMap"];
 /** 0 none, 1 light, 2 moderate, 3 severe — the observer's rating, not a model output. */
 export type Severity = 0 | 1 | 2 | 3;
+export type Sensors = Schemas["Sensors"];
+export type Finding = Schemas["Finding"];
+export type ChatReply = Schemas["ChatReply"];
 export type IdentifyStatus = IdentifyResult["status"];
 export type NextAction = IdentifyResult["action"];
 
@@ -165,6 +168,9 @@ export class HemlockClient {
       location?: Location;
       severity?: Severity;
       healthNotes?: string;
+      sensors?: Sensors;
+      signs?: string[];
+      acceptBestGuess?: boolean;
       commit?: boolean;
     } = {},
   ): Promise<IdentifyResult> {
@@ -179,6 +185,9 @@ export class HemlockClient {
     }
     if (opts.severity != null) form.append("severity", String(opts.severity));
     if (opts.healthNotes) form.append("health_notes", opts.healthNotes);
+    for (const [k, v] of Object.entries(opts.sensors ?? {})) if (v != null) form.append(k, String(v));
+    if (opts.signs?.length) form.append("signs", opts.signs.join(","));
+    if (opts.acceptBestGuess) form.append("accept_best_guess", "true");
     if (opts.commit === false) form.append("commit", "false");
     return this.req("POST", "/identify", form);
   }
@@ -210,6 +219,37 @@ export class HemlockClient {
   }
   getObservation(observationId: string): Promise<Observation> {
     return this.req("GET", `/observations/${enc(observationId)}`);
+  }
+  /** A visit without photos (Pi readings and/or observed signs) at a known tree. */
+  addVisit(treeId: string, visit: { sensors?: Sensors; signs?: string[]; severity?: Severity; healthNotes?: string;
+    location?: Location }): Promise<Observation> {
+    return this.req("POST", `/trees/${enc(treeId)}/visits`, { sensors: visit.sensors ?? null, signs: visit.signs ?? [],
+      severity: visit.severity ?? null, health_notes: visit.healthNotes ?? null, location: visit.location ?? null });
+  }
+  setSigns(observationId: string, signs: string[]): Promise<Observation> {
+    return this.req("PUT", `/observations/${enc(observationId)}/signs`, { signs });
+  }
+  setSensors(observationId: string, sensors: Sensors): Promise<Observation> {
+    return this.req("PUT", `/observations/${enc(observationId)}/sensors`, sensors);
+  }
+  /** AI photo check (Claude Haiku) of the visit's twig_underside photos. */
+  inspectPhotos(observationId: string): Promise<Observation> {
+    return this.req("POST", `/observations/${enc(observationId)}/inspect`);
+  }
+  /** Forest (or area) analysis: summary, ranked sections, worst trees, recommendations. */
+  analysis(opts: { forestId?: number; area?: { west: number; south: number; east: number; north: number };
+    cellM?: number } = {}): Promise<any> {
+    const id = opts.forestId ?? this.opts.forestId;
+    const q = query({ ...(opts.area ?? {}), cell_m: opts.cellM });
+    return this.req("GET", (id == null ? "/analysis" : `/forests/${id}/analysis`) + q);
+  }
+  healthGuide(): Promise<any> {
+    return this.req("GET", "/health-guide");
+  }
+  /** Ask the AI assistant; pass back conversationId to continue. */
+  chat(message: string, opts: { conversationId?: string; forestId?: number; treeId?: string } = {}): Promise<ChatReply> {
+    return this.req("POST", "/assistant/chat", { message, conversation_id: opts.conversationId ?? null,
+      forest_id: opts.forestId ?? this.opts.forestId ?? null, tree_id: opts.treeId ?? null });
   }
   /** Record or change the severity rating of a visit. */
   setHealth(observationId: string, severity: Severity | null, notes?: string): Promise<Observation> {

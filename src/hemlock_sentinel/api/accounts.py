@@ -26,7 +26,7 @@ from ..acquisition.mocks import LocalFileStorage
 from ..database.repository import TreeRepository
 from ..pipeline.inference import HemlockSentinel, PipelineConfig
 from ..reid.calibration import Calibration
-from . import health
+from . import field, health
 
 TOKEN_TTL_S = 30 * 24 * 3600
 
@@ -161,6 +161,7 @@ class Accounts:
                 d = self.root / "forests" / str(forest.forest_id)
                 repo = TreeRepository(d / "trees.sqlite")
                 health.ensure_schema(repo)
+                field.ensure_schema(repo)
                 p = HemlockSentinel(self.runtime, repo, LocalFileStorage(d / "blobs"), self.cal, self.config_factory())
                 self._pipes[forest.forest_id] = p
             return p

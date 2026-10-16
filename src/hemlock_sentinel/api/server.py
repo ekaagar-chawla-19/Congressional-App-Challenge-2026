@@ -54,9 +54,13 @@ from ..database.models import ObservationRecord, TreeRecord
 from ..pipeline.inference import HemlockSentinel, ObservationResult, ViewResult
 from ..preprocessing import decode_image
 from ..species.labels import COMMON_NAMES, ID_PREFIX, REID_SUPPORTED
+from . import analysis as A
+from . import diseases as D
+from . import field as F
 from . import health as H
 from . import schemas as S
 from .accounts import Accounts, Forest, User
+from .assistant import API_ERRORS, Assistant, NotConfigured
 
 def _find_production(name: str) -> Path:
     """models/production/<name> next to the source checkout (pip install -e), else in the current
@@ -134,7 +138,18 @@ def _result(r: ObservationResult, action: str, views: list[ViewResult], nxt: Vie
         if c:
             out.consistency = S.Consistency(per_view_top=list(c.per_view_top), agreement=round(c.agreement, 3),
                                             contradicting_views=[i + 1 for i in c.contradicting_views])
+        if r.status == "uncertain" and out.candidates:
+            top = out.candidates[0]
+            pct = f"{top.probability:.0%}" if top.probability is not None else "unknown"
+            out.best_guess = S.BestGuess(tree_id=top.tree_id, probability=top.probability,
+                                         note=f"Most likely {top.tree_id} ({pct} confident). Not auto-accepted "
+                                              "because it is below the validated threshold; confirm or pick another.")
     return out
+
+
+def _finding(f: dict) -> S.Finding:
+    return S.Finding(condition=f["condition"], name=D.CONDITIONS[f["condition"]]["name"],
+                     likelihood=f["likelihood"], level=f["level"], evidence=f["evidence"])
 
 
 def _location(lat, lon, acc=None) -> S.Location | None:
@@ -145,7 +160,13 @@ def _location(lat, lon, acc=None) -> S.Location | None:
 
 def _observations(repo, obs: list[ObservationRecord]) -> list[S.Observation]:
     hl = H.health_for(repo, [o.observation_id for o in obs])
+    vd = F.visit_data(repo, [o.observation_id for o in obs])
     return [S.Observation(
+        has_photos=any(v.image_key for v in o.views),
+        sensors=S.Sensors(**{k: v for k, v in vd[o.observation_id]["sensors"].items() if k != "source"})
+        if vd[o.observation_id]["sensors"] else None,
+        signs=vd[o.observation_id]["signs"], findings=[_finding(f) for f in vd[o.observation_id]["findings"]],
+        ai_inspection=vd[o.observation_id]["ai_inspection"],
         observation_id=o.observation_id, tree_id=o.tree_id, timestamp=_iso(o.timestamp), status=o.decision,
         severity=hl.get(o.observation_id, (None, None))[0], health_notes=hl.get(o.observation_id, (None, None))[1],
         species=o.species, species_confidence=o.species_confidence, match_probability=o.match_probability,
@@ -159,8 +180,23 @@ def _fix(loc: S.Location | None) -> GeoFix | None:
     return GeoFix(loc.lat, loc.lon, loc.accuracy_m if loc.accuracy_m is not None else float("nan")) if loc else None
 
 
+def _form_sensors(**kw) -> dict | None:
+    try:
+        return F.clean_sensors(kw)
+    except ValueError as e:
+        raise ApiError(422, "invalid_request", str(e)) from e
+
+
+def _check_signs(signs: list[str]) -> list[str]:
+    bad = [x for x in signs if x not in D.SIGNS]
+    if bad:
+        raise ApiError(400, "unknown_sign", f"unknown sign(s) {bad}; see GET {PREFIX}/health-guide")
+    return signs
+
+
 def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_key: str | None = None,
-               cors_origins: list[str] | None = None, accounts: Accounts | None = None) -> FastAPI:
+               cors_origins: list[str] | None = None, accounts: Accounts | None = None,
+               assistant: Assistant | None = None) -> FastAPI:
     """Single mode: pass ``pipeline`` (one shared database, no sign-in).
     Accounts mode: pass ``accounts`` (sign-in, one database per forest)."""
     if (pipeline is None) == (accounts is None):
@@ -178,6 +214,8 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     version = getattr(runtime, "version", "unknown")
     if pipeline is not None:
         H.ensure_schema(pipeline.repo)
+        F.ensure_schema(pipeline.repo)
+    assistant = assistant or Assistant()
 
     @app.exception_handler(ApiError)
     async def _api_error(_req: Request, e: ApiError):
@@ -282,15 +320,43 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         if thumb is None:
             thumb = next((v.image_key for v in ws.repo.gallery_views(t.tree_id) if v.image_key), None)
         if status is None:
-            status = next((d for d in H.tree_status(ws.repo) if d["tree_id"] == t.tree_id), {})
+            status = next((d for d in A.tree_profiles(ws.repo) if d["tree_id"] == t.tree_id), {})
         return S.TreeSummary(tree_id=t.tree_id, species=t.species, name=COMMON_NAMES.get(t.species, t.species),
-                             severity=status.get("severity"), location=_location(status.get("lat"), status.get("lon")),
+                             main_condition=status.get("main_condition"), severity=status.get("severity"), location=_location(status.get("lat"), status.get("lon")),
                              created_at=_iso(t.created_at), last_seen_at=_iso(t.last_seen_at),
                              observation_count=t.observation_count, notes=t.notes, thumbnail_url=_image_url(thumb))
 
-    def record_health(ws: Workspace, r: ObservationResult, severity: int | None, notes: str | None) -> None:
-        if r.observation_id and (severity is not None or notes):
-            H.set_health(ws.repo, r.observation_id, severity, notes)
+    def refresh_findings(ws: Workspace, oid: str) -> list[dict]:
+        o = ws.repo.get_observation(oid)
+        vd = F.visit_data(ws.repo, [oid])[oid]
+        sev = H.health_for(ws.repo, [oid]).get(oid, (None, None))[0]
+        findings = D.assess(vd["signs"], vd["sensors"], sev, o.timestamp, any(v.image_key for v in o.views),
+                            F.ai_signs(vd["ai_inspection"]))
+        F.set_findings(ws.repo, oid, findings)
+        return findings
+
+    def record_visit(ws: Workspace, oid: str | None, severity: int | None = None, notes: str | None = None,
+                     sensors: dict | None = None, signs: list[str] | None = None) -> list[S.Finding]:
+        if not oid:
+            return []
+        if severity is not None or notes:
+            H.set_health(ws.repo, oid, severity, notes)
+        if sensors:
+            F.set_sensors(ws.repo, oid, sensors)
+        if signs:
+            F.set_signs(ws.repo, oid, _check_signs(signs))
+        return [_finding(f) for f in refresh_findings(ws, oid)]
+
+    def accept_best_guess_fn(ws: Workspace, r: ObservationResult) -> bool:
+        if r.status != "uncertain" or not r.observation_id or not r.decision or not r.decision.candidates:
+            return False
+        top = r.decision.candidates[0]
+        ws.repo.assign_observation(r.observation_id, top["tree_id"], "best_guess")
+        ws.pipe.index.invalidate(r.species.species)
+        r.tree_id = top["tree_id"]
+        r.message = f"Assigned to best guess {top['tree_id']} ({top['probability']:.0%} confident); correct it " \
+                    "from the tree page if wrong"
+        return True
 
     def forest_summary(f: Forest) -> S.ForestSummary:
         repo = accounts.pipeline(f).repo
@@ -301,7 +367,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
                                severity_counts=H.severity_counts(status), last_visit_at=_iso(last))
 
     def forest_map(ws: Workspace) -> S.ForestMap:
-        status = H.tree_status(ws.repo)
+        status = A.tree_profiles(ws.repo)
         feats, missing = [], []
         for d in status:
             if d["lat"] is None:
@@ -317,7 +383,12 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
                             "first_seen_at": _iso(d["created_at"]),
                             "severity_history": [{"timestamp": _iso(h["timestamp"]), "severity": h["severity"]}
                                                  for h in d["severity_history"]],
-                            "thumbnail_url": _image_url(thumb)}))
+                            "thumbnail_url": _image_url(thumb),
+                            "main_condition": d["main_condition"],
+                            "main_condition_name": D.CONDITIONS[d["main_condition"]]["name"]
+                            if d["main_condition"] else None,
+                            "stress_score": A.stress_score(d),
+                            "latest_sensors": d["latest_sensors"]}))
         return S.ForestMap(forest=forest_summary(ws.forest) if ws.forest else None, severity_scale=H.SEVERITY,
                            features=feats, trees_without_location=missing)
 
@@ -394,11 +465,106 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         def get_forest_summary(forest_id: int, user: User = Depends(current_user)):
             return forest_summary(get_forest(user, forest_id))
 
+        def ws_for(user: User, forest_id: int) -> Workspace:
+            f = get_forest(user, forest_id)
+            return Workspace(accounts.pipeline(f), f"{user.user_id}:{f.forest_id}", user, f)
+
+        @api.get("/forests/{forest_id}/analysis", tags=["analysis"])
+        def forest_analysis(forest_id: int, west: float | None = None, south: float | None = None,
+                            east: float | None = None, north: float | None = None,
+                            cell_m: float = Query(150, ge=20, le=5000), user: User = Depends(current_user)):
+            """Same as /analysis for a given forest (optionally an area inside it)."""
+            return analysis_for(ws_for(user, forest_id), parse_bbox(west, south, east, north), cell_m)
+
+        def assistant_tools(user: User) -> dict:
+            def overview(_):
+                out = []
+                for f in accounts.forests(user.user_id):
+                    summ = A.summarize(A.tree_profiles(accounts.pipeline(f).repo))
+                    out.append({"forest_id": f.forest_id, "name": f.name, "trees": summ["trees"],
+                                "severity_counts": summ["severity_counts"],
+                                "most_prominent_condition": summ["most_prominent_condition"],
+                                "pct_moderate_or_severe": summ["pct_moderate_or_severe"]})
+                return out
+
+            def forest(i):
+                a = analysis_for(ws_for(user, int(i["forest_id"])))
+                return {"forest": a["forest"], "summary": a["summary"], "worst_trees": a["worst_trees"]}
+
+            def zones_tool(i):
+                ws = ws_for(user, int(i["forest_id"]))
+                return A.zones(A.tree_profiles(ws.repo), float(i.get("cell_m") or 150))[:15]
+
+            def trees(i):
+                ps = A.tree_profiles(ws_for(user, int(i["forest_id"])).repo)
+                if i.get("condition"):
+                    ps = [p for p in ps if i["condition"] in p["conditions"]
+                          and p["conditions"][i["condition"]]["level"] in ("likely", "possible")]
+                if i.get("min_severity") is not None:
+                    ps = [p for p in ps if (p["severity"] or 0) >= int(i["min_severity"])]
+                ps.sort(key=A.stress_score, reverse=True)
+                return [{"tree_id": p["tree_id"], "severity": p["severity"], "main_condition": p["main_condition"],
+                         "stress_score": A.stress_score(p), "lat": p["lat"], "lon": p["lon"],
+                         "visits": p["visits"], "latest_sensors": p["latest_sensors"]}
+                        for p in ps[: int(i.get("limit") or 25)]]
+
+            def tree(i):
+                ws = ws_for(user, int(i["forest_id"]))
+                return tree_detail(str(i["tree_id"]), ws).model_dump(exclude={"thumbnail_url"})
+
+            return {"get_account_overview": overview, "get_forest_analysis": forest, "get_forest_zones": zones_tool,
+                    "list_trees": trees, "get_tree": tree, "get_health_guide": lambda _: D.guide()}
+
+        @api.post("/assistant/chat", response_model=S.ChatReply, tags=["assistant"])
+        def assistant_chat(body: S.ChatRequest, user: User = Depends(current_user)):
+            """Ask the AI assistant (Claude Haiku) about your forests. Send conversation_id back to continue."""
+            ctx = []
+            if body.forest_id is not None:
+                f = get_forest(user, body.forest_id)
+                ctx.append(f"looking at forest {f.forest_id} ({f.name})")
+            if body.tree_id:
+                ctx.append(f"looking at tree {body.tree_id}")
+            try:
+                return assistant.chat(f"user:{user.user_id}", body.message, assistant_tools(user),
+                                      body.conversation_id, "; ".join(ctx) or None)
+            except NotConfigured as e:
+                raise ApiError(503, "assistant_not_configured", str(e)) from e
+            except API_ERRORS as e:
+                raise ApiError(502, "assistant_unavailable", f"the AI service failed: {e}") from e
+
         @api.get("/forests/{forest_id}/map", response_model=S.ForestMap, tags=["map"])
         def get_forest_map(forest_id: int, user: User = Depends(current_user)):
             """Every tree of the forest as a GeoJSON point with its latest severity."""
             f = get_forest(user, forest_id)
             return forest_map(Workspace(accounts.pipeline(f), f"{user.user_id}:{f.forest_id}", user, f))
+
+    def analysis_for(ws: Workspace, bbox: tuple | None = None, cell_m: float = 150.0) -> dict:
+        profs = A.tree_profiles(ws.repo)
+        if bbox:
+            profs = [p for p in profs if A.in_bbox(p, bbox)]
+        z = A.zones(profs, cell_m)
+        return {"forest": forest_summary(ws.forest).model_dump() if ws.forest else None,
+                "area": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]} if bbox else None,
+                "summary": A.summarize(profs), "zones": z,
+                "worst_trees": [{"tree_id": p["tree_id"], "stress_score": A.stress_score(p), "severity": p["severity"],
+                                 "main_condition": p["main_condition"], "lat": p["lat"], "lon": p["lon"]}
+                                for p in sorted(profs, key=A.stress_score, reverse=True)[:10]]}
+
+    def parse_bbox(west, south, east, north):
+        vals = (west, south, east, north)
+        if all(v is None for v in vals):
+            return None
+        if any(v is None for v in vals) or west >= east or south >= north:
+            raise ApiError(400, "bad_area", "give west<east and south<north (decimal degrees)")
+        return vals
+
+    @api.get("/analysis", tags=["analysis"])
+    def current_analysis(west: float | None = None, south: float | None = None, east: float | None = None,
+                         north: float | None = None, cell_m: float = Query(150, ge=20, le=5000),
+                         ws: Workspace = WS):
+        """Analysis of the current forest, or of the area west/south/east/north inside it: severity, condition
+        prevalence, sensor averages, ranked zones (where trees suffer most), worst trees, recommendations."""
+        return analysis_for(ws, parse_bbox(west, south, east, north), cell_m)
 
     @api.get("/map", response_model=S.ForestMap, tags=["map"])
     def current_map(ws: Workspace = WS):
@@ -474,9 +640,13 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
                     s["next"] = nxt
                     return _result(r, "capture_another_view", views, nxt)
             r = ws.pipe.commit(views, r, fix=_fix(body.location))
-            record_health(ws, r, body.severity, body.health_notes)
-        out = _result(r, "done" if r.status in ("existing", "new", "rejected_species", "unsupported_species")
-                      else "review", views)
+            guessed = body.accept_best_guess and accept_best_guess_fn(ws, r)
+            findings = record_visit(ws, r.observation_id, body.severity, body.health_notes,
+                                    F.clean_sensors(body.sensors.model_dump()) if body.sensors else None,
+                                    body.signs)
+        out = _result(r, "done" if guessed or r.status in ("existing", "new", "rejected_species",
+                                                             "unsupported_species") else "review", views)
+        out.findings = findings
         s["result_out"] = out
         s["views"] = [ViewResult(v.index, v.view_type, v.quality, faces_blurred=v.faces_blurred) for v in views]
         return out
@@ -498,6 +668,10 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         accuracy_m: float | None = Form(None, ge=0),
         severity: int | None = Form(None, ge=0, le=3, description=S.SEVERITY_DOC),
         health_notes: str | None = Form(None, max_length=2000),
+        soil_moisture_pct: float | None = Form(None), air_temp_c: float | None = Form(None),
+        humidity_pct: float | None = Form(None), light_lux: float | None = Form(None),
+        signs: str | None = Form(None, description="comma-separated " + S.SIGNS_DOC),
+        accept_best_guess: bool = Form(False, description="if uncertain, assign the top candidate"),
         commit: bool = Form(True, description="false = dry run, nothing stored"),
         ws: Workspace = WS):
         """All photos in one request. Always stores the result (uncertain ones for review) unless commit=false."""
@@ -514,6 +688,9 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             check_view_key(k)
         if (lat is None) != (lon is None):
             raise ApiError(400, "bad_location", "send both lat and lon")
+        sensors = _form_sensors(soil_moisture_pct=soil_moisture_pct, air_temp_c=air_temp_c,
+                                humidity_pct=humidity_pct, light_lux=light_lux)
+        sign_list = _check_signs([x.strip() for x in signs.split(",") if x.strip()] if signs else [])
         views: list[ViewResult] = []
         for img, k, h in zip(images, keys, heads):
             data, rgb = await read_image(img)
@@ -526,18 +703,21 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             r = ws.pipe.identify(accepted, commit=False)
             if r.status == "recapture":
                 return _result(r, "retake", views)
+            guessed, findings = False, []
             if commit:
                 r = ws.pipe.commit(accepted, r, fix=_fix(loc))
-                record_health(ws, r, severity, health_notes)
-        action = "review" if r.status == "uncertain" else "done"
-        return _result(r, action, views)
+                guessed = accept_best_guess and accept_best_guess_fn(ws, r)
+                findings = record_visit(ws, r.observation_id, severity, health_notes, sensors, sign_list)
+        out = _result(r, "review" if r.status == "uncertain" and not guessed else "done", views)
+        out.findings = findings
+        return out
 
     # -------------------------------------------------------------- database
     @api.get("/trees", response_model=S.TreePage, tags=["trees"])
     def list_trees(species: str | None = None, limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
                    ws: Workspace = WS):
         trees = sorted(ws.repo.list_trees(species), key=lambda t: t.last_seen_at, reverse=True)
-        status = {d["tree_id"]: d for d in H.tree_status(ws.repo)}
+        status = {d["tree_id"]: d for d in A.tree_profiles(ws.repo)}
         return S.TreePage(items=[tree_summary(ws, t, status.get(t.tree_id, {})) for t in trees[offset: offset + limit]],
                           total=len(trees), limit=limit, offset=offset)
 
@@ -547,7 +727,10 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         t = get_tree(ws, tree_id)
         obs = ws.repo.get_observations(tree_id)
         thumb = next((v.image_key for o in obs for v in o.views if v.image_key), None)
-        return S.TreeDetail(**tree_summary(ws, t, thumb=thumb).model_dump(), observations=_observations(ws.repo, obs))
+        prof = next((d for d in A.tree_profiles(ws.repo) if d["tree_id"] == tree_id), {})
+        cur = sorted(prof.get("conditions", {}).values(), key=lambda f: -f["likelihood"])
+        return S.TreeDetail(**tree_summary(ws, t, prof, thumb).model_dump(), observations=_observations(ws.repo, obs),
+                            current_conditions=[_finding(f) for f in cur], latest_sensors=prof.get("latest_sensors"))
 
     @api.patch("/trees/{tree_id}", response_model=S.TreeSummary, tags=["trees"])
     def update_tree(tree_id: str, body: S.TreeUpdate, ws: Workspace = WS):
@@ -591,7 +774,67 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         """Record or change the severity rating of a visit."""
         find_observation(ws, observation_id)
         H.set_health(ws.repo, observation_id, body.severity, body.notes)
+        refresh_findings(ws, observation_id)
         return get_observation(observation_id, ws)
+
+    @api.put("/observations/{observation_id}/signs", response_model=S.Observation, tags=["health"])
+    def set_observation_signs(observation_id: str, body: S.SignsUpdate, ws: Workspace = WS):
+        """Record the signs the observer checked on this visit (replaces the list); findings are recomputed."""
+        find_observation(ws, observation_id)
+        F.set_signs(ws.repo, observation_id, _check_signs(body.signs))
+        refresh_findings(ws, observation_id)
+        return get_observation(observation_id, ws)
+
+    @api.put("/observations/{observation_id}/sensors", response_model=S.Observation, tags=["health"])
+    def set_observation_sensors(observation_id: str, body: S.Sensors, ws: Workspace = WS):
+        """Attach Raspberry Pi readings to an existing visit."""
+        find_observation(ws, observation_id)
+        sensors = F.clean_sensors(body.model_dump())
+        if not sensors:
+            raise ApiError(400, "no_readings", "send at least one reading")
+        F.set_sensors(ws.repo, observation_id, sensors)
+        refresh_findings(ws, observation_id)
+        return get_observation(observation_id, ws)
+
+    @api.post("/observations/{observation_id}/inspect", response_model=S.Observation, tags=["health"])
+    def inspect_observation(observation_id: str, ws: Workspace = WS):
+        """AI photo check (Claude Haiku) of this visit's twig-underside close-ups for adelgid wool and scales.
+        Suggestions are stored separately from observer signs and count as weaker evidence."""
+        o = find_observation(ws, observation_id)
+        keys = [v.image_key for v in o.views if v.image_key and v.view_type == "twig_underside"]
+        if not keys:
+            raise ApiError(400, "no_twig_photos", "this visit has no twig_underside photo; trunk photos cannot "
+                                                  "show HWA or EHS")
+        try:
+            res = assistant.inspect_photos([ws.pipe.storage.get(k) for k in keys])
+        except NotConfigured as e:
+            raise ApiError(503, "assistant_not_configured", str(e)) from e
+        except API_ERRORS as e:
+            raise ApiError(502, "assistant_unavailable", f"the AI service failed: {e}") from e
+        F.set_ai_inspection(ws.repo, observation_id, res)
+        refresh_findings(ws, observation_id)
+        return get_observation(observation_id, ws)
+
+    @api.post("/trees/{tree_id}/visits", response_model=S.Observation, status_code=201, tags=["health"])
+    def add_visit(tree_id: str, body: S.VisitCreate, ws: Workspace = WS):
+        """A visit without photos: Pi sensor readings and/or observer signs and severity at a known tree."""
+        t = get_tree(ws, tree_id)
+        sensors = F.clean_sensors(body.sensors.model_dump()) if body.sensors else None
+        if not (sensors or body.signs or body.severity is not None or body.health_notes):
+            raise ApiError(400, "empty_visit", "send sensors, signs, severity or notes")
+        import uuid as _uuid
+        loc = body.location
+        oid = ws.repo.add_observation(ObservationRecord(
+            _uuid.uuid4().hex, t.tree_id, time.time(), "field_visit", t.species, None, None, None,
+            loc.lat if loc else None, loc.lon if loc else None, loc.accuracy_m if loc else None, None, {},
+            {"kind": "sensor_or_observer_only"}))
+        record_visit(ws, oid, body.severity, body.health_notes, sensors, body.signs)
+        return get_observation(oid, ws)
+
+    @app.get(f"{PREFIX}/health-guide", tags=["health"])
+    def health_guide():
+        """Conditions, signs checklist, severity scale, sensor thresholds and general advice (no sign-in)."""
+        return D.guide()
 
     @api.post("/observations/{observation_id}/assign", response_model=S.AssignResult, tags=["observations"])
     def assign_observation(observation_id: str, body: S.AssignRequest, ws: Workspace = WS):
@@ -635,6 +878,16 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     @app.get("/map", include_in_schema=False)
     def map_page():
         return FileResponse(STATIC / "map.html")
+
+    @app.get("/app", include_in_schema=False)
+    def app_page():
+        return FileResponse(STATIC / "app.html")
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse("/app" if accounts is not None else "/docs")
 
     return app
 

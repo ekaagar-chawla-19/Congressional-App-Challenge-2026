@@ -70,6 +70,12 @@ class ApiClient:
         body = b"".join(parts) + f"--{boundary}--\r\n".encode()
         return self._call("POST", "/identify", body, f"multipart/form-data; boundary={boundary}", forest_id)
 
+    def visit(self, tree_id: str, payload: dict, forest_id: int | None) -> dict:
+        from urllib.parse import quote
+
+        return self._call("POST", f"/trees/{quote(tree_id)}/visits", json.dumps(payload).encode(),
+                          "application/json", forest_id)
+
 
 class ApiCallError(Exception):
     def __init__(self, error: dict):
@@ -77,8 +83,14 @@ class ApiCallError(Exception):
         self.error = error
 
 
+SENSOR_KEYS = ("soil_moisture_pct", "air_temp_c", "humidity_pct", "light_lux")
+
+
 def _form_fields(h: dict) -> dict:
-    out = {k: h.get(k) for k in ("lat", "lon", "accuracy_m", "severity", "health_notes")}
+    out = {k: h.get(k) for k in ("lat", "lon", "accuracy_m", "severity", "health_notes", "accept_best_guess")}
+    out.update({k: (h.get("sensors") or {}).get(k) for k in SENSOR_KEYS})
+    if h.get("signs"):
+        out["signs"] = ",".join(h["signs"])
     if h.get("view_keys"):
         out["view_keys"] = ",".join(h["view_keys"])
     if h.get("headings"):
@@ -100,11 +112,25 @@ def handle_connection(conn: socket.socket, api: ApiClient, default_forest: int |
             if kind == "ping":
                 send_message(conn, {"type": "pong"})
                 continue
+            forest = header.get("forest_id", default_forest)
+            if kind == "visit":  # sensor readings (and/or signs) for a known tree, no photos
+                payload = {k: header.get(k) for k in ("signs", "severity", "health_notes") if header.get(k) is not None}
+                payload["sensors"] = {k: v for k, v in (header.get("sensors") or {}).items() if k in SENSOR_KEYS}
+                if header.get("lat") is not None and header.get("lon") is not None:
+                    payload["location"] = {"lat": header["lat"], "lon": header["lon"]}
+                try:
+                    res = api.visit(str(header.get("tree_id", "")), payload, forest)
+                    send_message(conn, {"type": "result", "ok": True, "result": res})
+                except ApiCallError as e:
+                    send_message(conn, {"type": "result", "ok": False, "error": e.error})
+                except OSError as e:
+                    send_message(conn, {"type": "result", "ok": False,
+                                        "error": {"code": "backend_unreachable", "message": str(e)}})
+                continue
             if kind != "capture":
                 send_message(conn, {"type": "result", "ok": False,
                                     "error": {"code": "unknown_type", "message": f"unknown message type {kind!r}"}})
                 continue
-            forest = header.get("forest_id", default_forest)
             log.info("capture: %d photos, forest %s", len(blobs), forest)
             try:
                 res = api.identify(blobs, _form_fields(header), forest)

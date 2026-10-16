@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health-guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Guide
+         * @description Conditions, signs checklist, severity scale, sensor thresholds and general advice (no sign-in).
+         */
+        get: operations["health_guide_api_v1_health_guide_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/model": {
         parameters: {
             query?: never;
@@ -167,6 +187,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/forests/{forest_id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forest Analysis
+         * @description Same as /analysis for a given forest (optionally an area inside it).
+         */
+        get: operations["forest_analysis_api_v1_forests__forest_id__analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assistant Chat
+         * @description Ask the AI assistant (Claude Haiku) about your forests. Send conversation_id back to continue.
+         */
+        post: operations["assistant_chat_api_v1_assistant_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/forests/{forest_id}/map": {
         parameters: {
             query?: never;
@@ -179,6 +239,27 @@ export interface paths {
          * @description Every tree of the forest as a GeoJSON point with its latest severity.
          */
         get: operations["get_forest_map_api_v1_forests__forest_id__map_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Analysis
+         * @description Analysis of the current forest, or of the area west/south/east/north inside it: severity, condition
+         *     prevalence, sensor averages, ranked zones (where trees suffer most), worst trees, recommendations.
+         */
+        get: operations["current_analysis_api_v1_analysis_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -421,6 +502,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/observations/{observation_id}/signs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Observation Signs
+         * @description Record the signs the observer checked on this visit (replaces the list); findings are recomputed.
+         */
+        put: operations["set_observation_signs_api_v1_observations__observation_id__signs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observations/{observation_id}/sensors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Observation Sensors
+         * @description Attach Raspberry Pi readings to an existing visit.
+         */
+        put: operations["set_observation_sensors_api_v1_observations__observation_id__sensors_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observations/{observation_id}/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect Observation
+         * @description AI photo check (Claude Haiku) of this visit's twig-underside close-ups for adelgid wool and scales.
+         *     Suggestions are stored separately from observer signs and count as weaker evidence.
+         */
+        post: operations["inspect_observation_api_v1_observations__observation_id__inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trees/{tree_id}/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Visit
+         * @description A visit without photos: Pi sensor readings and/or observer signs and severity at a known tree.
+         */
+        post: operations["add_visit_api_v1_trees__tree_id__visits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/observations/{observation_id}/assign": {
         parameters: {
             query?: never;
@@ -491,6 +653,15 @@ export interface components {
             /** Created Tree */
             created_tree: boolean;
         };
+        /** BestGuess */
+        BestGuess: {
+            /** Tree Id */
+            tree_id: string;
+            /** Probability */
+            probability: number | null;
+            /** Note */
+            note: string;
+        };
         /** Body_capture_view_api_v1_captures__capture_id__views_post */
         Body_capture_view_api_v1_captures__capture_id__views_post: {
             /**
@@ -513,7 +684,7 @@ export interface components {
         Body_identify_oneshot_api_v1_identify_post: {
             /**
              * Images
-             * @description 3-7 photos in protocol order
+             * @description 3-9 photos in protocol order
              */
             images: string[];
             /**
@@ -539,6 +710,25 @@ export interface components {
             severity?: number | null;
             /** Health Notes */
             health_notes?: string | null;
+            /** Soil Moisture Pct */
+            soil_moisture_pct?: number | null;
+            /** Air Temp C */
+            air_temp_c?: number | null;
+            /** Humidity Pct */
+            humidity_pct?: number | null;
+            /** Light Lux */
+            light_lux?: number | null;
+            /**
+             * Signs
+             * @description comma-separated observed signs (keys from GET /api/v1/health-guide signs)
+             */
+            signs?: string | null;
+            /**
+             * Accept Best Guess
+             * @description if uncertain, assign the top candidate
+             * @default false
+             */
+            accept_best_guess: boolean;
             /**
              * Commit
              * @description false = dry run, nothing stored
@@ -592,6 +782,38 @@ export interface components {
             next_view: components["schemas"]["ViewSpecOut"] | null;
             result: components["schemas"]["IdentifyResult"] | null;
         };
+        /** ChatReply */
+        ChatReply: {
+            /** Conversation Id */
+            conversation_id: string;
+            /** Reply */
+            reply: string;
+            /** Tools Used */
+            tools_used: {
+                [key: string]: unknown;
+            }[];
+            /** Stop Reason */
+            stop_reason: string | null;
+            /** Model */
+            model: string;
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /** Message */
+            message: string;
+            /** Conversation Id */
+            conversation_id?: string | null;
+            /**
+             * Forest Id
+             * @description the forest the user is looking at (context)
+             */
+            forest_id?: number | null;
+            /**
+             * Tree Id
+             * @description the tree the user is looking at (context)
+             */
+            tree_id?: string | null;
+        };
         /** Consistency */
         Consistency: {
             /** Per View Top */
@@ -614,6 +836,25 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /** Finding */
+        Finding: {
+            /** Condition */
+            condition: string;
+            /** Name */
+            name: string;
+            /**
+             * Likelihood
+             * @description 0-1
+             */
+            likelihood: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "likely" | "possible" | "low" | "unknown";
+            /** Evidence */
+            evidence: string[];
         };
         /** ForestCreate */
         ForestCreate: {
@@ -701,6 +942,12 @@ export interface components {
              * @default false
              */
             force_commit: boolean;
+            /**
+             * Accept Best Guess
+             * @description if uncertain, assign the top candidate (marked best_guess)
+             * @default false
+             */
+            accept_best_guess: boolean;
             location?: components["schemas"]["Location"] | null;
             /**
              * Severity
@@ -709,6 +956,13 @@ export interface components {
             severity?: (0 | 1 | 2 | 3) | null;
             /** Health Notes */
             health_notes?: string | null;
+            sensors?: components["schemas"]["Sensors"] | null;
+            /**
+             * Signs
+             * @description observed signs (keys from GET /api/v1/health-guide signs)
+             * @default []
+             */
+            signs: string[];
         };
         /** IdentifyResult */
         IdentifyResult: {
@@ -745,6 +999,14 @@ export interface components {
             candidates: components["schemas"]["Candidate"][];
             consistency?: components["schemas"]["Consistency"] | null;
             next_view?: components["schemas"]["ViewSpecOut"] | null;
+            /** @description top candidate when not auto-accepted, with confidence */
+            best_guess?: components["schemas"]["BestGuess"] | null;
+            /**
+             * Findings
+             * @description health assessment of this visit
+             * @default []
+             */
+            findings: components["schemas"]["Finding"][];
             /**
              * Views
              * @default []
@@ -840,6 +1102,24 @@ export interface components {
             severity?: number | null;
             /** Health Notes */
             health_notes?: string | null;
+            /** Has Photos */
+            has_photos: boolean;
+            /** @description null = no Pi reading on this visit (N/A) */
+            sensors?: components["schemas"]["Sensors"] | null;
+            /**
+             * Signs
+             * @default []
+             */
+            signs: string[];
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["Finding"][];
+            /** Ai Inspection */
+            ai_inspection?: {
+                [key: string]: unknown;
+            } | null;
             /** Tree Id */
             tree_id: string | null;
             /**
@@ -901,6 +1181,28 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * Sensors
+         * @description Raspberry Pi readings for one visit (any may be missing).
+         */
+        Sensors: {
+            /** Soil Moisture Pct */
+            soil_moisture_pct?: number | null;
+            /** Air Temp C */
+            air_temp_c?: number | null;
+            /** Humidity Pct */
+            humidity_pct?: number | null;
+            /** Light Lux */
+            light_lux?: number | null;
+        };
+        /** SignsUpdate */
+        SignsUpdate: {
+            /**
+             * Signs
+             * @description observed signs (keys from GET /api/v1/health-guide signs)
+             */
+            signs: string[];
+        };
         /** Species */
         Species: {
             /** Label */
@@ -918,6 +1220,8 @@ export interface components {
             species: string;
             /** Name */
             name: string;
+            /** Main Condition */
+            main_condition?: string | null;
             /**
              * Severity
              * @description most recent rating; observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
@@ -934,6 +1238,16 @@ export interface components {
             notes: string | null;
             /** Thumbnail Url */
             thumbnail_url: string | null;
+            /**
+             * Current Conditions
+             * @description latest assessed finding per condition
+             * @default []
+             */
+            current_conditions: components["schemas"]["Finding"][];
+            /** Latest Sensors */
+            latest_sensors?: {
+                [key: string]: unknown;
+            } | null;
             /** Observations */
             observations: components["schemas"]["Observation"][];
         };
@@ -956,6 +1270,8 @@ export interface components {
             species: string;
             /** Name */
             name: string;
+            /** Main Condition */
+            main_condition?: string | null;
             /**
              * Severity
              * @description most recent rating; observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
@@ -1044,6 +1360,27 @@ export interface components {
             /** Identity View */
             identity_view: boolean;
         };
+        /**
+         * VisitCreate
+         * @description A visit without photos (e.g. Pi sensor reading at a known tree, or an observer check).
+         */
+        VisitCreate: {
+            sensors?: components["schemas"]["Sensors"] | null;
+            /**
+             * Signs
+             * @description observed signs (keys from GET /api/v1/health-guide signs)
+             * @default []
+             */
+            signs: string[];
+            /**
+             * Severity
+             * @description observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: (0 | 1 | 2 | 3) | null;
+            /** Health Notes */
+            health_notes?: string | null;
+            location?: components["schemas"]["Location"] | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -1069,6 +1406,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    health_guide_api_v1_health_guide_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -1751,6 +2108,166 @@ export interface operations {
             };
         };
     };
+    forest_analysis_api_v1_forests__forest_id__analysis_get: {
+        parameters: {
+            query?: {
+                west?: number | null;
+                south?: number | null;
+                east?: number | null;
+                north?: number | null;
+                cell_m?: number;
+            };
+            header?: never;
+            path: {
+                forest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    assistant_chat_api_v1_assistant_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatReply"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_forest_map_api_v1_forests__forest_id__map_get: {
         parameters: {
             query?: never;
@@ -1769,6 +2286,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForestMap"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    current_analysis_api_v1_analysis_get: {
+        parameters: {
+            query?: {
+                west?: number | null;
+                south?: number | null;
+                east?: number | null;
+                north?: number | null;
+                cell_m?: number;
+            };
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Bad Request */
@@ -2892,6 +3492,334 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_observation_signs_api_v1_observations__observation_id__signs_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_observation_sensors_api_v1_observations__observation_id__sensors_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Sensors"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    inspect_observation_api_v1_observations__observation_id__inspect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_visit_api_v1_trees__tree_id__visits_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                tree_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

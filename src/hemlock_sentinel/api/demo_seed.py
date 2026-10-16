@@ -16,7 +16,7 @@ import uuid
 import numpy as np
 
 from ..database.models import ObservationRecord
-from . import health
+from . import diseases, field, health
 from .accounts import Accounts, User
 
 DEMO_EMAIL = "demo@hemlock.test"
@@ -62,6 +62,26 @@ def seed_demo(accounts: Accounts, now: float | None = None, seed: int = 7) -> Us
                     lat + rng.normal(0, 3e-5), lon + rng.normal(0, 3e-5), 5.0, "demo_seed", {},
                     {"demo_seed": True}))
                 health.set_health(repo, oid, sev, None)
+                # placeholder field data: wool on most infested trees, scale on some, a drier upslope end
+                signs = []
+                if sev >= 1 and rng.random() < 0.85:
+                    signs.append("hwa_wool")
+                elif rng.random() < 0.6:
+                    signs.append("twigs_checked_clean")
+                if sev >= 2:
+                    signs += ["gray_green_foliage", "needle_loss"] + (["no_new_growth"] if sev == 3 else [])
+                if rng.random() < 0.18:
+                    signs += ["ehs_scale", "needle_yellow_banding"]
+                sensors = None
+                if rng.random() < 0.75:
+                    dry = (450 - along) / 900  # 1 = upslope/driest end
+                    sensors = {"soil_moisture_pct": round(float(np.clip(32 - 22 * dry + rng.normal(0, 4), 3, 60)), 1),
+                               "air_temp_c": round(float(rng.normal(24, 5)), 1),
+                               "humidity_pct": round(float(np.clip(rng.normal(68, 12), 20, 99)), 0),
+                               "light_lux": round(float(rng.uniform(800, 18000)), 0)}
+                    field.set_sensors(repo, oid, sensors, "demo_seed")
+                field.set_signs(repo, oid, signs)
+                field.set_findings(repo, oid, diseases.assess(signs, sensors, sev, min(ts, now - DAY)))
             if rng.random() < 0.15:
                 repo.set_notes(tid, "near trail; treated with imidacloprid (demo note)")
     return user
