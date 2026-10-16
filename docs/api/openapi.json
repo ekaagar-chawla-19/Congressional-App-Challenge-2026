@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Hemlock Sentinel API",
-    "description": "Hemlock Sentinel mobile API (v1): the backend a React Native / Expo app talks to.\n\nThe phone takes the photos; this server runs the trained model (ONNX), decides\nexisting / new / uncertain tree, and keeps the tree database. Interactive docs\nare served at /docs (try every endpoint from the browser) and the machine-readable\ncontract at /openapi.json.\n\nUncertain results are stored unassigned; resolve them with `POST /api/v1/observations/{id}/assign`.",
-    "version": "1.0.0"
+    "description": "Hemlock Sentinel mobile API (v1): the backend a React Native / Expo app talks to.\n\nThe phone (or the Raspberry Pi, over Bluetooth via hemlock-bt-receiver) takes the\nphotos; this server runs the trained model (ONNX), decides existing / new /\nuncertain tree, and keeps the tree database. Interactive docs are served at /docs\nand the machine-readable contract at /openapi.json. A demo forest map is at /map.",
+    "version": "1.1.0"
   },
   "paths": {
     "/api/v1/health": {
@@ -12,7 +12,7 @@
           "meta"
         ],
         "summary": "Health",
-        "description": "Liveness check (no API key needed).",
+        "description": "Liveness check (no sign-in needed).",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -191,21 +191,30 @@
         }
       }
     },
-    "/api/v1/captures": {
+    "/api/v1/auth/register": {
       "post": {
         "tags": [
-          "capture"
+          "account"
         ],
-        "summary": "Create Capture",
-        "description": "Start a guided capture. Photos are held in memory for 30 min until identify.",
-        "operationId": "create_capture_api_v1_captures_post",
+        "summary": "Register",
+        "operationId": "register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CaptureCreated"
+                  "$ref": "#/components/schemas/LoginResult"
                 }
               }
             }
@@ -273,6 +282,856 @@
         }
       }
     },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Me",
+        "description": "Everything on this account: each forest with tree counts and severity breakdown.",
+        "operationId": "me_api_v1_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/forests": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "List Forests",
+        "operationId": "list_forests_api_v1_forests_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ForestSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Forests Api V1 Forests Get"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Create Forest",
+        "operationId": "create_forest_api_v1_forests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForestSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/forests/{forest_id}": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Get Forest Summary",
+        "operationId": "get_forest_summary_api_v1_forests__forest_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Forest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForestSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/forests/{forest_id}/map": {
+      "get": {
+        "tags": [
+          "map"
+        ],
+        "summary": "Get Forest Map",
+        "description": "Every tree of the forest as a GeoJSON point with its latest severity.",
+        "operationId": "get_forest_map_api_v1_forests__forest_id__map_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Forest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForestMap"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/map": {
+      "get": {
+        "tags": [
+          "map"
+        ],
+        "summary": "Current Map",
+        "description": "Map of the current forest (X-Forest-Id) or of the single database.",
+        "operationId": "current_map_api_v1_map_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForestMap"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/captures": {
+      "post": {
+        "tags": [
+          "capture"
+        ],
+        "summary": "Create Capture",
+        "description": "Start a guided capture. Photos are held in memory for 30 min until identify.",
+        "operationId": "create_capture_api_v1_captures_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
     "/api/v1/captures/{capture_id}": {
       "get": {
         "tags": [
@@ -280,6 +1139,11 @@
         ],
         "summary": "Capture State",
         "operationId": "capture_state_api_v1_captures__capture_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "capture_id",
@@ -289,6 +1153,24 @@
               "type": "string",
               "title": "Capture Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "responses": {
@@ -370,6 +1252,11 @@
         ],
         "summary": "Cancel Capture",
         "operationId": "cancel_capture_api_v1_captures__capture_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "capture_id",
@@ -379,6 +1266,24 @@
               "type": "string",
               "title": "Capture Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "responses": {
@@ -456,6 +1361,11 @@
         "summary": "Capture View",
         "description": "Add one photo. Rejected photos (blurry, dark, duplicate...) are reported and must be retaken.",
         "operationId": "capture_view_api_v1_captures__capture_id__views_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "capture_id",
@@ -465,6 +1375,24 @@
               "type": "string",
               "title": "Capture Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "requestBody": {
@@ -559,6 +1487,11 @@
         "summary": "Capture Identify",
         "description": "Decide existing / new / uncertain. If uncertain and another trunk view is available, nothing is\nstored and `action` is `capture_another_view`; otherwise the observation is stored.",
         "operationId": "capture_identify_api_v1_captures__capture_id__identify_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "capture_id",
@@ -568,6 +1501,24 @@
               "type": "string",
               "title": "Capture Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "requestBody": {
@@ -669,15 +1620,40 @@
         "summary": "Identify Oneshot",
         "description": "All photos in one request. Always stores the result (uncertain ones for review) unless commit=false.",
         "operationId": "identify_oneshot_api_v1_identify_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_identify_oneshot_api_v1_identify_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -691,64 +1667,64 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "401": {
-            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unauthorized"
           },
           "404": {
-            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Not Found"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "413": {
-            "description": "Request Entity Too Large",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Request Entity Too Large"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -760,6 +1736,11 @@
         ],
         "summary": "List Trees",
         "operationId": "list_trees_api_v1_trees_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "species",
@@ -799,6 +1780,24 @@
               "default": 0,
               "title": "Offset"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "responses": {
@@ -881,8 +1880,13 @@
           "trees"
         ],
         "summary": "Tree Detail",
-        "description": "A tree and its full observation history (oldest first).",
+        "description": "A tree and its full observation history (oldest first), with severity per visit.",
         "operationId": "tree_detail_api_v1_trees__tree_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "tree_id",
@@ -892,6 +1896,24 @@
               "type": "string",
               "title": "Tree Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "responses": {
@@ -973,6 +1995,11 @@
         ],
         "summary": "Update Tree",
         "operationId": "update_tree_api_v1_trees__tree_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "tree_id",
@@ -982,6 +2009,24 @@
               "type": "string",
               "title": "Tree Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "requestBody": {
@@ -1076,6 +2121,11 @@
         "summary": "Merge Trees",
         "description": "Fix a duplicate: all observations of `duplicate_tree_id` move to this tree.",
         "operationId": "merge_trees_api_v1_trees__tree_id__merge_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "tree_id",
@@ -1085,6 +2135,24 @@
               "type": "string",
               "title": "Tree Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "requestBody": {
@@ -1179,6 +2247,11 @@
         "summary": "List Observations",
         "description": "Newest first. `?status=uncertain&unassigned=true` is the review queue.",
         "operationId": "list_observations_api_v1_observations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "status",
@@ -1233,6 +2306,24 @@
               "default": 0,
               "title": "Offset"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "responses": {
@@ -1316,6 +2407,11 @@
         ],
         "summary": "Get Observation",
         "operationId": "get_observation_api_v1_observations__observation_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "observation_id",
@@ -1325,8 +2421,152 @@
               "type": "string",
               "title": "Observation Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observation"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/observations/{observation_id}/health": {
+      "put": {
+        "tags": [
+          "observations"
+        ],
+        "summary": "Set Observation Health",
+        "description": "Record or change the severity rating of a visit.",
+        "operationId": "set_observation_health_api_v1_observations__observation_id__health_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "observation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Observation Id"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthUpdate"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1409,6 +2649,11 @@
         "summary": "Assign Observation",
         "description": "The user decides which tree an observation belongs to: resolve an uncertain one, or correct a\nwrong automatic decision (one tap on a candidate). `\"new\"` registers a new tree. A tree left with\nno observations is retired, never reused.",
         "operationId": "assign_observation_api_v1_observations__observation_id__assign_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "observation_id",
@@ -1418,6 +2663,24 @@
               "type": "string",
               "title": "Observation Id"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "requestBody": {
@@ -1511,6 +2774,11 @@
         ],
         "summary": "Image",
         "operationId": "image_api_v1_images__key__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "key",
@@ -1520,6 +2788,24 @@
               "type": "string",
               "title": "Key"
             }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
           }
         ],
         "responses": {
@@ -1595,6 +2881,34 @@
   },
   "components": {
     "schemas": {
+      "AccountOverview": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "forests": {
+            "items": {
+              "$ref": "#/components/schemas/ForestSummary"
+            },
+            "type": "array",
+            "title": "Forests"
+          },
+          "totals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Totals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "forests",
+          "totals"
+        ],
+        "title": "AccountOverview"
+      },
       "AssignRequest": {
         "properties": {
           "tree_id": {
@@ -1749,6 +3063,32 @@
               }
             ],
             "title": "Accuracy M"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "health_notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Notes"
           },
           "commit": {
             "type": "boolean",
@@ -1977,6 +3317,157 @@
         ],
         "title": "ErrorResponse"
       },
+      "ForestCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 180.0,
+                "minimum": -180.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ForestCreate"
+      },
+      "ForestMap": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type",
+            "default": "FeatureCollection"
+          },
+          "forest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForestSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "severity_scale": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Severity Scale"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/MapFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "trees_without_location": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trees Without Location"
+          }
+        },
+        "type": "object",
+        "required": [
+          "forest",
+          "severity_scale",
+          "features",
+          "trees_without_location"
+        ],
+        "title": "ForestMap",
+        "description": "GeoJSON FeatureCollection: one Point per tree with a known location (drop straight into a map library)."
+      },
+      "ForestSummary": {
+        "properties": {
+          "forest_id": {
+            "type": "integer",
+            "title": "Forest Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "center": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tree_count": {
+            "type": "integer",
+            "title": "Tree Count"
+          },
+          "observation_count": {
+            "type": "integer",
+            "title": "Observation Count"
+          },
+          "severity_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Severity Counts",
+            "description": "trees per latest rating: none/light/moderate/severe/unrated"
+          },
+          "last_visit_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Visit At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "forest_id",
+          "name",
+          "center",
+          "tree_count",
+          "observation_count",
+          "severity_counts",
+          "last_visit_at"
+        ],
+        "title": "ForestSummary"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -2007,6 +3498,42 @@
         ],
         "title": "Health"
       },
+      "HealthUpdate": {
+        "properties": {
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "title": "HealthUpdate"
+      },
       "IdentifyRequest": {
         "properties": {
           "force_commit": {
@@ -2024,6 +3551,36 @@
                 "type": "null"
               }
             ]
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "health_notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Notes"
           }
         },
         "type": "object",
@@ -2192,6 +3749,69 @@
         ],
         "title": "Location"
       },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResult": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "send as header  Authorization: Bearer <token>"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "user"
+        ],
+        "title": "LoginResult"
+      },
+      "MapFeature": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "Feature",
+            "title": "Type",
+            "default": "Feature"
+          },
+          "geometry": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Geometry",
+            "description": "GeoJSON Point, coordinates [lon, lat]"
+          },
+          "properties": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Properties"
+          }
+        },
+        "type": "object",
+        "required": [
+          "geometry",
+          "properties"
+        ],
+        "title": "MapFeature"
+      },
       "MergeRequest": {
         "properties": {
           "duplicate_tree_id": {
@@ -2271,6 +3891,29 @@
           "observation_id": {
             "type": "string",
             "title": "Observation Id"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "health_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Notes"
           },
           "tree_id": {
             "anyOf": [
@@ -2453,6 +4096,36 @@
         ],
         "title": "Protocol"
       },
+      "RegisterRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 3,
+            "pattern": "^[^@\\s]+@[^@\\s]+$",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Password"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "name"
+        ],
+        "title": "RegisterRequest"
+      },
       "Species": {
         "properties": {
           "label": {
@@ -2489,6 +4162,28 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "most recent rating; observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "type": "string",
@@ -2591,6 +4286,28 @@
             "type": "string",
             "title": "Name"
           },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity",
+            "description": "most recent rating; observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -2656,6 +4373,29 @@
         },
         "type": "object",
         "title": "TreeUpdate"
+      },
+      "UserOut": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "name"
+        ],
+        "title": "UserOut"
       },
       "ViewAdded": {
         "properties": {
@@ -2822,6 +4562,13 @@
           "identity_view"
         ],
         "title": "ViewSpecOut"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "description": "token from POST /api/v1/auth/login",
+        "scheme": "bearer"
       }
     }
   }

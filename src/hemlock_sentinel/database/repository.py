@@ -30,6 +30,10 @@ class TreeRepository:
     def close(self) -> None:
         self._conn.close()
 
+    def query(self, sql: str, args: tuple | list = ()) -> list[sqlite3.Row]:
+        with self._lock:
+            return self._conn.execute(sql, args).fetchall()
+
     @contextmanager
     def tx(self):
         with self._lock:

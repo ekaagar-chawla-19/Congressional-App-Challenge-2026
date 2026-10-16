@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Health
-         * @description Liveness check (no API key needed).
+         * @description Liveness check (no sign-in needed).
          */
         get: operations["health_api_v1_health_get"];
         put?: never;
@@ -53,6 +53,152 @@ export interface paths {
          * @description The guided photo sequence the app should walk the user through.
          */
         get: operations["protocol_api_v1_protocol_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register */
+        post: operations["register_api_v1_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description Everything on this account: each forest with tree counts and severity breakdown.
+         */
+        get: operations["me_api_v1_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Forests */
+        get: operations["list_forests_api_v1_forests_get"];
+        put?: never;
+        /** Create Forest */
+        post: operations["create_forest_api_v1_forests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forests/{forest_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Forest Summary */
+        get: operations["get_forest_summary_api_v1_forests__forest_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forests/{forest_id}/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Forest Map
+         * @description Every tree of the forest as a GeoJSON point with its latest severity.
+         */
+        get: operations["get_forest_map_api_v1_forests__forest_id__map_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Map
+         * @description Map of the current forest (X-Forest-Id) or of the single database.
+         */
+        get: operations["current_map_api_v1_map_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -186,7 +332,7 @@ export interface paths {
         };
         /**
          * Tree Detail
-         * @description A tree and its full observation history (oldest first).
+         * @description A tree and its full observation history (oldest first), with severity per visit.
          */
         get: operations["tree_detail_api_v1_trees__tree_id__get"];
         put?: never;
@@ -255,6 +401,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/observations/{observation_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Observation Health
+         * @description Record or change the severity rating of a visit.
+         */
+        put: operations["set_observation_health_api_v1_observations__observation_id__health_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/observations/{observation_id}/assign": {
         parameters: {
             query?: never;
@@ -298,6 +464,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountOverview */
+        AccountOverview: {
+            user: components["schemas"]["UserOut"];
+            /** Forests */
+            forests: components["schemas"]["ForestSummary"][];
+            /** Totals */
+            totals: {
+                [key: string]: number;
+            };
+        };
         /** AssignRequest */
         AssignRequest: {
             /**
@@ -356,6 +532,13 @@ export interface components {
             lon?: number | null;
             /** Accuracy M */
             accuracy_m?: number | null;
+            /**
+             * Severity
+             * @description observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: number | null;
+            /** Health Notes */
+            health_notes?: string | null;
             /**
              * Commit
              * @description false = dry run, nothing stored
@@ -432,6 +615,57 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /** ForestCreate */
+        ForestCreate: {
+            /** Name */
+            name: string;
+            /** Lat */
+            lat?: number | null;
+            /** Lon */
+            lon?: number | null;
+        };
+        /**
+         * ForestMap
+         * @description GeoJSON FeatureCollection: one Point per tree with a known location (drop straight into a map library).
+         */
+        ForestMap: {
+            /**
+             * Type
+             * @default FeatureCollection
+             * @constant
+             */
+            type: "FeatureCollection";
+            forest: components["schemas"]["ForestSummary"] | null;
+            /** Severity Scale */
+            severity_scale: {
+                [key: string]: string;
+            };
+            /** Features */
+            features: components["schemas"]["MapFeature"][];
+            /** Trees Without Location */
+            trees_without_location: string[];
+        };
+        /** ForestSummary */
+        ForestSummary: {
+            /** Forest Id */
+            forest_id: number;
+            /** Name */
+            name: string;
+            center: components["schemas"]["Location"] | null;
+            /** Tree Count */
+            tree_count: number;
+            /** Observation Count */
+            observation_count: number;
+            /**
+             * Severity Counts
+             * @description trees per latest rating: none/light/moderate/severe/unrated
+             */
+            severity_counts: {
+                [key: string]: number;
+            };
+            /** Last Visit At */
+            last_visit_at: string | null;
+        };
         /** Health */
         Health: {
             /**
@@ -449,6 +683,16 @@ export interface components {
              */
             face_blur: boolean;
         };
+        /** HealthUpdate */
+        HealthUpdate: {
+            /**
+             * Severity
+             * @description observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: (0 | 1 | 2 | 3) | null;
+            /** Notes */
+            notes?: string | null;
+        };
         /** IdentifyRequest */
         IdentifyRequest: {
             /**
@@ -458,6 +702,13 @@ export interface components {
              */
             force_commit: boolean;
             location?: components["schemas"]["Location"] | null;
+            /**
+             * Severity
+             * @description observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: (0 | 1 | 2 | 3) | null;
+            /** Health Notes */
+            health_notes?: string | null;
         };
         /** IdentifyResult */
         IdentifyResult: {
@@ -516,6 +767,42 @@ export interface components {
             /** Accuracy M */
             accuracy_m?: number | null;
         };
+        /** LoginRequest */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** LoginResult */
+        LoginResult: {
+            /**
+             * Token
+             * @description send as header  Authorization: Bearer <token>
+             */
+            token: string;
+            user: components["schemas"]["UserOut"];
+        };
+        /** MapFeature */
+        MapFeature: {
+            /**
+             * Type
+             * @default Feature
+             * @constant
+             */
+            type: "Feature";
+            /**
+             * Geometry
+             * @description GeoJSON Point, coordinates [lon, lat]
+             */
+            geometry: {
+                [key: string]: unknown;
+            };
+            /** Properties */
+            properties: {
+                [key: string]: unknown;
+            };
+        };
         /** MergeRequest */
         MergeRequest: {
             /**
@@ -546,6 +833,13 @@ export interface components {
         Observation: {
             /** Observation Id */
             observation_id: string;
+            /**
+             * Severity
+             * @description observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: number | null;
+            /** Health Notes */
+            health_notes?: string | null;
             /** Tree Id */
             tree_id: string | null;
             /**
@@ -598,6 +892,15 @@ export interface components {
             /** Max Image Bytes */
             max_image_bytes: number;
         };
+        /** RegisterRequest */
+        RegisterRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Name */
+            name: string;
+        };
         /** Species */
         Species: {
             /** Label */
@@ -615,6 +918,12 @@ export interface components {
             species: string;
             /** Name */
             name: string;
+            /**
+             * Severity
+             * @description most recent rating; observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: number | null;
+            location?: components["schemas"]["Location"] | null;
             /** Created At */
             created_at: string;
             /** Last Seen At */
@@ -647,6 +956,12 @@ export interface components {
             species: string;
             /** Name */
             name: string;
+            /**
+             * Severity
+             * @description most recent rating; observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)
+             */
+            severity?: number | null;
+            location?: components["schemas"]["Location"] | null;
             /** Created At */
             created_at: string;
             /** Last Seen At */
@@ -662,6 +977,15 @@ export interface components {
         TreeUpdate: {
             /** Notes */
             notes?: string | null;
+        };
+        /** UserOut */
+        UserOut: {
+            /** User Id */
+            user_id: number;
+            /** Email */
+            email: string;
+            /** Name */
+            name: string;
         };
         /** ViewAdded */
         ViewAdded: {
@@ -897,10 +1221,696 @@ export interface operations {
             };
         };
     };
-    create_capture_api_v1_captures_post: {
+    register_api_v1_auth_register_post: {
         parameters: {
             query?: never;
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    me_api_v1_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOverview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_forests_api_v1_forests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForestSummary"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_forest_api_v1_forests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForestSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_forest_summary_api_v1_forests__forest_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForestSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_forest_map_api_v1_forests__forest_id__map_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                forest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForestMap"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    current_map_api_v1_map_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForestMap"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_capture_api_v1_captures_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -974,7 +1984,10 @@ export interface operations {
     capture_state_api_v1_captures__capture_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 capture_id: string;
             };
@@ -1050,7 +2063,10 @@ export interface operations {
     cancel_capture_api_v1_captures__capture_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 capture_id: string;
             };
@@ -1124,7 +2140,10 @@ export interface operations {
     capture_view_api_v1_captures__capture_id__views_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 capture_id: string;
             };
@@ -1204,7 +2223,10 @@ export interface operations {
     capture_identify_api_v1_captures__capture_id__identify_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 capture_id: string;
             };
@@ -1284,7 +2306,10 @@ export interface operations {
     identify_oneshot_api_v1_identify_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1366,7 +2391,10 @@ export interface operations {
                 limit?: number;
                 offset?: number;
             };
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1440,7 +2468,10 @@ export interface operations {
     tree_detail_api_v1_trees__tree_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 tree_id: string;
             };
@@ -1516,7 +2547,10 @@ export interface operations {
     update_tree_api_v1_trees__tree_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 tree_id: string;
             };
@@ -1596,7 +2630,10 @@ export interface operations {
     merge_trees_api_v1_trees__tree_id__merge_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 tree_id: string;
             };
@@ -1682,7 +2719,10 @@ export interface operations {
                 limit?: number;
                 offset?: number;
             };
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1756,7 +2796,10 @@ export interface operations {
     get_observation_api_v1_observations__observation_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 observation_id: string;
             };
@@ -1829,10 +2872,96 @@ export interface operations {
             };
         };
     };
+    set_observation_health_api_v1_observations__observation_id__health_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     assign_observation_api_v1_observations__observation_id__assign_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 observation_id: string;
             };
@@ -1912,7 +3041,10 @@ export interface operations {
     image_api_v1_images__key__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
             path: {
                 key: string;
             };

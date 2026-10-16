@@ -1,10 +1,10 @@
 # Hemlock Sentinel API with the production model (CPU, ONNX Runtime; no PyTorch).
 #   docker build -t hemlock-api .
-#   docker run -p 8000:8000 -v hemlock-data:/data hemlock-api      -> http://localhost:8000/docs
+#   docker run -p 8000:8000 -v hemlock-data:/data hemlock-api      -> http://localhost:8000/docs, /map
 FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
-    HEMLOCK_DB=/data/trees.sqlite HEMLOCK_BLOBS=/data/blobs
+    HEMLOCK_DATA=/data HEMLOCK_DB=/data/trees.sqlite HEMLOCK_BLOBS=/data/blobs
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install ".[onnx,app]"

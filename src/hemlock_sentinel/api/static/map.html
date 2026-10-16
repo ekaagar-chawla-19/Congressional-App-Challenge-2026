@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hemlock Sentinel – Forest Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root { --bg:#f6f7f4; --panel:#fff; --ink:#1d2a1f; --muted:#5f6b61; --line:#dfe3dc; --accent:#2f5d3a;
+          --s0:#2e7d32; --s1:#d4a017; --s2:#e8710a; --s3:#c62828; --sn:#8a8f8b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  #login { max-width:340px; margin:12vh auto; background:var(--panel); padding:24px; border-radius:10px; border:1px solid var(--line); }
+  #login h1 { font-size:20px; margin:0 0 4px; } #login p { color:var(--muted); margin:0 0 16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-top:10px; }
+  input, select, button { font:inherit; width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px; }
+  button { background:var(--accent); color:#fff; border:none; margin-top:16px; cursor:pointer; }
+  .err { color:var(--s3); margin-top:10px; min-height:1em; }
+  #app { display:none; height:100vh; }
+  #side { position:absolute; z-index:500; top:12px; left:12px; width:300px; max-height:calc(100vh - 24px); overflow:auto;
+          background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  #map { height:100vh; }
+  .row { display:flex; justify-content:space-between; gap:8px; } .muted { color:var(--muted); font-size:12px; }
+  .bar { display:flex; height:10px; border-radius:5px; overflow:hidden; margin:8px 0 4px; background:var(--line); }
+  .legend span { display:inline-flex; align-items:center; gap:4px; margin-right:8px; font-size:12px; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .banner { background:#fff6e0; border:1px solid #f0d58a; padding:6px 8px; border-radius:6px; font-size:12px; margin-top:10px; }
+  .popup img { width:180px; border-radius:6px; display:block; margin-top:6px; }
+  a.link { color:var(--accent); cursor:pointer; text-decoration:underline; font-size:12px; }
+  @media (max-width:600px) { #side { width:auto; right:12px; max-height:45vh; } }
+</style>
+</head>
+<body>
+<form id="login">
+  <h1>Hemlock Sentinel</h1>
+  <p>Sign in to see your forests.</p>
+  <label>Email<input id="email" value="demo@hemlock.test" autocomplete="username"></label>
+  <label>Password<input id="password" type="password" value="hemlock-demo" autocomplete="current-password"></label>
+  <button type="submit">Sign in</button>
+  <div class="err" id="loginErr"></div>
+</form>
+<div id="app">
+  <div id="side">
+    <div class="row"><strong id="who"></strong><a class="link" id="logout">Sign out</a></div>
+    <div class="muted" id="totals"></div>
+    <label>Forest<select id="forest"></select></label>
+    <div id="summary"></div>
+    <div class="legend" id="legend"></div>
+    <div class="banner">Severity is the observer's field rating (e.g. adelgid infestation), not a model
+      prediction. Demo forests contain placeholder trees without photos.</div>
+  </div>
+  <div id="map"></div>
+</div>
+<script>
+const COLORS = { none: "var(--s0)", light: "var(--s1)", moderate: "var(--s2)", severe: "var(--s3)", unrated: "var(--sn)" };
+const HEX = { none: "#2e7d32", light: "#d4a017", moderate: "#e8710a", severe: "#c62828", unrated: "#8a8f8b" };
+const ORDER = ["none", "light", "moderate", "severe", "unrated"];
+let token = null, overview = null, map = null, layer = null, forestId = null;
+const $ = (id) => document.getElementById(id);
+try { token = sessionStorage.getItem("hs_token"); } catch (e) {}
+
+async function api(path, opts = {}) {
+  const headers = { Accept: "application/json", ...(opts.headers || {}) };
+  if (token) headers.Authorization = "Bearer " + token;
+  const res = await fetch("/api/v1" + path, { ...opts, headers });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error?.message || ("HTTP " + res.status));
+  return data;
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const day = (iso) => iso ? new Date(iso).toLocaleDateString() : "–";
+
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("loginErr").textContent = "";
+  try {
+    const r = await api("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("email").value, password: $("password").value }) });
+    token = r.token; try { sessionStorage.setItem("hs_token", token); } catch (e) {}
+    await start();
+  } catch (err) { $("loginErr").textContent = err.message; }
+});
+$("logout").addEventListener("click", async () => {
+  try { await api("/auth/logout", { method: "POST" }); } catch (e) {}
+  token = null; try { sessionStorage.removeItem("hs_token"); } catch (e) {}
+  location.reload();
+});
+$("forest").addEventListener("change", (e) => showForest(+e.target.value));
+
+async function start() {
+  overview = await api("/me");
+  $("login").style.display = "none"; $("app").style.display = "block";
+  $("who").textContent = overview.user.name;
+  const t = overview.totals;
+  $("totals").textContent = `${t.forests} forests · ${t.trees} hemlocks · ${t.observations} visits`;
+  $("forest").innerHTML = overview.forests.map((f) => `<option value="${f.forest_id}">${esc(f.name)}</option>`).join("");
+  $("legend").innerHTML = ORDER.map((k) => `<span><i class="dot" style="background:${COLORS[k]}"></i>${k}</span>`).join("");
+  if (!map) {
+    map = L.map("map", { zoomControl: false }).setView([34.8, -84.5], 9);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+  }
+  if (overview.forests.length) showForest(overview.forests[0].forest_id);
+  else $("summary").innerHTML = '<p class="muted">No forests yet.</p>';
+}
+
+async function showForest(id) {
+  forestId = id;
+  const m = await api(`/forests/${id}/map`);
+  const f = m.forest, c = f.severity_counts, n = Math.max(1, f.tree_count);
+  $("summary").innerHTML = `
+    <div class="row" style="margin-top:10px"><strong>${f.tree_count} hemlocks</strong>
+      <span class="muted">last visit ${day(f.last_visit_at)}</span></div>
+    <div class="bar">${ORDER.map((k) => `<div style="width:${100 * c[k] / n}%;background:${COLORS[k]}"></div>`).join("")}</div>
+    <div class="muted">${ORDER.filter((k) => c[k]).map((k) => `${c[k]} ${k}`).join(" · ")}</div>
+    ${m.trees_without_location.length ? `<div class="muted">${m.trees_without_location.length} trees without GPS</div>` : ""}`;
+  if (layer) layer.remove();
+  layer = L.geoJSON(m, {
+    pointToLayer: (feat, ll) => L.circleMarker(ll, { radius: 7, weight: 1.5, color: "#fff", fillOpacity: 0.9,
+      fillColor: HEX[feat.properties.severity_label] }),
+    onEachFeature: (feat, lyr) => {
+      const p = feat.properties;
+      const hist = p.severity_history.map((h) => `${day(h.timestamp)}: ${["none","light","moderate","severe"][h.severity]}`).join("<br>");
+      lyr.bindPopup(`<div class="popup"><strong>${esc(p.tree_id)}</strong> – ${esc(p.severity_label)}<br>
+        <span class="muted">${p.observation_count} visits · first ${day(p.first_seen_at)} · last ${day(p.last_seen_at)}</span>
+        ${p.notes ? `<br><em>${esc(p.notes)}</em>` : ""}${hist ? `<br><span class="muted">${hist}</span>` : ""}
+        <div data-thumb="${esc(p.thumbnail_url || "")}"></div></div>`);
+      lyr.on("popupopen", (ev) => loadThumb(ev.popup.getElement()));
+    },
+  }).addTo(map);
+  if (m.features.length) map.fitBounds(layer.getBounds().pad(0.2));
+  else if (f.center) map.setView([f.center.lat, f.center.lon], 14);
+}
+
+async function loadThumb(el) {
+  const box = el.querySelector("[data-thumb]"); const url = box?.dataset.thumb;
+  if (!url || box.firstChild) return;
+  const res = await fetch(url, { headers: { Authorization: "Bearer " + token, "X-Forest-Id": String(forestId) } });
+  if (res.ok) { const img = new Image(); img.src = URL.createObjectURL(await res.blob()); box.appendChild(img); }
+}
+
+if (token) start().catch(() => { token = null; $("login").style.display = "block"; });
+</script>
+</body>
+</html>

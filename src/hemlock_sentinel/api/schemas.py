@@ -118,10 +118,16 @@ class CaptureState(BaseModel):
     result: IdentifyResult | None
 
 
+Severity = Literal[0, 1, 2, 3]
+SEVERITY_DOC = "observer's field rating: 0 none, 1 light, 2 moderate, 3 severe (NOT estimated by the model)"
+
+
 class IdentifyRequest(BaseModel):
     force_commit: bool = Field(False, description="store an uncertain result for review instead of asking for "
                                                   "another trunk view")
     location: Location | None = None
+    severity: Severity | None = Field(None, description=SEVERITY_DOC)
+    health_notes: str | None = Field(None, max_length=2000)
 
 
 class IdentifyResult(BaseModel):
@@ -158,6 +164,8 @@ class ViewOut(BaseModel):
 
 class Observation(BaseModel):
     observation_id: str
+    severity: int | None = Field(None, description=SEVERITY_DOC)
+    health_notes: str | None = None
     tree_id: str | None
     timestamp: str = Field(description="ISO 8601, UTC")
     status: str = Field(description="existing | new | uncertain | rejected_species | unsupported_species | "
@@ -182,6 +190,8 @@ class TreeSummary(BaseModel):
     tree_id: str
     species: str
     name: str
+    severity: int | None = Field(None, description="most recent rating; " + SEVERITY_DOC)
+    location: Location | None = None
     created_at: str
     last_seen_at: str
     observation_count: int
@@ -206,6 +216,71 @@ class TreeUpdate(BaseModel):
 
 class MergeRequest(BaseModel):
     duplicate_tree_id: str = Field(description="tree to fold into this one; its ID is retired, never reused")
+
+
+class HealthUpdate(BaseModel):
+    severity: Severity | None = Field(None, description=SEVERITY_DOC)
+    notes: str | None = Field(None, max_length=2000)
+
+
+# ------------------------------------------------------------------ accounts
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=200, pattern=r"^[^@\s]+@[^@\s]+$")
+    password: str = Field(min_length=8, max_length=200)
+    name: str = Field(min_length=1, max_length=100)
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    user_id: int
+    email: str
+    name: str
+
+
+class LoginResult(BaseModel):
+    token: str = Field(description="send as header  Authorization: Bearer <token>")
+    user: UserOut
+
+
+class ForestCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    lat: float | None = Field(None, ge=-90, le=90)
+    lon: float | None = Field(None, ge=-180, le=180)
+
+
+class ForestSummary(BaseModel):
+    forest_id: int
+    name: str
+    center: Location | None
+    tree_count: int
+    observation_count: int
+    severity_counts: dict[str, int] = Field(description="trees per latest rating: none/light/moderate/severe/unrated")
+    last_visit_at: str | None
+
+
+class AccountOverview(BaseModel):
+    user: UserOut
+    forests: list[ForestSummary]
+    totals: dict[str, int]
+
+
+class MapFeature(BaseModel):
+    type: Literal["Feature"] = "Feature"
+    geometry: dict = Field(description='GeoJSON Point, coordinates [lon, lat]')
+    properties: dict
+
+
+class ForestMap(BaseModel):
+    """GeoJSON FeatureCollection: one Point per tree with a known location (drop straight into a map library)."""
+    type: Literal["FeatureCollection"] = "FeatureCollection"
+    forest: ForestSummary | None
+    severity_scale: dict[int, str]
+    features: list[MapFeature]
+    trees_without_location: list[str]
 
 
 CaptureState.model_rebuild()

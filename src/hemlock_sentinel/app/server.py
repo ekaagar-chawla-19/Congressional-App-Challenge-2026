@@ -237,6 +237,12 @@ def create_app(pipeline: HemlockSentinel, demo: bool = False) -> FastAPI:
 
 
 def build_pipeline(db: str, blobs: str, model: str | None, calibration: str | None) -> tuple[HemlockSentinel, bool]:
+    runtime, cal, demo = load_model(model, calibration)
+    return HemlockSentinel(runtime, TreeRepository(db), LocalFileStorage(blobs), cal, PipelineConfig()), demo
+
+
+def load_model(model: str | None, calibration: str | None):
+    """(runtime, calibration, demo). No model -> mock model with a demo calibration."""
     from ..pipeline.runtime import MockRuntime, OnnxRuntime, TorchRuntime
 
     demo = model is None
@@ -250,9 +256,7 @@ def build_pipeline(db: str, blobs: str, model: str | None, calibration: str | No
         if calibration is None:
             raise SystemExit("--calibration is required with a real model (thresholds must be validated)")
         cal = Calibration.load(calibration)
-    repo = TreeRepository(db)
-    storage = LocalFileStorage(blobs)
-    return HemlockSentinel(runtime, repo, storage, cal, PipelineConfig()), demo
+    return runtime, cal, demo
 
 
 def main() -> None:

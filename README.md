@@ -93,9 +93,11 @@ pytest -q                                               # + training/export regr
 
 ## Backend API for the mobile app
 
-`hemlock-api` serves the production model to a React Native / Expo app over a JSON API
-(interactive docs at `http://localhost:8000/docs`), with a typed TypeScript client in
-`client/` and a `Dockerfile`. Guide: [`docs/api.md`](docs/api.md).
+`hemlock-api` serves the production model to a React Native / Expo app over a JSON API:
+sign-in, one tree database per forest, severity ratings, a forest map (`/map`, demo
+account `demo@hemlock.test` / `hemlock-demo`) and interactive docs (`/docs`). A Raspberry Pi
+can send photos to it over Bluetooth (`hemlock-bt-send` → `hemlock-bt-receiver`). Typed
+TypeScript client in `client/`, `Dockerfile` included. Guide: [`docs/api.md`](docs/api.md).
 
 ## Try the app (demo mode, no trained model)
 
