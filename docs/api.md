@@ -72,6 +72,50 @@ guide). It cannot see other accounts. It needs `ANTHROPIC_API_KEY` from console.
 (pay per use; Haiku is the cheapest model); without it the endpoint returns
 `503 assistant_not_configured` and the app says so. A Claude.ai subscription cannot be used for this.
 
+## Where the model runs: computer or phone
+
+The same model file (`hemlock.onnx`) runs in both places, with the same preprocessing, thresholds
+and decision logic:
+
+| | Computer (server) | Phone (on-device) |
+|---|---|---|
+| Runtime | ONNX Runtime (Python) | ONNX Runtime JS: `onnxruntime-web` (the `/app` web app), `onnxruntime-react-native` (RN app) |
+| Code | `src/hemlock_sentinel/pipeline` | `client/src/ondevice.ts` (a port of the server pipeline) |
+| Needs signal | yes | no, after the model (87 MB, once) and the forest's trees are downloaded |
+| Stores the result | yes, assigns tree IDs | no: offline surveys are queued and sent with "Sync now"; the server then stores them and makes the final call |
+
+Parity, checked by `client/test/parity.mjs` on 11 captures of held-out BarkNet hemlocks (8 returning
+trees, 3 never enrolled): **11/11 identical decisions**, embeddings cosine ≥ 0.994 to the server's,
+match probabilities within 0.02. Not ported: the "no tree structure visible" edge check and face
+blurring (the server still does both on sync).
+
+In the web app: Survey tree → tick **Run the model on this phone**. The model is stored in the
+browser (IndexedDB) and re-downloaded only when the server's model changes (SHA-256 check). The
+page itself must already be open when signal is lost (offline loading of the page would need
+HTTPS and a service worker).
+
+API for on-device use: `GET /api/v1/model` (`on_device`: URLs, size, SHA-256),
+`GET /api/v1/model/files/hemlock.onnx`, `.../hemlock.json`, `GET /api/v1/model/calibration`,
+`GET /api/v1/gallery` (the forest's tree fingerprints, X-Forest-Id).
+
+React Native:
+
+```ts
+import * as ort from "onnxruntime-react-native";
+import { HemlockClient, OnDeviceModel } from "@hemlock-sentinel/client";
+
+const files = await api.downloadModel();            // save files.onnx to the app's documents dir (expo-file-system)
+const model = await OnDeviceModel.create(ort, modelFileUri, files.meta, files.calibration, {});
+const gallery = await api.gallery();                // cache per forest for offline use
+const views = [];
+for (const [key, img] of photos) views.push(await model.processView(img, key, views));  // img: { width, height, data: RGBA, channels: 4 }
+const result = model.identify(views, gallery);      // existing / new / uncertain, like POST /identify
+```
+
+Speed: about 0.3 s per photo with ONNX Runtime on a laptop CPU (Node). Phones running the web
+build use WebAssembly and are slower (expect a few seconds per photo); the React Native build can
+use the phone's native ONNX Runtime and is faster. Not yet measured on a real phone.
+
 ## Run it
 
 **Option A: Python** (Python 3.10+)

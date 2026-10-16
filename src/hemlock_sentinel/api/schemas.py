@@ -33,8 +33,18 @@ class CalibrationInfo(BaseModel):
     provenance: dict
 
 
+class ModelFiles(BaseModel):
+    """For running the model on the phone (onnxruntime-web / onnxruntime-react-native)."""
+    onnx_url: str
+    meta_url: str
+    calibration_url: str
+    onnx_bytes: int
+    onnx_sha256: str
+
+
 class ModelInfo(BaseModel):
     version: str
+    on_device: ModelFiles | None = Field(None, description="null in demo mode (mock model)")
     demo: bool
     backbone: str | None
     embedding_dim: int
@@ -59,6 +69,21 @@ class Protocol(BaseModel):
     max_views: int
     max_total_views: int
     max_image_bytes: int
+
+
+class GalleryObservation(BaseModel):
+    tree_id: str
+    observation_id: str
+    embedding_b64: str = Field(description="base64 of little-endian float32[embedding_dim], L2-normalised")
+
+
+class Gallery(BaseModel):
+    """A forest's stored tree fingerprints, for identifying trees on the phone (offline)."""
+    model_version: str
+    embedding_dim: int
+    species: str
+    tree_ids: list[str]
+    observations: list[GalleryObservation]
 
 
 class Location(BaseModel):

@@ -98,7 +98,8 @@ sign-in, one tree database per forest, severity ratings, a forest map (`/map`, d
 account `demo@hemlock.test` / `hemlock-demo`), a phone app (`/app`) and interactive docs (`/docs`).
 An ESP32 sensor node (`firmware/esp32_sensors`) supplies soil moisture, temperature, humidity and
 light over Bluetooth LE (`hemlock-esp32` on a laptop). Typed
-TypeScript client in `client/`, `Dockerfile` included. Guide: [`docs/api.md`](docs/api.md).
+TypeScript client in `client/`, `Dockerfile` included. The model runs on the computer (server) **or on the
+phone**, offline, with identical decisions (`client/src/ondevice.ts`). Guide: [`docs/api.md`](docs/api.md).
 
 ## Try the app (demo mode, no trained model)
 

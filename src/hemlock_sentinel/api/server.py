@@ -211,6 +211,19 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     cal = pipeline.cal if pipeline else accounts.cal
     blur_enabled = (pipeline.cfg if pipeline else accounts.config_factory()).blur_faces
     version = getattr(runtime, "version", "unknown")
+    model_path = getattr(runtime, "model_path", None)
+    model_files = None
+    if model_path is not None and model_path.exists():
+        import hashlib
+
+        h = hashlib.sha256()
+        with open(model_path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        model_files = S.ModelFiles(onnx_url=f"{PREFIX}/model/files/hemlock.onnx",
+                                   meta_url=f"{PREFIX}/model/files/hemlock.json",
+                                   calibration_url=f"{PREFIX}/model/calibration",
+                                   onnx_bytes=model_path.stat().st_size, onnx_sha256=h.hexdigest())
     if pipeline is not None:
         H.ensure_schema(pipeline.repo)
         F.ensure_schema(pipeline.repo)
@@ -401,12 +414,30 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     @api.get("/model", response_model=S.ModelInfo, tags=["meta"])
     def model_info():
         return S.ModelInfo(
-            version=version, demo=demo, backbone=getattr(runtime, "backbone", None),
+            version=version, demo=demo, on_device=model_files, backbone=getattr(runtime, "backbone", None),
             embedding_dim=runtime.embedding_dim, image_size=runtime.input_size,
             species_labels=list(runtime.species_labels), reid_supported_species=sorted(REID_SUPPORTED),
             calibration=S.CalibrationInfo(target_false_match_rate=getattr(cal, "target_fmr", None),
                                           species_threshold=cal.species_threshold,
                                           match_threshold=cal.match_threshold, provenance=cal.provenance or {}))
+
+    @api.get("/model/files/{name}", tags=["on-device"], response_class=FileResponse,
+             responses={200: {"content": {"application/octet-stream": {}}}})
+    def model_file(name: str):
+        """Download the production model (hemlock.onnx, 87 MB) or its metadata (hemlock.json) to run it on
+        the phone. Cache it: the ETag changes only with a new model version."""
+        if model_files is None:
+            raise ApiError(404, "no_model_files", "the server runs the demo (mock) model")
+        files = {"hemlock.onnx": model_path, "hemlock.json": model_path.with_suffix(".json")}
+        if name not in files:
+            raise ApiError(404, "not_found", "available: hemlock.onnx, hemlock.json")
+        return FileResponse(files[name], headers={"ETag": f'"{model_files.onnx_sha256[:16]}"',
+                                                  "Cache-Control": "public, max-age=86400"})
+
+    @api.get("/model/calibration", tags=["on-device"])
+    def model_calibration():
+        """The calibrated decision thresholds, same JSON as models/production/calibration.json."""
+        return asdict(cal)
 
     @api.get("/protocol", response_model=S.Protocol, tags=["meta"])
     def protocol():
@@ -564,6 +595,28 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         """Analysis of the current forest, or of the area west/south/east/north inside it: severity, condition
         prevalence, sensor averages, ranked zones (where trees suffer most), worst trees, recommendations."""
         return analysis_for(ws, parse_bbox(west, south, east, north), cell_m)
+
+    def gallery_for(ws: Workspace) -> S.Gallery:
+        import base64
+
+        import numpy as np
+
+        sp = sorted(REID_SUPPORTED)[0]
+        tids, oids, emb = ws.repo.gallery(sp)
+        out = []
+        for t, o, e in zip(tids, oids, emb):
+            v = np.asarray(e, dtype=np.float32)
+            v = v / max(float(np.linalg.norm(v)), 1e-12)
+            out.append(S.GalleryObservation(tree_id=t, observation_id=o,
+                                            embedding_b64=base64.b64encode(v.astype("<f4").tobytes()).decode()))
+        return S.Gallery(model_version=version, embedding_dim=runtime.embedding_dim, species=sp,
+                         tree_ids=sorted(set(tids)), observations=out)
+
+    @api.get("/gallery", response_model=S.Gallery, tags=["on-device"])
+    def current_gallery(ws: Workspace = WS):
+        """Fingerprints of every tree in the current forest, so the phone can identify trees offline. Photos
+        taken offline are queued and sent to POST /identify when back online (the server decides finally)."""
+        return gallery_for(ws)
 
     @api.get("/map", response_model=S.ForestMap, tags=["map"])
     def current_map(ws: Workspace = WS):
@@ -881,6 +934,21 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     @app.get("/app", include_in_schema=False)
     def app_page():
         return FileResponse(STATIC / "app.html")
+
+    @app.get("/ort/{name}", include_in_schema=False)
+    def ort_file(name: str):
+        """onnxruntime-web (MIT), vendored by `npm run build:web`, so the phone needs no CDN."""
+        types = {"ort.wasm.min.js": "text/javascript", "ort-wasm-simd-threaded.mjs": "text/javascript",
+                 "ort-wasm-simd-threaded.wasm": "application/wasm"}
+        if name not in types:
+            raise ApiError(404, "not_found", "unknown file")
+        return FileResponse(STATIC / "ort" / name, media_type=types[name],
+                            headers={"Cache-Control": "public, max-age=604800"})
+
+    @app.get("/ondevice.js", include_in_schema=False)
+    def ondevice_js():
+        """The on-device engine (built from client/src/ondevice.ts by `npm run build:web`)."""
+        return FileResponse(STATIC / "ondevice.js", media_type="text/javascript")
 
     @app.get("/", include_in_schema=False)
     def root():

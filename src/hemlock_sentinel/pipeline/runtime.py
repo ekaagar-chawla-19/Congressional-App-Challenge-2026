@@ -27,6 +27,7 @@ class OnnxRuntime:
         self.species_labels = list(meta["species_labels"])
         self.version = meta.get("version", Path(model_path).stem)
         self.backbone = meta.get("backbone")
+        self.model_path = Path(model_path)
 
     def run(self, batch: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         emb, logits = self.session.run(None, {"images": np.ascontiguousarray(batch, dtype=np.float32)})

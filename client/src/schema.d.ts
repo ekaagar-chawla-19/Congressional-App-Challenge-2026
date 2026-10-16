@@ -61,6 +61,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/model/files/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Model File
+         * @description Download the production model (hemlock.onnx, 87 MB) or its metadata (hemlock.json) to run it on
+         *     the phone. Cache it: the ETag changes only with a new model version.
+         */
+        get: operations["model_file_api_v1_model_files__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/model/calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Model Calibration
+         * @description The calibrated decision thresholds, same JSON as models/production/calibration.json.
+         */
+        get: operations["model_calibration_api_v1_model_calibration_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocol": {
         parameters: {
             query?: never;
@@ -260,6 +301,27 @@ export interface paths {
          *     prevalence, sensor averages, ranked zones (where trees suffer most), worst trees, recommendations.
          */
         get: operations["current_analysis_api_v1_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gallery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Gallery
+         * @description Fingerprints of every tree in the current forest, so the phone can identify trees offline. Photos
+         *     taken offline are queued and sent to POST /identify when back online (the server decides finally).
+         */
+        get: operations["current_gallery_api_v1_gallery_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -907,6 +969,34 @@ export interface components {
             /** Last Visit At */
             last_visit_at: string | null;
         };
+        /**
+         * Gallery
+         * @description A forest's stored tree fingerprints, for identifying trees on the phone (offline).
+         */
+        Gallery: {
+            /** Model Version */
+            model_version: string;
+            /** Embedding Dim */
+            embedding_dim: number;
+            /** Species */
+            species: string;
+            /** Tree Ids */
+            tree_ids: string[];
+            /** Observations */
+            observations: components["schemas"]["GalleryObservation"][];
+        };
+        /** GalleryObservation */
+        GalleryObservation: {
+            /** Tree Id */
+            tree_id: string;
+            /** Observation Id */
+            observation_id: string;
+            /**
+             * Embedding B64
+             * @description base64 of little-endian float32[embedding_dim], L2-normalised
+             */
+            embedding_b64: string;
+        };
         /** Health */
         Health: {
             /**
@@ -1073,10 +1163,28 @@ export interface components {
              */
             duplicate_tree_id: string;
         };
+        /**
+         * ModelFiles
+         * @description For running the model on the phone (onnxruntime-web / onnxruntime-react-native).
+         */
+        ModelFiles: {
+            /** Onnx Url */
+            onnx_url: string;
+            /** Meta Url */
+            meta_url: string;
+            /** Calibration Url */
+            calibration_url: string;
+            /** Onnx Bytes */
+            onnx_bytes: number;
+            /** Onnx Sha256 */
+            onnx_sha256: string;
+        };
         /** ModelInfo */
         ModelInfo: {
             /** Version */
             version: string;
+            /** @description null in demo mode (mock model) */
+            on_device?: components["schemas"]["ModelFiles"] | null;
             /** Demo */
             demo: boolean;
             /** Backbone */
@@ -1446,6 +1554,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelInfo"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    model_file_api_v1_model_files__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    model_calibration_api_v1_model_calibration_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Bad Request */
@@ -2369,6 +2627,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    current_gallery_api_v1_gallery_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gallery"];
                 };
             };
             /** @description Bad Request */

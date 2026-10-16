@@ -9,6 +9,8 @@
  */
 import type { components } from "./schema";
 export { ESP32, parseEsp32Reading, type Esp32Reading } from "./esp32";
+export { OnDeviceModel, type OnDeviceResult, type RgbImage, type ViewResult as OnDeviceView, type OrtLike } from "./ondevice";
+import type { Calibration as OnDeviceCalibration, ModelMeta } from "./ondevice";
 
 type Schemas = components["schemas"];
 export type Health = Schemas["Health"];
@@ -117,6 +119,21 @@ export class HemlockClient {
   }
   model(): Promise<ModelInfo> {
     return this.req("GET", "/model");
+  }
+  /** Everything needed to run the model on the device: hemlock.onnx bytes (~87 MB: cache them),
+   * metadata and calibration. Check `model().on_device.onnx_sha256` to know when to re-download. */
+  async downloadModel(): Promise<{ onnx: Uint8Array; meta: ModelMeta; calibration: OnDeviceCalibration }> {
+    const headers: Record<string, string> = this.authHeaders();
+    const r = await fetch(this.base + "/model/files/hemlock.onnx", { headers });
+    if (!r.ok) throw new HemlockApiError(r.status, "no_model_files", "model download failed");
+    const [meta, calibration] = await Promise.all([this.req<ModelMeta>("GET", "/model/files/hemlock.json"),
+      this.req<OnDeviceCalibration>("GET", "/model/calibration")]);
+    return { onnx: new Uint8Array(await r.arrayBuffer()), meta, calibration };
+  }
+  /** The forest's tree fingerprints for on-device (offline) identification. */
+  gallery(forestId?: number): Promise<Schemas["Gallery"]> {
+    const id = forestId ?? this.opts.forestId;
+    return this.req("GET", "/gallery", undefined, id);
   }
   /** The guided photo sequence (instructions to show the user for each view). */
   protocol(): Promise<Protocol> {
@@ -280,8 +297,9 @@ export class HemlockClient {
   }
 
   // --------------------------------------------------------------- private
-  private async req<T>(method: string, path: string, body?: FormData | object): Promise<T> {
+  private async req<T>(method: string, path: string, body?: FormData | object, forestId?: number): Promise<T> {
     const headers: Record<string, string> = { Accept: "application/json", ...this.authHeaders() };
+    if (forestId != null) headers["X-Forest-Id"] = String(forestId);
     let payload: FormData | string | undefined;
     if (body instanceof FormData) payload = body; // fetch sets the multipart boundary itself
     else if (body !== undefined) {

@@ -129,6 +129,175 @@
         }
       }
     },
+    "/api/v1/model/files/{name}": {
+      "get": {
+        "tags": [
+          "on-device"
+        ],
+        "summary": "Model File",
+        "description": "Download the production model (hemlock.onnx, 87 MB) or its metadata (hemlock.json) to run it on\nthe phone. Cache it: the ETag changes only with a new model version.",
+        "operationId": "model_file_api_v1_model_files__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/model/calibration": {
+      "get": {
+        "tags": [
+          "on-device"
+        ],
+        "summary": "Model Calibration",
+        "description": "The calibrated decision thresholds, same JSON as models/production/calibration.json.",
+        "operationId": "model_calibration_api_v1_model_calibration_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/protocol": {
       "get": {
         "tags": [
@@ -1322,6 +1491,113 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/gallery": {
+      "get": {
+        "tags": [
+          "on-device"
+        ],
+        "summary": "Current Gallery",
+        "description": "Fingerprints of every tree in the current forest, so the phone can identify trees offline. Photos\ntaken offline are queued and sent to POST /identify when back online (the server decides finally).",
+        "operationId": "current_gallery_api_v1_gallery_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gallery"
+                }
               }
             }
           },
@@ -4661,6 +4937,70 @@
         ],
         "title": "ForestSummary"
       },
+      "Gallery": {
+        "properties": {
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "embedding_dim": {
+            "type": "integer",
+            "title": "Embedding Dim"
+          },
+          "species": {
+            "type": "string",
+            "title": "Species"
+          },
+          "tree_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tree Ids"
+          },
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/GalleryObservation"
+            },
+            "type": "array",
+            "title": "Observations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_version",
+          "embedding_dim",
+          "species",
+          "tree_ids",
+          "observations"
+        ],
+        "title": "Gallery",
+        "description": "A forest's stored tree fingerprints, for identifying trees on the phone (offline)."
+      },
+      "GalleryObservation": {
+        "properties": {
+          "tree_id": {
+            "type": "string",
+            "title": "Tree Id"
+          },
+          "observation_id": {
+            "type": "string",
+            "title": "Observation Id"
+          },
+          "embedding_b64": {
+            "type": "string",
+            "title": "Embedding B64",
+            "description": "base64 of little-endian float32[embedding_dim], L2-normalised"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tree_id",
+          "observation_id",
+          "embedding_b64"
+        ],
+        "title": "GalleryObservation"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -5064,11 +5404,56 @@
         ],
         "title": "MergeRequest"
       },
+      "ModelFiles": {
+        "properties": {
+          "onnx_url": {
+            "type": "string",
+            "title": "Onnx Url"
+          },
+          "meta_url": {
+            "type": "string",
+            "title": "Meta Url"
+          },
+          "calibration_url": {
+            "type": "string",
+            "title": "Calibration Url"
+          },
+          "onnx_bytes": {
+            "type": "integer",
+            "title": "Onnx Bytes"
+          },
+          "onnx_sha256": {
+            "type": "string",
+            "title": "Onnx Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "onnx_url",
+          "meta_url",
+          "calibration_url",
+          "onnx_bytes",
+          "onnx_sha256"
+        ],
+        "title": "ModelFiles",
+        "description": "For running the model on the phone (onnxruntime-web / onnxruntime-react-native)."
+      },
       "ModelInfo": {
         "properties": {
           "version": {
             "type": "string",
             "title": "Version"
+          },
+          "on_device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelFiles"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null in demo mode (mock model)"
           },
           "demo": {
             "type": "boolean",

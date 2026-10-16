@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "target": "ES2020", "module": "ES2020", "lib": ["ES2020", "DOM"], "strict": true, "skipLibCheck": true,
+    "declaration": false, "rootDir": "src", "outDir": "../src/hemlock_sentinel/api/static"
+  },
+  "files": ["src/ondevice.ts"]
+}

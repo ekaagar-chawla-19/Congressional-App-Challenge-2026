@@ -141,7 +141,8 @@ async function homeView() {
       <div class="row"><strong>${esc(f.name)}</strong><span class="muted">${f.tree_count} trees</span></div>
       ${sevBar(f.severity_counts, f.tree_count)}
       <div class="muted small">last visit ${day(f.last_visit_at)}</div></div>`).join("")}
-    <button class="block" id="nf">+ New forest</button>`;
+    <button class="block" id="nf">+ New forest</button><div id="syncBox"></div>`;
+  showSyncBox();
   V.querySelectorAll("[data-f]").forEach((el) => el.onclick = () => {
     S.forest = me.forests.find((f) => f.forest_id === +el.dataset.f);
     nav(() => forestView("map"), S.forest.name);
@@ -289,9 +290,9 @@ const sensorTable = (s) => `<table>
   <tr><td>Humidity</td><td>${na(s?.humidity_pct, " %")}</td></tr><tr><td>Light</td><td>${na(s?.light_lux, " lux")}</td></tr></table>`;
 
 function signChecks(sel = []) {
-  return `<div class="checks">${Object.entries(S.guide.signs).map(([k, d]) => `<label><input type="checkbox" value="${k}" ${sel.includes(k) ? "checked" : ""}>${esc(d)}</label>`).join("")}</div>`;
+  return `<div class="checks">${Object.entries(S.guide.signs).map(([k, d]) => `<label><input type="checkbox" class="sign" value="${k}" ${sel.includes(k) ? "checked" : ""}>${esc(d)}</label>`).join("")}</div>`;
 }
-const checked = () => [...V.querySelectorAll(".checks input:checked")].map((i) => i.value);
+const checked = () => [...V.querySelectorAll("input.sign:checked")].map((i) => i.value);
 function sevPicker(id) {
   return `<div class="sev" id="${id}">${SEV.map((s, i) => `<button data-v="${i}">${i} ${s}</button>`).join("")}</div>
     <div class="muted small" id="${id}h">Tap a rating</div>`;
@@ -345,12 +346,145 @@ async function signsForm(oid, t) {
   $("#save").onclick = async () => { try { await api(`/observations/${oid}/signs`, { method: "PUT", body: { signs: checked() } }); $("#back").click(); } catch (e) { showErr(e); } };
 }
 
+// ------------------------------------------------------- on-device model
+const ORT_BASE = "/ort/";  // onnxruntime-web 1.20.1, served by the backend
+const DEV = { on: false, model: null, loading: null };
+try { DEV.on = localStorage.getItem("hs_ondevice") === "1"; } catch (e) {}
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("hemlock-sentinel", 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore("kv"); r.result.createObjectStore("queue", { autoIncrement: true }); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function store(name, mode, fn) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(name, mode); let out;
+    const req = fn(tx.objectStore(name)); if (req) req.onsuccess = () => { out = req.result; };
+    tx.oncomplete = () => res(out); tx.onerror = () => rej(tx.error);
+  });
+}
+const kvGet = (k) => store("kv", "readonly", (s) => s.get(k));
+const kvPut = (k, v) => store("kv", "readwrite", (s) => s.put(v, k));
+const devStatus = (t) => { const el = $("#devStatus"); if (el) el.textContent = t; };
+function loadScript(src) { return new Promise((res, rej) => { const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = () => rej(new Error("cannot load " + src)); document.head.appendChild(el); }); }
+
+async function ensureModel() {
+  if (DEV.model) return DEV.model;
+  if (DEV.loading) return DEV.loading;
+  DEV.loading = (async () => {
+    let cached = await kvGet("model").catch(() => null), info = null;
+    try { info = await api("/model", { noForest: true }); } catch (e) { if (!cached) throw new Error("go online once to download the model"); }
+    if (info && !info.on_device) throw new Error("the server runs the demo model; nothing to download");
+    if (!cached || (info && cached.sha !== info.on_device.onnx_sha256)) {
+      const r = await fetch(info.on_device.onnx_url, { headers: { Authorization: "Bearer " + S.token } });
+      if (!r.ok) throw new Error("download failed (HTTP " + r.status + ")");
+      const total = info.on_device.onnx_bytes, reader = r.body.getReader(), parts = []; let got = 0;
+      for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length;
+        devStatus(`Downloading model… ${Math.round(100 * got / total)}%`); }
+      const bytes = new Uint8Array(got); let o = 0; for (const p of parts) { bytes.set(p, o); o += p.length; }
+      const [meta, cal] = await Promise.all([api("/model/files/hemlock.json", { noForest: true }), api("/model/calibration", { noForest: true })]);
+      cached = { sha: info.on_device.onnx_sha256, bytes: bytes.buffer, meta, cal };
+      await kvPut("model", cached).catch(() => devStatus("Couldn't save the model on this phone; it will download again next time."));
+    }
+    devStatus("Starting the model…");
+    if (!window.ort) await loadScript(ORT_BASE + "ort.wasm.min.js");
+    ort.env.wasm.wasmPaths = ORT_BASE;
+    const { OnDeviceModel } = await import("/ondevice.js");
+    DEV.model = await OnDeviceModel.create(ort, new Uint8Array(cached.bytes), cached.meta, cached.cal, { executionProviders: ["wasm"] });
+    devStatus(`Model ${cached.meta.version} ready on this phone.`);
+    return DEV.model;
+  })();
+  try { return await DEV.loading; } finally { DEV.loading = null; }
+}
+
+async function forestGallery() {
+  const key = "gallery:" + S.forest.forest_id;
+  try { const g = await api("/gallery"); await kvPut(key, g).catch(() => {}); return g; }
+  catch (e) { if (e.status) throw e; return (await kvGet(key)) || null; }
+}
+
+async function decodeForModel(file) {
+  const bmp = await createImageBitmap(file);  // applies EXIF orientation
+  let s = 1;  // like the server's JPEG decode: halve while the short side stays >= 640
+  while (s < 8 && Math.floor(Math.min(bmp.width, bmp.height) / (s * 2)) >= 640) s *= 2;
+  const w = Math.ceil(bmp.width / s), h = Math.ceil(bmp.height / s);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(bmp, 0, 0, w, h);
+  return { width: w, height: h, data: g.getImageData(0, 0, w, h).data, channels: 4 };
+}
+
+async function identifyOnDevice(files) {
+  const model = await ensureModel(), t0 = performance.now();
+  const gallery = await forestGallery();
+  const views = [];
+  for (const [i, f] of files.entries()) {
+    devStatus(`Running the model on photo ${i + 1}/${files.length}…`);
+    views.push(await model.processView(await decodeForModel(f.files[0]), f.dataset.k, views));
+  }
+  const r = model.identify(views, gallery), secs = ((performance.now() - t0) / 1000).toFixed(1);
+  devStatus(`Done on this phone in ${secs} s${gallery ? "" : " (no saved trees for this forest yet)"}.`);
+  const head = r.status === "existing" ? `<h2 class="ok">Existing tree ${r.tree_id}</h2><div>${Math.round(r.probability * 100)}% confident</div>`
+    : r.status === "new" ? "<h2>New tree</h2><div class=\"muted small\">Gets its ID (H-…) when the server stores it</div>"
+    : r.status === "uncertain" ? `<h2>Not sure which tree</h2>${r.best_guess ? `<div>Most likely ${r.best_guess.tree_id} (${Math.round(r.best_guess.probability * 100)}%)</div>` : ""}`
+    : `<h2>${esc(r.message)}</h2>`;
+  $("#res").insertAdjacentHTML("beforeend", `<div class="card"><div class="muted small">On this phone · ${secs} s</div>${head}
+    ${r.species ? `<div class="muted">${esc(r.species.label === "tsuga_canadensis" ? "Eastern hemlock" : r.species.label)} (${Math.round(r.species.confidence * 100)}%)</div>` : ""}
+    ${views.filter((v) => !v.accepted).map((v, i) => `<p class="err small">${esc(v.viewKey)}: ${esc(v.problems.join("; "))}</p>`).join("")}</div>`);
+  return r;
+}
+
+async function queueCapture(fd) {
+  const fields = [], files = [];
+  for (const [k, v] of fd.entries()) { if (v instanceof Blob) files.push({ k, v, name: v.name || "photo.jpg" }); else fields.push([k, v]); }
+  await store("queue", "readwrite", (s) => s.add({ forest_id: S.forest.forest_id, forest: S.forest.name, fields, files, at: Date.now() }));
+}
+async function queued() {
+  const [keys, vals] = await Promise.all([store("queue", "readonly", (s) => s.getAllKeys()), store("queue", "readonly", (s) => s.getAll())]);
+  return keys.map((k, i) => [k, vals[i]]);
+}
+async function showSyncBox() {
+  const box = $("#syncBox"); if (!box) return;
+  const q = await queued().catch(() => []);
+  box.innerHTML = q.length ? `<div class="card"><b>${q.length} survey${q.length > 1 ? "s" : ""} saved offline</b>
+    <div class="muted small">${[...new Set(q.map(([, e]) => e.forest))].map(esc).join(", ")}</div>
+    <button class="primary block" id="syncNow">Sync now</button><div id="syncOut" class="small"></div></div>` : "";
+  if (q.length) $("#syncNow").onclick = syncQueue;
+}
+async function syncQueue() {
+  const out = $("#syncOut"); let ok = 0;
+  for (const [key, e] of await queued()) {
+    const fd = new FormData();
+    e.fields.forEach(([k, v]) => fd.append(k, v)); e.files.forEach((f) => fd.append(f.k, f.v, f.name));
+    try {
+      const r = await fetch("/api/v1/identify", { method: "POST", body: fd, headers: { Authorization: "Bearer " + S.token, "X-Forest-Id": String(e.forest_id) } });
+      const d = await r.json();
+      if (!r.ok) { out.insertAdjacentHTML("beforeend", `<div class="err">${esc(e.forest)}: ${esc(d?.error?.message || r.status)}</div>`); continue; }
+      await store("queue", "readwrite", (s) => s.delete(key)); ok++;
+      out.insertAdjacentHTML("beforeend", `<div>${esc(e.forest)}: ${esc(d.status)} ${esc(d.tree_id || "")}</div>`);
+    } catch (x) { out.insertAdjacentHTML("beforeend", '<div class="err">Still no connection.</div>'); break; }
+  }
+  if (ok) setTimeout(() => nav(homeView, "My forests", false), 1500);
+}
+
 // --------------------------------------------------------------- capture
 $("#fabCap").onclick = () => nav(captureView, "Survey a tree");
+const DEFAULT_VIEWS = [
+  { key: "trunk_north", title: "Front / trunk", instruction: "Stand on the NORTH side of the tree about 1 m away. Fill the frame with bark at chest height." },
+  { key: "trunk_right", title: "Rotate right", instruction: "Walk about a quarter-turn clockwise around the tree. Bark at chest height again." },
+  { key: "trunk_right2", title: "Rotate farther right", instruction: "Walk another quarter-turn clockwise. Bark at chest height." }];
+async function protocolViews() {  // works offline: last copy from the server, else built in
+  try { const p = await api("/protocol", { noForest: true }); kvPut("protocol", p.views).catch(() => {}); return p.views; }
+  catch (e) { if (e.status) throw e; return (await kvGet("protocol").catch(() => null)) || DEFAULT_VIEWS; }
+}
 async function captureView() {
-  const proto = await api("/protocol", { noForest: true });
+  const proto = { views: await protocolViews() };
   const steps = [...proto.views.slice(0, 3), { key: "twig_underside", title: "Twig underside (optional)", instruction: "Turn a low branch over; close-up of the twig underside from 10-30 cm. This is what can show adelgid wool and scales." }];
-  V.innerHTML = `<div class="card"><h2>Photos</h2><p class="muted small">Same spots every visit: start on the north side, then walk clockwise.</p>
+  V.innerHTML = `<div class="card"><label class="checks" style="margin:0"><label><input type="checkbox" id="dev" ${DEV.on ? "checked" : ""}>
+    <span><b>Run the model on this phone</b><br><span class="muted small">Works without signal. Downloads the model once (87 MB).</span></span></label></label>
+    <div class="muted small" id="devStatus"></div></div>
+    <div class="card"><h2>Photos</h2><p class="muted small">Same spots every visit: start on the north side, then walk clockwise.</p>
     ${steps.map((v, i) => `<label><b>${i + 1}. ${esc(v.title)}</b><br>${esc(v.instruction)}<input type="file" accept="image/*" capture="environment" data-k="${v.key}"></label>`).join("")}</div>
     <div class="card"><h2>Health</h2><h3>Severity</h3>${sevPicker("cs")}<h3>Signs you see</h3>${signChecks()}</div>
     <div class="card"><h2>Location & ESP32 sensors</h2><button id="gps" class="block">Use my location</button>
@@ -358,6 +492,9 @@ async function captureView() {
     ${esp32Button()}${sensorInputs()}<p class="muted small">Tap “Read ESP32” near the sensor node, or type values. Leave empty if it wasn't used (shown as N/A).</p></div>
     <button class="primary block" id="send">Identify tree</button><div id="res"></div>`;
   const sev = bindSev("cs");
+  $("#dev").onchange = (e) => { DEV.on = e.target.checked; try { localStorage.setItem("hs_ondevice", DEV.on ? "1" : "0"); } catch (x) {}
+    if (DEV.on) ensureModel().catch((x) => { $("#devStatus").textContent = "Model not ready: " + x.message; }); };
+  if (DEV.on) ensureModel().catch((x) => { $("#devStatus").textContent = "Model not ready: " + x.message; });
   $("#gps").onclick = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(
     (p) => { $("#lat").value = p.coords.latitude.toFixed(6); $("#lon").value = p.coords.longitude.toFixed(6); },
     () => { $("#gps").textContent = "Location needs HTTPS on phones: type it in"; }) : null;
@@ -372,22 +509,32 @@ async function captureView() {
     if (sev() != null) fd.append("severity", sev());
     const sg = checked(); if (sg.length) fd.append("signs", sg.join(","));
     $("#send").disabled = true; $("#send").textContent = "Identifying…";
-    try { showResult(await api("/identify", { method: "POST", body: fd })); }
-    catch (e) { showErr(e); } finally { $("#send").disabled = false; $("#send").textContent = "Identify tree"; }
+    $("#res").innerHTML = "";
+    try {
+      if (DEV.on) await identifyOnDevice(files);
+      try { showResult(await api("/identify", { method: "POST", body: fd }), !!DEV.on); }
+      catch (e) {
+        if (e.status) throw e;  // the server answered with an error
+        await queueCapture(fd);  // no connection: keep it for later
+        $("#res").insertAdjacentHTML("beforeend", `<div class="card"><b>Saved on this phone.</b> No connection: it will be sent
+          (and the server will confirm the result) when you tap “Sync now” with signal.</div>`);
+      }
+    } catch (e) { showErr(e); } finally { $("#send").disabled = false; $("#send").textContent = "Identify tree"; }
   };
 }
-function showResult(r) {
+function showResult(r, append = false) {
   const head = r.status === "existing" ? `<h2 class="ok">Existing tree ${r.tree_id}</h2><div>${Math.round(r.probability * 100)}% confident</div>`
     : r.status === "new" ? `<h2>New tree registered: ${r.tree_id}</h2>`
     : r.status === "uncertain" ? `<h2>Not sure which tree</h2>` : `<h2>${esc(r.message)}</h2>`;
-  $("#res").innerHTML = `<div class="card">${head}
+  if (!append) $("#res").innerHTML = "";
+  $("#res").insertAdjacentHTML("beforeend", `<div class="card">${append ? '<div class="muted small">Confirmed by the server</div>' : ""}${head}
     ${r.species ? `<div class="muted">${esc(r.species.name)} (${Math.round(r.species.confidence * 100)}%)</div>` : ""}
     ${r.best_guess ? `<p>${esc(r.best_guess.note)}</p><button class="primary block" data-as="${r.best_guess.tree_id}">Use ${r.best_guess.tree_id} (${Math.round((r.best_guess.probability || 0) * 100)}%)</button>
       ${r.candidates.slice(1).map((c) => `<button class="block" data-as="${c.tree_id}">${c.tree_id} (${Math.round((c.probability || 0) * 100)}%)</button>`).join("")}
       <button class="block" data-as="new">It's a new tree</button>` : ""}
     ${r.views.filter((v) => !v.accepted).map((v) => `<p class="err small">Photo ${v.index + 1}: ${esc(v.problems.join("; "))}</p>`).join("")}
     ${r.findings.length ? `<h3>Health assessment</h3>${r.findings.map(chip).join("")}` : ""}
-    ${r.tree_id ? `<button class="block" id="ot">Open ${r.tree_id}</button>` : ""}</div>`;
+    ${r.tree_id ? `<button class="block" id="ot">Open ${r.tree_id}</button>` : ""}</div>`);
   $("#res").querySelectorAll("[data-as]").forEach((b) => b.onclick = async () => {
     const a = await api(`/observations/${r.observation_id}/assign`, { method: "POST", body: { tree_id: b.dataset.as } });
     openTree(a.tree_id);

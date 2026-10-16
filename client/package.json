@@ -4,14 +4,22 @@
   "description": "TypeScript client for the Hemlock Sentinel API (React Native / Expo / web / Node 18+)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
     "gen": "openapi-typescript ../docs/api/openapi.json -o src/schema.d.ts",
-    "test:live": "npm run build && node test/live.mjs"
+    "test:live": "npm run build && node test/live.mjs",
+    "build:web": "tsc -p tsconfig.web.json && node scripts/copy-ort.mjs",
+    "test:parity": "npm run build && node test/parity.mjs"
   },
   "devDependencies": {
+    "jpeg-js": "^0.4.4",
+    "onnxruntime-node": "^1.20.1",
+    "onnxruntime-web": "^1.20.1",
     "openapi-typescript": "7.4.4",
     "typescript": "5.6.3"
   },
