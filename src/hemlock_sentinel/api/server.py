@@ -58,9 +58,18 @@ from . import health as H
 from . import schemas as S
 from .accounts import Accounts, Forest, User
 
-ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_MODEL = ROOT / "models/production/hemlock.onnx"
-DEFAULT_CALIBRATION = ROOT / "models/production/calibration.json"
+def _find_production(name: str) -> Path:
+    """models/production/<name> next to the source checkout (pip install -e), else in the current
+    directory (pip install . run from the repo root), else /app (Docker)."""
+    rel = Path("models/production") / name
+    for base in (Path(__file__).resolve().parents[3], Path.cwd(), Path("/app")):
+        if (base / rel).exists():
+            return base / rel
+    return Path(__file__).resolve().parents[3] / rel
+
+
+DEFAULT_MODEL = _find_production("hemlock.onnx")
+DEFAULT_CALIBRATION = _find_production("calibration.json")
 STATIC = Path(__file__).parent / "static"
 MAX_IMAGE_BYTES = 25_000_000
 PREFIX = "/api/v1"
@@ -646,7 +655,10 @@ def main() -> None:
     ap.add_argument("--cors", default=os.environ.get("HEMLOCK_CORS", "*"), help="comma-separated origins")
     args = ap.parse_args()
     if not args.demo and not Path(args.model).exists():
-        raise SystemExit(f"model not found: {args.model} (use --demo to run without it)")
+        raise SystemExit(f"model not found: {args.model}\n"
+                         "Run from the repository root (the folder containing models/production/), or pass "
+                         "--model path/to/hemlock.onnx --calibration path/to/calibration.json, "
+                         "or use --demo to run without the model.")
     import uvicorn
 
     model = None if args.demo else args.model
