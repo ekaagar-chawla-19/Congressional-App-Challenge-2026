@@ -4,13 +4,15 @@ import Svg, { Circle, G, Path, Polyline, Rect, Text as SvgText } from 'react-nat
 import { Minus, Plus, Scan as Fit } from './icons';
 import { hotspotColor, LANDMARK_STYLE, pinColor, type MapProps } from './mapTypes';
 import { color, font, radius } from './theme';
+import { terrain, type Pt } from './terrain';
 import { Icon, T } from './ui';
 
 export type { MapProps } from './mapTypes';
 
-// Browser map (react-native-maps is native only): a drawn terrain map in metres around the forest,
-// with streams, ridges, trails, peaks with contour lines, a canopy of background trees, sections,
-// disease hotspots and the hemlocks. Drag to pan, buttons (or mouse wheel) to zoom.
+// Browser map (react-native-maps is native only): a drawn topographic map in metres around the
+// forest: illustrative contour lines (terrain.ts), a canopy of background trees, the streamside
+// hemlock/rhododendron band, streams, the road, trails, ridges, peaks and places, sections, disease
+// hotspots and the hemlocks (IDs shown when zoomed in). Drag to pan, buttons (or wheel) to zoom.
 const M = 111_320;
 
 export default function MapCanvas({ trees, landmarks, sections, showSections, hotspots, layer, selected, onSelect, onView }: MapProps) {
@@ -71,6 +73,20 @@ export default function MapCanvas({ trees, landmarks, sections, showSections, ho
     }));
   }, [ext.x0, ext.x1, ext.y0, ext.y1]);
 
+  // Contours from the landmarks, in metres (recomputed only when the forest changes).
+  const topo = useMemo(() => {
+    if (!landmarks.length) return null;
+    const m = (c: [number, number]): Pt => [(c[0] - lon0) * kx, (c[1] - lat0) * M];
+    const lines = (kind: string) => landmarks.filter((l) => l.properties.kind === kind && l.geometry.type === 'LineString')
+      .map((l) => (l.geometry.coordinates as [number, number][]).map(m));
+    const pk = landmarks.filter((l) => l.properties.kind === 'peak').map((l) => ({ at: m(l.geometry.coordinates as [number, number]), big: !!l.properties.name }));
+    return terrain(lines('stream'), pk, lines('ridge'), ext);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landmarks, lon0, lat0]);
+  const segPath = (segs: [number, number, number, number][]) =>
+    segs.map(([a, b, c, d]) => `M${sx(a).toFixed(1)},${sy(b).toFixed(1)}L${sx(c).toFixed(1)},${sy(d).toFixed(1)}`).join('');
+  const linesOf = (kind: string) => landmarks.map((l, i) => ({ l, i })).filter(({ l }) => l.properties.kind === kind && l.geometry.type === 'LineString');
+
   const line = (c: [number, number][]) => c.map(([lo, la]) => `${sx(X(lo))},${sy(Y(la))}`).join(' ');
   const box = ([w, so, e, n]: number[]) => ({ x: sx(X(w)), y: sy(Y(n)), width: (X(e) - X(w)) * s, height: (Y(n) - Y(so)) * s });
   const bar = [50, 100, 200, 500, 1000, 2000].find((m) => m * s > 70) ?? 2000;
@@ -86,26 +102,42 @@ export default function MapCanvas({ trees, landmarks, sections, showSections, ho
         <G>
           {canopy.map((c, i) => <Circle key={i} cx={sx(c.x)} cy={sy(c.y)} r={Math.max(1.5, c.r * s)} fill={c.c} />)}
         </G>
-        {peaks.map((p) => {
-          const [lo, la] = p.geometry.coordinates as [number, number];
-          return (
-            <G key={p.properties.name}>
-              {[520, 400, 290, 190, 100].map((rad, i) => (
-                <Path key={rad} fill={i === 4 ? '#D9C9A8' : 'none'} stroke="#9C8460" strokeOpacity={0.45} strokeWidth={1}
-                  d={blob(sx(X(lo)), sy(Y(la)), rad * s, rad * 0.75 * s, i)} />
-              ))}
-            </G>
-          );
-        })}
-        {landmarks.filter((l) => l.geometry.type === 'LineString').map((l) => {
+        {topo && (
+          <G>
+            <Path d={segPath(topo.minor)} stroke="#8C7B5B" strokeOpacity={0.28} strokeWidth={0.8} fill="none" />
+            <Path d={segPath(topo.index)} stroke="#7A6A4C" strokeOpacity={0.5} strokeWidth={1.4} fill="none" />
+          </G>
+        )}
+        {/* streamside band: where the hemlocks (and rhododendron) grow */}
+        {linesOf('stream').filter(({ l }) => l.properties.name).map(({ l, i }) => (
+          <Polyline key={`band${i}`} points={line(l.geometry.coordinates as [number, number][])} fill="none" stroke="#7FA672"
+            strokeOpacity={0.35} strokeWidth={Math.max(6, 70 * s)} strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {linesOf('road').map(({ l, i }) => (
+          <G key={`road${i}`}>
+            <Polyline points={line(l.geometry.coordinates as [number, number][])} fill="none" stroke="#9A8F7E" strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
+            <Polyline points={line(l.geometry.coordinates as [number, number][])} fill="none" stroke="#F4EFE2" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+          </G>
+        ))}
+        {landmarks.map((l, i) => ({ l, i })).filter(({ l }) => l.geometry.type === 'LineString' && l.properties.kind !== 'road').map(({ l, i }) => {
           const k = l.properties.kind as keyof typeof LANDMARK_STYLE;
           const style = LANDMARK_STYLE[k] ?? LANDMARK_STYLE.trail;
           const main = l.properties.name === 'Cooper Creek';
+          const minor = k === 'stream' && !l.properties.name;
           return (
-            <Polyline key={l.properties.name} points={line(l.geometry.coordinates as [number, number][])} fill="none"
-              stroke={style.color} strokeWidth={(main ? 1.6 : 1) * style.width * Math.min(2, Math.max(1, view.z / 1.5))}
+            <Polyline key={`ln${i}`} points={line(l.geometry.coordinates as [number, number][])} fill="none"
+              stroke={style.color} strokeOpacity={minor ? 0.75 : 1}
+              strokeWidth={(main ? 1.6 : minor ? 0.5 : 1) * style.width * Math.min(2, Math.max(1, view.z / 1.5))}
               strokeDasharray={k === 'trail' ? '6 4' : k === 'ridge' ? '2 3' : undefined} strokeLinecap="round" strokeLinejoin="round" />
           );
+        })}
+        {peaks.map((p, i) => {
+          const [lo, la] = p.geometry.coordinates as [number, number];
+          return <Path key={`pk${i}`} d={`M${sx(X(lo))},${sy(Y(la)) - 6}l5,9h-10z`} fill="#6B5A3E" />;
+        })}
+        {landmarks.filter((l) => l.properties.kind === 'place').map((l, i) => {
+          const [lo, la] = l.geometry.coordinates as [number, number];
+          return <Rect key={`pl${i}`} x={sx(X(lo)) - 4} y={sy(Y(la)) - 4} width={8} height={8} rx={2} fill="#4A3D33" stroke="#F3F1E8" strokeWidth={1.5} />;
         })}
         {showSections && sections.map((sec) => {
           const b = box(sec.bbox);
@@ -125,19 +157,20 @@ export default function MapCanvas({ trees, landmarks, sections, showSections, ho
             </G>
           );
         })}
-        {landmarks.map((l) => {
+        {landmarks.map((l, li) => ({ l, li })).filter(({ l }) => l.properties.name).map(({ l, li }) => {
           const [lo, la] = l.geometry.type === 'Point' ? l.geometry.coordinates
             : l.geometry.coordinates[Math.floor(l.geometry.coordinates.length * (l.properties.kind === 'stream' ? 0.35 : 0.5))];
           const peak = l.properties.kind === 'peak';
           const props = {
-            x: sx(X(lo)), y: sy(Y(la)) + (peak ? -8 : -6), textAnchor: 'middle' as const, fontSize: peak ? 12 : 10,
+            x: sx(X(lo)) + (l.properties.kind === 'place' ? 7 : 0), y: sy(Y(la)) + (peak ? -10 : l.properties.kind === 'place' ? 4 : -6),
+            textAnchor: l.properties.kind === 'place' ? ('start' as const) : ('middle' as const), fontSize: peak ? 12 : 10,
             fontWeight: peak ? '700' : '500', fontStyle: l.properties.kind === 'stream' ? ('italic' as const) : ('normal' as const),
           };
-          const text = `${peak ? '▲ ' : ''}${l.properties.name}`;
+          const text = l.properties.name;
           return (
-            <G key={`t${l.properties.name}`}>
+            <G key={`t${li}`}>
               <SvgText {...props} fill="#F3F1E8" stroke="#F3F1E8" strokeWidth={3}>{text}</SvgText>
-              <SvgText {...props} fill={l.properties.kind === 'stream' ? '#2F5F8A' : '#5B4630'}>{text}</SvgText>
+              <SvgText {...props} fill={l.properties.kind === 'stream' ? '#2F5F8A' : l.properties.kind === 'road' ? '#5C5548' : '#5B4630'}>{text}</SvgText>
             </G>
           );
         })}
@@ -154,6 +187,16 @@ export default function MapCanvas({ trees, landmarks, sections, showSections, ho
         );
       })}
 
+      {view.z >= 2.5 && trees.map((t) => (
+        <View key={`id${t.id}`} pointerEvents="none" style={[st.tag, { left: sx(X(t.lng!)) + 11, top: sy(Y(t.lat!)) - 8 }]}>
+          <T v="caption" c={color.ink} style={{ fontSize: 10, fontFamily: font.semibold }}>{t.id}</T>
+        </View>
+      ))}
+
+      <View style={st.north} pointerEvents="none">
+        <T v="label" c={color.ink} style={{ fontSize: 12 }}>N</T>
+        <View style={st.arrow} />
+      </View>
       <View style={st.controls}>
         <Pressable style={st.btn} onPress={() => zoom(1.5)} accessibilityLabel="Zoom in"><Icon as={Plus} /></Pressable>
         <Pressable style={st.btn} onPress={() => zoom(1 / 1.5)} accessibilityLabel="Zoom out"><Icon as={Minus} /></Pressable>
@@ -162,7 +205,7 @@ export default function MapCanvas({ trees, landmarks, sections, showSections, ho
       <View style={st.scale} pointerEvents="none">
         <View style={{ width: bar * s, height: 4, backgroundColor: color.ink, borderRadius: 2 }} />
         <T v="caption" c={color.ink} style={{ fontSize: 11, fontFamily: font.semibold }}>{bar >= 1000 ? `${bar / 1000} km` : `${bar} m`}</T>
-        <T v="caption" c={color.inkSoft} style={{ fontSize: 10 }}>Landmarks approximate</T>
+        <T v="caption" c={color.inkSoft} style={{ fontSize: 10 }}>Contours 20 m, illustrative · landmarks approximate</T>
       </View>
     </View>
   );
@@ -179,21 +222,13 @@ function lcg(seed: number, n: number) {
   return out;
 }
 
-// Slightly irregular closed contour around a peak.
-function blob(cx: number, cy: number, rx: number, ry: number, seed: number) {
-  const n = 18;
-  const p = Array.from({ length: n }, (_, i) => {
-    const a = (i / n) * Math.PI * 2;
-    const k = 1 + 0.08 * Math.sin(a * 3 + seed) + 0.05 * Math.cos(a * 5 + seed * 2);
-    return [cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k];
-  });
-  return `M${p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' L')} Z`;
-}
-
 const st = StyleSheet.create({
   field: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', backgroundColor: '#CFDDC2', cursor: 'grab' } as object,
   pin: { position: 'absolute', borderRadius: 999, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   controls: { position: 'absolute', right: 16, top: 120, gap: 8 },
+  tag: { position: 'absolute', paddingHorizontal: 3, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.85)' },
+  north: { position: 'absolute', left: 16, top: 120, width: 34, height: 44, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', gap: 1 },
+  arrow: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderBottomWidth: 12, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: color.ink },
   btn: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: color.card, borderWidth: 1, borderColor: color.line, alignItems: 'center', justifyContent: 'center' },
   scale: { position: 'absolute', left: 16, bottom: 200, gap: 3 },
 });

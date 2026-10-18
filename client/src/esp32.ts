@@ -28,7 +28,8 @@ const RANGES: Record<string, [number, number]> = {
 
 /** Firmware JSON -> sensors for the API. A failed or out-of-range sensor becomes null (N/A). */
 export function parseEsp32Reading(json: string): Esp32Reading {
-  const d = JSON.parse(json);
+  // BLE stacks can pad the value with NUL bytes; serial lines end in \r\n
+  const d = JSON.parse(json.replace(/\0+/g, "").trim());
   if (!d || d.v !== 1) throw new Error("not a Hemlock Sentinel ESP32 reading");
   const sensors: Record<string, number | null> = {};
   for (const [k, [lo, hi]] of Object.entries(RANGES)) {

@@ -71,7 +71,7 @@ export type Analysis = {
 };
 export type Landmark = {
   geometry: { type: 'Point'; coordinates: [number, number] } | { type: 'LineString'; coordinates: [number, number][] };
-  properties: { kind: 'stream' | 'ridge' | 'trail' | 'peak' | 'place'; name: string };
+  properties: { kind: 'stream' | 'ridge' | 'trail' | 'road' | 'peak' | 'place'; name: string }; // name '' = unnamed
 };
 
 export class ApiError extends Error {
@@ -179,6 +179,8 @@ export const assign = (observationId: string, treeId: string | 'new') =>
   request<{ tree_id: string; created_tree: boolean }>(`/observations/${observationId}/assign`, { json: { tree_id: treeId } });
 export const setSigns = (observationId: string, signs: string[]) =>
   request<Observation>(`/observations/${observationId}/signs`, { method: 'PUT', json: { signs } });
+export const setSensors = (observationId: string, sensors: Sensors) =>
+  request<Observation>(`/observations/${observationId}/sensors`, { method: 'PUT', json: sensors });
 export const setHealth = (observationId: string, severity: number, notes: string) =>
   request<Observation>(`/observations/${observationId}/health`, { method: 'PUT', json: { severity, notes: notes || null } });
 

@@ -28,9 +28,21 @@ export type Levels = Record<(typeof SIGNS)[number]['key'], number>;
 export const LEVELS = ['None', 'Light', 'Moderate', 'Severe'];
 
 // Visible woolly masses are the HWA signature, so moderate wool alone means infested.
-export const overall = (l: Levels): Status => {
+// What the observer saw besides the four graded signs (all optional).
+export type Checks = {
+  twigsChecked: boolean; // looked under several low branches (otherwise insects are "not assessed")
+  scale: boolean; // elongate hemlock scale covers under the needles
+  banding: boolean; // yellow bands on needle tops
+  browning: boolean; // browning / wilting in a dry spell
+  borers: boolean; // small exit holes in the bark
+  rootRot: boolean; // fungus fans / mushrooms at the base
+};
+export const NO_CHECKS: Checks = { twigsChecked: false, scale: false, banding: false, browning: false, borers: false, rootRot: false };
+
+export const overall = (l: Levels, c: Checks = NO_CHECKS): Status => {
   const worst = Math.max(...Object.values(l));
-  return l.wool >= 2 || worst >= 3 ? 'infested' : worst >= 1 ? 'watch' : 'healthy';
+  if (l.wool >= 2 || worst >= 3) return 'infested';
+  return worst >= 1 || c.scale || c.banding || c.browning || c.borers || c.rootRot ? 'watch' : 'healthy';
 };
 
 export const REVISIT_DAYS = 30;
@@ -105,9 +117,14 @@ const forestId = () => useSession.getState().forest?.id ?? -1;
 const ms = (iso: string | null) => (iso ? Date.parse(iso) : null);
 // Server severity 0-3 (observer rating) to the app's status.
 const statusOf = (sev: number | null): Status => (sev == null ? 'unrated' : sev === 0 ? 'healthy' : sev === 1 ? 'watch' : 'infested');
-const conditionLabel = (t: api.TreeSummary) =>
-  ({ hwa: 'Woolly adelgid', ehs: 'Elongate hemlock scale', drought_stress: 'Drought stress' } as Record<string, string>)[t.main_condition ?? ''] ??
-  (t.severity === 0 ? 'No problems found' : 'No condition confirmed');
+// The main condition with how sure the server is ("Woolly adelgid likely"), so a tree rated healthy
+// by the observer but with a possible pest reads as a lead to check, not a contradiction.
+const conditionLabel = (t: api.TreeSummary) => {
+  const name = ({ hwa: 'Woolly adelgid', ehs: 'Hemlock scale', drought_stress: 'Drought stress' } as Record<string, string>)[t.main_condition ?? ''];
+  const f = t.main_condition ? t.conditions?.[t.main_condition] : undefined;
+  if (name) return f && f.level !== 'likely' ? `${name} possible` : `${name} likely`;
+  return t.severity === 0 ? 'No problems found' : 'No condition confirmed';
+};
 
 export async function listForests(db: SQLiteDatabase): Promise<Forest[]> {
   if (isServer()) {
@@ -228,22 +245,34 @@ export async function deleteTree(db: SQLiteDatabase, id: string) {
 }
 
 // The four signs as the server's checklist, and the severity matching the status shown on the health screen.
-export function toServer(l: Levels) {
+// The checklist as the server's sign keys. Insects are only marked "checked, none found" when the
+// observer actually looked under the twigs; otherwise they stay "not assessed" on the server.
+export function toServer(l: Levels, c: Checks = NO_CHECKS) {
+  const twigs = c.twigsChecked
+    ? [...(l.wool ? ['hwa_wool'] : []), ...(c.scale ? ['ehs_scale'] : []), ...(!l.wool && !c.scale ? ['twigs_checked_clean'] : [])]
+    : [];
   const signs = [
-    l.wool ? 'hwa_wool' : 'twigs_checked_clean',
+    ...twigs,
+    ...(c.banding ? ['needle_yellow_banding'] : []),
     ...(l.needles || l.crown ? ['needle_loss'] : []),
     ...(l.crown ? ['gray_green_foliage'] : []),
     ...(l.dieback ? ['branch_dieback'] : []),
+    ...(c.browning ? ['drought_browning'] : []),
+    ...(c.borers ? ['borer_holes'] : []),
+    ...(c.rootRot ? ['root_rot_signs'] : []),
   ];
-  const st = overall(l);
+  const st = overall(l, c);
   return { signs, severity: st === 'healthy' ? 0 : st === 'watch' ? 1 : Math.max(2, ...Object.values(l)) };
 }
 
-// Server mode: the visit was stored when the photos were identified; add the health check to it.
-export async function saveServerVisit(observationId: string, levels: Levels, note: string) {
-  const { signs, severity } = toServer(levels);
+// Server mode: the visit was stored when the photos were identified; add the health check and any
+// ESP32 readings to it. The server then works out the likely causes (diseases.assess).
+export async function saveServerVisit(observationId: string, levels: Levels, note: string, c: Checks = NO_CHECKS,
+  sensors: api.Sensors | null = null) {
+  const { signs, severity } = toServer(levels, c);
   await api.setSigns(observationId, [...new Set(signs)]);
   await api.setHealth(observationId, severity, note.trim());
+  if (sensors && Object.values(sensors).some((v) => v != null)) await api.setSensors(observationId, sensors);
 }
 
 export async function exportCsv(db: SQLiteDatabase) {

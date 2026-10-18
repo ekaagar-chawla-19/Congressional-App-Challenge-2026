@@ -28,8 +28,8 @@ export default function Onboarding() {
         </T>
       </View>
       <View style={{ gap: space.md }}>
-        <Button title="Pair your unit" onPress={() => go('/pair')} />
-        <Button title="I'll do this later" secondary onPress={() => go('/')} />
+        <Button title="Get started" onPress={() => go('/')} />
+        <Button title="Pair a sensor unit first" secondary onPress={() => go('/pair')} />
       </View>
     </Screen>
   );

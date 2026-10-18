@@ -4,14 +4,15 @@ import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as api from '@/api';
-import { CONDITIONS, CONDITION_KEYS, likelihoodColor, type Layer } from '@/conditions';
+import { CONDITIONS, likelihoodColor, type Layer } from '@/conditions';
 import { ago, listTrees, useQuery } from '@/data';
 import MapCanvas from '@/MapCanvas';
 import { isServer, useSession } from '@/session';
 import { color, font, radius, space, status } from '@/theme';
 import { Badge, Dot, Empty, Icon, Screen, T } from '@/ui';
 
-const LAYERS: { key: Layer; label: string }[] = [{ key: 'health', label: 'Health' }, ...CONDITION_KEYS.map((k) => ({ key: k, label: CONDITIONS[k].short }))];
+// Short labels so all four layers fit across a phone screen.
+const LAYERS: { key: Layer; label: string }[] = [{ key: 'health', label: 'Health' }, { key: 'hwa', label: 'Adelgid' }, { key: 'ehs', label: 'Scale' }, { key: 'drought_stress', label: 'Drought' }];
 
 // Landmarks, sections and disease hotspots come from the server; the offline demo shows trees only.
 const extras = async () => {

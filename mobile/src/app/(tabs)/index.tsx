@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ago, dueForRevisit, listTrees, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
 import { shortName, useSession } from '@/session';
-import { color, font, radius, space, status, type Status } from '@/theme';
+import { color, radius, space, status, type Status } from '@/theme';
 import { Card, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, StatusIcon, T } from '@/ui';
 
 const today = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -14,6 +14,8 @@ export default function Home() {
   const pending = useQuery(pendingCount) ?? 0;
   const unit = useApp((s) => s.unit);
   const forest = useSession((s) => s.forest);
+  const user = useSession((s) => s.user);
+  const initials = (user?.name ?? '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const due = dueForRevisit(trees).slice(0, 2);
   const open = (id: string) => router.push(`/tree/${id}`);
   const stat = (label: string, n: number, key?: Status) => (
@@ -36,9 +38,11 @@ export default function Home() {
             <Icon as={ChevronDown} c={color.inkSoft} />
           </View>
         </Pressable>
-        <Pressable style={s.chip} onPress={() => router.push('/device')} accessibilityLabel={unit ? `Unit connected, battery ${unit.battery} percent` : 'No unit connected'}>
-          <Dot c={unit ? color.moss : color.lichen} />
-          <T v="caption" c={color.ink} style={{ fontFamily: font.medium }}>{unit ? `Unit  ${unit.battery}%` : 'No unit'}</T>
+        {/* Account, sensor unit and settings; the dot shows whether a unit is connected. */}
+        <Pressable style={s.avatar} onPress={() => router.push('/device')} accessibilityRole="button"
+          accessibilityLabel={`Account and settings${unit ? `, unit connected, battery ${unit.battery} percent` : ''}`}>
+          <T v="label" c={color.paper} style={{ fontSize: 15 }}>{initials}</T>
+          <View style={[s.unitDot, { backgroundColor: unit ? color.live : color.lichen }]} />
         </Pressable>
       </View>
 
@@ -106,8 +110,9 @@ export default function Home() {
 }
 
 const s = StyleSheet.create({
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: color.spruce, alignItems: 'center', justifyContent: 'center' },
+  unitDot: { position: 'absolute', right: 0, bottom: 0, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: color.paper },
   header: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   hero: { flexDirection: 'row', alignItems: 'center', gap: space.lg, padding: space.xl, borderRadius: radius.lg, backgroundColor: color.spruce },
   stats: { flexDirection: 'row', gap: space.md },
   quick: { flexDirection: 'row', gap: space.md },

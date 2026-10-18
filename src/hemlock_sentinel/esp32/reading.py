@@ -21,7 +21,9 @@ class BadReading(ValueError):
 def parse_reading(raw: bytes | str) -> dict:
     """Firmware JSON -> {"device", "sensors": {4 keys, None = sensor failed}, "raw": dict}."""
     try:
-        d = json.loads(raw.decode() if isinstance(raw, bytes | bytearray) else raw)
+        text = raw.decode() if isinstance(raw, bytes | bytearray) else raw
+        # BLE stacks can pad a characteristic value with NUL bytes; serial lines end in \r\n
+        d = json.loads(text.strip().strip("\x00").strip())
     except (ValueError, UnicodeDecodeError) as e:
         raise BadReading(f"not a sensor reading: {raw!r:.80}") from e
     if not isinstance(d, dict) or d.get("v") != 1:
@@ -30,9 +32,12 @@ def parse_reading(raw: bytes | str) -> dict:
     for k in SENSOR_KEYS:
         v = d.get(k)
         if v is not None:
-            v = float(v)
+            try:
+                v = float(v)
+            except (TypeError, ValueError):
+                v = None
             lo, hi = RANGES[k]
-            if not lo <= v <= hi:
+            if v is not None and not lo <= v <= hi:  # also rejects NaN
                 v = None  # a broken sensor reading: report N/A rather than nonsense
         sensors[k] = v
     return {"device": d.get("device"), "sensors": sensors, "raw": d}

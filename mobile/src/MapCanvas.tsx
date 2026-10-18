@@ -38,17 +38,24 @@ export default function MapCanvas({ trees, landmarks, sections, showSections, ho
     <View style={StyleSheet.absoluteFill}>
       <MapView ref={map} style={StyleSheet.absoluteFill} initialRegion={home} onRegionChangeComplete={changed} onMapReady={() => changed(home)}
         showsUserLocation mapType={satellite ? 'hybrid' : 'standard'}>
-        {landmarks.map((l) => {
+        {/* streamside band where the hemlocks grow, under the streams */}
+        {landmarks.map((l, i) => l.geometry.type === 'LineString' && l.properties.kind === 'stream' && l.properties.name ? (
+          <Polyline key={`band${i}`} coordinates={l.geometry.coordinates.map(([lo, la]) => ({ latitude: la, longitude: lo }))}
+            strokeColor="rgba(95,140,85,0.30)" strokeWidth={16} />
+        ) : null)}
+        {landmarks.map((l, i) => {
           if (l.geometry.type === 'LineString') {
             const st = LANDMARK_STYLE[l.properties.kind as keyof typeof LANDMARK_STYLE] ?? LANDMARK_STYLE.trail;
+            const minor = l.properties.kind === 'stream' && !l.properties.name;
             return (
-              <Polyline key={l.properties.name} coordinates={l.geometry.coordinates.map(([lo, la]) => ({ latitude: la, longitude: lo }))}
-                strokeColor={st.color} strokeWidth={st.width} lineDashPattern={l.properties.kind === 'trail' ? [6, 4] : undefined} />
+              <Polyline key={`ln${i}`} coordinates={l.geometry.coordinates.map(([lo, la]) => ({ latitude: la, longitude: lo }))}
+                strokeColor={st.color} strokeWidth={minor ? 1.5 : st.width} lineDashPattern={l.properties.kind === 'trail' ? [6, 4] : undefined} />
             );
           }
+          if (!l.properties.name) return null;
           const [lo, la] = l.geometry.coordinates;
           return (
-            <Marker key={l.properties.name} coordinate={{ latitude: la, longitude: lo }} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
+            <Marker key={`pt${i}`} coordinate={{ latitude: la, longitude: lo }} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
               <View style={s.label}>
                 <T v="caption" c={color.ink} style={{ fontSize: 11, fontFamily: font.semibold }}>{`${l.properties.kind === 'peak' ? '▲ ' : ''}${l.properties.name}`}</T>
               </View>

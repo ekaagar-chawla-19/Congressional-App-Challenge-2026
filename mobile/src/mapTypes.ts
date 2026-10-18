@@ -24,4 +24,5 @@ export const LANDMARK_STYLE = {
   stream: { color: '#3E7CB1', width: 3 },
   ridge: { color: '#8B6F4E', width: 2 },
   trail: { color: '#7A5C3E', width: 1.5 },
+  road: { color: '#9A8F7E', width: 3 },
 } as const;

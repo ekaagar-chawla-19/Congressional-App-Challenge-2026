@@ -54,6 +54,8 @@ export default function TreeDetail() {
         {latest && <Badge s={latest.status} />}
       </View>
 
+      {data.extras && <ServerHealth {...data.extras} only="causes" />}
+
       {shots.length > 0 && (
         <View style={s.row}>
           {shots.map((p) => (
@@ -89,7 +91,7 @@ export default function TreeDetail() {
         ))}
       </View>
 
-      {data.extras && <ServerHealth {...data.extras} />}
+      {data.extras && <ServerHealth {...data.extras} only="details" />}
 
       {latest?.note ? (
         <Card style={{ padding: space.lg, gap: space.xs }}>
@@ -108,7 +110,7 @@ export default function TreeDetail() {
 }
 
 // What the server worked out from the observer's checklist, the photos and the ESP32 sensor node.
-function ServerHealth({ conditions, sensors, history }: TreeExtras) {
+function ServerHealth({ conditions, sensors, history, only }: TreeExtras & { only: 'causes' | 'details' }) {
   const reading = (icon: LucideIcon, label: string, v: number | null | undefined, unit: string) => (
     <View key={label} style={s.reading}>
       <Icon as={icon} c={color.inkSoft} />
@@ -118,10 +120,9 @@ function ServerHealth({ conditions, sensors, history }: TreeExtras) {
       </View>
     </View>
   );
-  const shown = conditions.filter((c: Finding) => c.level !== 'unknown' || c.condition === 'hwa');
-  return (
-    <>
-      {shown.length > 0 && (
+  const shown = [...conditions].sort((a: Finding, b: Finding) => (a.level === 'unknown' ? 1 : 0) - (b.level === 'unknown' ? 1 : 0));
+  if (only === 'causes') {
+    return shown.length > 0 ? (
         <View style={{ gap: space.md }}>
           <T v="overline">Possible causes</T>
           <Card>
@@ -129,7 +130,7 @@ function ServerHealth({ conditions, sensors, history }: TreeExtras) {
               <Row
                 key={c.condition}
                 title={c.name}
-                sub={c.evidence[0]}
+                sub={c.evidence.slice(0, 2).join(' · ')}
                 right={
                   <View style={[s.level, { backgroundColor: LEVEL[c.level].tint }]}>
                     <T v="caption" c={LEVEL[c.level].text} style={{ fontFamily: font.semibold }}>{LEVEL[c.level].label}</T>
@@ -140,7 +141,10 @@ function ServerHealth({ conditions, sensors, history }: TreeExtras) {
             ))}
           </Card>
         </View>
-      )}
+    ) : null;
+  }
+  return (
+    <>
       {history.length >= 2 && (
         <Card style={{ padding: space.lg, gap: space.md }}>
           <T v="label">Disease trend by visit</T>

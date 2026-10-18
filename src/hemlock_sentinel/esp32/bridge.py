@@ -24,7 +24,7 @@ from pathlib import Path
 from .api_client import ApiCallError, ApiClient
 from .reading import COMMAND_UUID, NAME_PREFIX, READING_UUID, SERVICE_UUID, BadReading, parse_reading
 
-MEASURE_WAIT_S = 3.0  # the DHT11 may need a ~2 s retry
+MEASURE_WAIT_S = 6.0  # longest wait for a fresh reading (the DHT11 may need a ~2 s retry)
 
 
 # ------------------------------------------------------------------ USB serial
@@ -82,9 +82,33 @@ async def read_ble(address: str | None = None, timeout: float = 10.0) -> dict:
             raise TimeoutError("no Hemlock Sentinel ESP32 found nearby (powered on? within ~10 m?)")
         address = nodes[0][0]  # strongest signal = nearest
     async with bleak.BleakClient(address, timeout=timeout) as client:
+        # The node notifies when the new reading is ready; reading at a fixed delay could return the
+        # previous one. Without a notification in time, read the characteristic as a fallback.
+        fresh: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        def on_notify(_char, data: bytearray) -> None:
+            if not fresh.done():
+                try:
+                    fresh.set_result(parse_reading(bytes(data)))
+                except BadReading:
+                    pass  # e.g. truncated by a small MTU; the read below gets the whole value
+
+        try:
+            await client.start_notify(READING_UUID, on_notify)
+            subscribed = True
+        except Exception:  # noqa: BLE001  (some stacks refuse notify; reading still works)
+            subscribed = False
         await client.write_gatt_char(COMMAND_UUID, b"r", response=False)
-        await asyncio.sleep(MEASURE_WAIT_S)
-        return parse_reading(bytes(await client.read_gatt_char(READING_UUID)))
+        try:
+            return await asyncio.wait_for(fresh, MEASURE_WAIT_S)
+        except asyncio.TimeoutError:
+            return parse_reading(bytes(await client.read_gatt_char(READING_UUID)))
+        finally:
+            if subscribed:
+                try:
+                    await client.stop_notify(READING_UUID)
+                except Exception:  # noqa: BLE001
+                    pass
 
 
 def read_node(args) -> dict:

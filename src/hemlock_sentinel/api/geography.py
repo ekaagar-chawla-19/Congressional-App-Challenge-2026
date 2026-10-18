@@ -16,7 +16,8 @@ import math
 import random
 
 # name -> (centre lat, centre lon, features)
-# feature: (kind, name, [(east_m, north_m), ...])  kinds: stream, ridge, trail, peak, place
+# feature: (kind, name, [(east_m, north_m), ...])  kinds: stream, ridge, trail, road, peak, place
+# (an empty name = an unnamed small stream or knob: drawn, not labelled)
 GEOGRAPHY: dict[str, tuple[float, float, list[tuple[str, str, list[tuple[float, float]]]]]] = {
     "Cooper Creek Scenic Area, Chattahoochee NF (demo)": (34.7637, -84.0681, [
         ("stream", "Cooper Creek", [(1500, 420), (1200, 330), (950, 380), (700, 260), (450, 300), (250, 150),
@@ -30,6 +31,17 @@ GEOGRAPHY: dict[str, tuple[float, float, list[tuple[str, str, list[tuple[float, 
         ("trail", "Yellow Mountain Trail", [(-150, 40), (-320, 360), (-560, 660), (-800, 960), (-950, 1150)]),
         ("trail", "Mill Shoals Trail", [(100, 80), (320, -300), (520, -650), (680, -1000), (780, -1450)]),
         ("place", "Cooper Creek Campground", [(-60, 90)]),
+        # finer detail: small unnamed side streams, the road in, a shoals, a trailhead, a second knob
+        ("stream", "", [(-300, 700), (-330, 420), (-280, 180), (-250, -30)]),
+        ("stream", "", [(-1150, 450), (-1080, 200), (-1020, 30), (-1000, -150)]),
+        ("stream", "", [(800, -900), (760, -560), (720, -250), (700, 260)]),
+        ("stream", "", [(1350, 1000), (1280, 720), (1220, 480), (1200, 330)]),
+        ("stream", "", [(-1400, -900), (-1330, -620), (-1280, -290)]),
+        ("road", "Cooper Creek Rd", [(1600, 640), (1250, 560), (900, 600), (600, 470), (300, 360), (40, 240),
+                                     (-60, 130), (-320, 190), (-700, 160), (-1100, 60), (-1600, -60)]),
+        ("place", "Mill Shoals", [(380, 250)]),
+        ("place", "Trailhead parking", [(140, 160)]),
+        ("peak", "", [(1050, 1200)]),
     ]),
 }
 
@@ -80,7 +92,7 @@ def point_near_stream(forest_name: str, rng: random.Random, spread_m: float = 22
     """Random point beside one of the forest's streams (longer streams more likely).
     Returns (east_m, north_m, stream name, position along that stream 0-1)."""
     _, _, features = GEOGRAPHY[forest_name]
-    streams = [(name, pts) for kind, name, pts in features if kind == "stream"]
+    streams = [(name, pts) for kind, name, pts in features if kind == "stream" and name]
     lengths = [sum(math.dist(a, b) for a, b in zip(p, p[1:])) for _, p in streams]
     name, pts = rng.choices(streams, weights=lengths)[0]
     total = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))

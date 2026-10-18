@@ -253,8 +253,9 @@ export default function Scan() {
           </View>
           <View style={s.controls}>
             <View style={{ flex: 1, alignItems: 'flex-start' }}>
-              <Pressable style={s.round} onPress={library} disabled={busy || ok >= MAX} accessibilityLabel="Choose photos from library">
-                <Icon as={Images} c={color.paper} />
+              <Pressable style={s.labelled} onPress={library} disabled={busy || ok >= MAX} accessibilityLabel="Choose photos from library">
+                <View style={s.round}><Icon as={Images} c={color.paper} /></View>
+                <T v="caption" c={color.nightText} style={{ fontSize: 11 }}>Library</T>
               </Pressable>
             </View>
             <Pressable style={s.shutter} onPress={shoot} disabled={busy || ok >= MAX || !permission.granted} accessibilityLabel="Take photo">
@@ -288,6 +289,7 @@ const CORNERS = [
 const s = StyleSheet.create({
   top: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   round: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: color.nightCard, alignItems: 'center', justifyContent: 'center' },
+  labelled: { alignItems: 'center', gap: 4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: color.nightCard },
   viewport: { flex: 1, borderRadius: 24, overflow: 'hidden', backgroundColor: color.bark, alignItems: 'center', justifyContent: 'center' },
   frame: { width: 220, height: 220, marginBottom: 90 },
