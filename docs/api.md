@@ -121,7 +121,7 @@ use the phone's native ONNX Runtime and is faster. Not yet measured on a real ph
 **Option A: Python** (Python 3.10+)
 
 ```bash
-git clone -b backend/api https://github.com/ekaagar-chawla-19/Congressional-App-Challenge-2026
+git clone https://github.com/ekaagar-chawla-19/Congressional-App-Challenge-2026
 cd Congressional-App-Challenge-2026
 python -m pip install -e ".[onnx,app]"
 hemlock-api            # → http://localhost:8000/map  (sign in: demo@hemlock.test / hemlock-demo)
@@ -136,7 +136,7 @@ docker run -p 8000:8000 -v hemlock-data:/data hemlock-api
 ```
 
 On first start a **demo account** is created (`demo@hemlock.test` / `hemlock-demo`,
-skip with `--no-demo-account`) with two North Georgia demo forests full of
+skip with `--no-demo-account`) with two North Georgia demo forests (Cloudland Canyon, and Cooper Creek in the Chattahoochee NF) full of
 **placeholder** hemlocks (positions, visit dates and severity ratings, no photos)
 so the account overview and map have something to show. Photos you capture
 while signed in as the demo user are real and stored normally.
