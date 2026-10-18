@@ -24,6 +24,7 @@ export const status = {
   healthy: { label: 'Healthy', dot: '#5E7D5A', tint: '#E3E9E1', text: '#3F5A3C' },
   watch: { label: 'Watch', dot: '#C08A2E', tint: '#F3E7CF', text: '#7A5414' },
   infested: { label: 'Infested', dot: '#A3442F', tint: '#F4DED7', text: '#8A3524' },
+  unrated: { label: 'Not rated', dot: '#8A938C', tint: '#EAE5DB', text: '#5C655F' }, // server visits with no health check
 } as const;
 export type Status = keyof typeof status;
 

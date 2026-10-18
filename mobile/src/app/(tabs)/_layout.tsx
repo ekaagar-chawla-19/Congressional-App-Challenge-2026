@@ -1,6 +1,7 @@
 import { Redirect, router, Tabs } from 'expo-router';
-import Storage from 'expo-sqlite/kv-store';
+import Storage from '@/kv';
 import { Cpu, House, MapIcon, ScanLine, TreePine, type LucideIcon } from '@/icons';
+import { useSession } from '@/session';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { color, font, radius, space } from '@/theme';
@@ -14,7 +15,10 @@ const TABS: Record<string, [string, LucideIcon]> = {
 };
 
 export default function TabsLayout() {
+  const { user, forest } = useSession();
   if (!Storage.getItemSync('onboarded')) return <Redirect href="/onboarding" />;
+  if (!user) return <Redirect href="/login" />;
+  if (!forest) return <Redirect href="/forests" />;
   return (
     <Tabs screenOptions={{ headerShown: false }} tabBar={(p) => <TabBar {...p} />}>
       {Object.keys(TABS).map((name) => <Tabs.Screen key={name} name={name} />)}

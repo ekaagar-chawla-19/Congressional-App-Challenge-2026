@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
-import Storage from 'expo-sqlite/kv-store';
+import Storage from '@/kv';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
-import { BatteryMedium, CloudUpload, Cpu, Download, HardDrive, Info, RefreshCw, Wifi, type LucideIcon } from '@/icons';
+import { BatteryMedium, CloudUpload, Cpu, Download, HardDrive, Info, LogOut, RefreshCw, Server, Trees, Wifi, type LucideIcon } from '@/icons';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { logout } from '@/api';
 import { exportCsv, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
+import { shortName, useSession } from '@/session';
 import { color, radius, space, status } from '@/theme';
 import { Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, T } from '@/ui';
 
@@ -15,6 +17,12 @@ export default function Device() {
   const unit = useApp((s) => s.unit);
   const pending = useQuery(pendingCount) ?? 0;
   const [sync, setSync] = useState(() => Storage.getItemSync('sync') === 'on');
+  const { user, mode, server, forest } = useSession();
+  const signOut = () => {
+    if (mode === 'server') logout().catch(() => {});
+    useSession.getState().signOut();
+    router.replace('/login');
+  };
 
   const toggleSync = (on: boolean) => {
     Storage.setItemSync('sync', on ? 'on' : 'off');
@@ -22,7 +30,12 @@ export default function Device() {
   };
   const share = async () => {
     try {
-      await Sharing.shareAsync(await exportCsv(db), { mimeType: 'text/csv', dialogTitle: 'Export scans' });
+      const uri = await exportCsv(db);
+      if (Platform.OS === 'web') {
+        const [href, name] = uri.split('#');
+        return Object.assign(document.createElement('a'), { href, download: name }).click();
+      }
+      await Sharing.shareAsync(uri, { mimeType: 'text/csv', dialogTitle: 'Export scans' });
     } catch (e) {
       Alert.alert('Export failed', String(e));
     }
@@ -74,9 +87,18 @@ export default function Device() {
       )}
 
       <View style={{ gap: space.md }}>
+        <T v="overline">Account</T>
+        <Card>
+          <Row left={<IconBox icon={mode === 'server' ? Server : Cpu} />} title={user?.name ?? ''} sub={mode === 'server' ? `${user?.email} · ${server.replace(/^https?:\/\//, '')}` : `${user?.email} · offline demo`} />
+          <Row left={<IconBox icon={Trees} />} title="Forest" sub={shortName(forest?.name ?? '')} onPress={() => router.push('/forests')} />
+          <Row left={<IconBox icon={LogOut} />} title="Sign out" onPress={signOut} last />
+        </Card>
+      </View>
+
+      <View style={{ gap: space.md }}>
         <T v="overline">Settings</T>
         <Card>
-          <Row left={<IconBox icon={CloudUpload} />} title="Sync when online" sub={pending ? `${pending} waiting` : 'All scans synced'} right={<Switch value={sync} onValueChange={toggleSync} trackColor={{ true: color.spruce, false: color.line }} thumbColor={color.card} />} />
+          {mode === 'local' && <Row left={<IconBox icon={CloudUpload} />} title="Sync when online" sub={pending ? `${pending} waiting` : 'All scans synced'} right={<Switch value={sync} onValueChange={toggleSync} trackColor={{ true: color.spruce, false: color.line }} thumbColor={color.card} />} />}
           <Row left={<IconBox icon={Download} />} title="Export data" sub="CSV for forestry teams" onPress={share} />
           <Row left={<IconBox icon={Info} />} title="About HemlockID" sub="How it works and your privacy" onPress={() => router.push('/about')} last />
         </Card>

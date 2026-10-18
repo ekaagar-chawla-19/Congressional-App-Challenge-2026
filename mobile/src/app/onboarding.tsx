@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import Storage from 'expo-sqlite/kv-store';
+import Storage from '@/kv';
 import { TreePine } from '@/icons';
 import { StyleSheet, View } from 'react-native';
 import { color, radius, space } from '@/theme';

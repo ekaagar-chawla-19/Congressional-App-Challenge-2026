@@ -1,4 +1,4 @@
-import Storage from 'expo-sqlite/kv-store';
+import Storage from './kv';
 import { create } from 'zustand';
 
 export type Unit = { id: string; name: string; signal: 'Strong' | 'Weak' };
@@ -36,9 +36,12 @@ type App = {
   connect(id: string): Promise<void>;
   disconnect(): Promise<void>;
   // The scan in progress: photos taken, then the tree they were matched to (null = new tree).
+  // Signed in, the server has already stored the visit (observationId) and created any new tree (isNew).
   photos: string[];
   treeId: string | null;
-  setScan(s: Partial<Pick<App, 'photos' | 'treeId'>>): void;
+  observationId: string | null;
+  isNew: boolean;
+  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew'>>): void;
 };
 
 export const useApp = create<App>((set) => ({
@@ -60,6 +63,8 @@ export const useApp = create<App>((set) => ({
   },
   photos: [],
   treeId: null,
+  observationId: null,
+  isNew: false,
   setScan: (s) => set(s),
 }));
 

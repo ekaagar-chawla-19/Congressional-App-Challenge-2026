@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TextInput, View } from 'react-native';
-import { LEVELS, overall, saveScan, SIGNS, type Levels } from '@/data';
+import { LEVELS, overall, saveScan, saveServerVisit, SIGNS, type Levels } from '@/data';
 import { useApp } from '@/device';
 import { color, font, radius, space, status } from '@/theme';
 import { BackBar, Button, Dot, Screen, Segmented, T } from '@/ui';
@@ -12,7 +12,7 @@ const OPTIONS = LEVELS.map((label, value) => ({ label, value }));
 
 export default function Health() {
   const db = useSQLiteContext();
-  const { photos, treeId } = useApp();
+  const { photos, treeId, observationId, isNew } = useApp();
   const [levels, setLevels] = useState<Levels>({ wool: 0, needles: 0, crown: 0, dieback: 0 });
   const [note, setNote] = useState('');
   const [place, setPlace] = useState('');
@@ -33,8 +33,11 @@ export default function Health() {
   const save = async () => {
     setSaving(true);
     try {
-      const id = await saveScan(db, { treeId: treeId ?? undefined, place, coords, photos, levels, note });
-      useApp.getState().setScan({ photos: [], treeId: null });
+      // Signed in, the visit already exists on the server (stored with the photos); add the health check.
+      const id = observationId && treeId
+        ? (await saveServerVisit(observationId, levels, note), treeId)
+        : await saveScan(db, { treeId: treeId ?? undefined, place, coords, photos, levels, note });
+      useApp.getState().setScan({ photos: [], treeId: null, observationId: null, isNew: false });
       router.dismissAll();
       router.push(`/tree/${id}`);
     } catch (e) {
@@ -45,7 +48,7 @@ export default function Health() {
 
   return (
     <Screen scroll>
-      <BackBar title={`${treeId ?? 'New tree'} · step 2 of 2`} />
+      <BackBar title={`${isNew ? `New tree ${treeId ?? ''}`.trim() : treeId} · step 2 of 2`} />
       <View style={{ gap: space.sm }}>
         <T v="display">How does it look?</T>
         <T c={color.inkSoft}>Check the undersides of a few low branches.</T>

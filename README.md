@@ -101,6 +101,19 @@ light over Bluetooth LE (`hemlock-esp32` on a laptop). Typed
 TypeScript client in `client/`, `Dockerfile` included. The model runs on the computer (server) **or on the
 phone**, offline, with identical decisions (`client/src/ondevice.ts`). Guide: [`docs/api.md`](docs/api.md).
 
+## The phone app (HemlockID, `mobile/`)
+
+The Expo / React Native app: sign in, pick a forest, scan a hemlock's bark, see whether it is a
+tree you already track, record its health, and browse each forest's trees and map. Signed in, the
+backend above runs the model and stores everything; the offline demo works without it.
+
+```bash
+hemlock-api                         # terminal 1: backend on port 8000
+cd mobile && npm ci && npx expo start   # terminal 2: scan the QR code with Expo Go, or press w for the browser
+```
+
+Sign in with `demo@hemlock.test` / `hemlock-demo`. Details: [`mobile/README.md`](mobile/README.md).
+
 ## Try the app (demo mode, no trained model)
 
 ```bash

@@ -37,6 +37,12 @@
         {
           "locationWhenInUsePermission": "HemlockID saves where each tree is so you can find it again."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HemlockID lets you pick bark photos you already took."
+        }
       ]
     ],
     "experiments": {

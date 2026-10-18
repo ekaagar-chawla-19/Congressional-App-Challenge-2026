@@ -1,59 +1,145 @@
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { Check, Plus } from '@/icons';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Camera, Check, Plus, TriangleAlert } from '@/icons';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import * as api from '@/api';
 import { fmtDate, listTrees } from '@/data';
 import { useApp } from '@/device';
-import { identify, MATCH_THRESHOLD, type Match } from '@/identify';
+import { identify, MATCH_THRESHOLD, type Identification } from '@/identify';
+import { isServer } from '@/session';
 import { color, font, radius, space, status } from '@/theme';
-import { BackBar, Button, Card, Dot, Photo, Row, Screen, T } from '@/ui';
+import { BackBar, Button, Card, Dot, Empty, Photo, Row, Screen, T } from '@/ui';
 
 const strength = (x: number) => (x >= 0.85 ? 'Very likely' : x >= 0.7 ? 'Likely' : 'Possible');
+const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export default function Result() {
   const db = useSQLiteContext();
-  const photos = useApp((s) => s.photos);
-  const [matches, setMatches] = useState<Match[]>();
+  // Taken once: this screen identifies the photos it was opened with, even if a later scan changes them.
+  const [photos] = useState(() => useApp.getState().photos);
+  const [res, setRes] = useState<Identification>();
+  const [error, setError] = useState<string>();
   const [pick, setPick] = useState(0);
   const [browsing, setBrowsing] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    listTrees(db).then((trees) => identify(photos, trees)).then(setMatches);
-  }, [db, photos]);
+  const run = useCallback(
+    () => listTrees(db).then((trees) => identify(photos, trees)).then(setRes, (e: Error) => setError(e.message)),
+    [db, photos],
+  );
+  useEffect(() => void run(), [run]);
+  const retry = () => (setError(undefined), run());
 
-  if (!matches) {
+  if (error) {
+    return (
+      <Screen>
+        <BackBar title="Scan result" />
+        <View style={s.center}>
+          <Empty icon={TriangleAlert} title="Could not identify" body={error} />
+        </View>
+        <Button title="Try again" onPress={retry} />
+        <Button title="Back to photos" secondary onPress={() => router.replace('/scan')} />
+      </Screen>
+    );
+  }
+
+  if (!res) {
     return (
       <Screen>
         <View style={s.center}>
           <ActivityIndicator size="large" color={color.spruce} />
           <T v="title">Identifying</T>
-          <T v="caption">Comparing bark with your trees</T>
+          <T v="caption">{isServer() ? 'Checking the species, then comparing bark with every tree in this forest' : 'Comparing bark with your trees'}</T>
         </View>
       </Screen>
     );
   }
 
+  const srv = res.server;
+  // Blurry photos, or not a hemlock: nothing to match, ask for new photos.
+  if (srv && (srv.status === 'recapture' || srv.status === 'rejected_species' || srv.status === 'unsupported_species')) {
+    const notHemlock = srv.status !== 'recapture';
+    return (
+      <Screen>
+        <BackBar title="Scan result" />
+        <View style={{ gap: space.sm }}>
+          <View style={[s.badge, { backgroundColor: status.watch.tint }]}>
+            <Dot c={status.watch.dot} />
+            <T v="caption" c={status.watch.text} style={{ fontFamily: font.semibold }}>{notHemlock ? 'Not a hemlock' : 'Photos not clear enough'}</T>
+          </View>
+          <T v="display">{notHemlock ? "This doesn't look like an Eastern hemlock" : 'Let’s retake those'}</T>
+          <T c={color.inkSoft}>
+            {notHemlock
+              ? `The species check could not confirm Eastern hemlock${srv.species ? ` (${pct(srv.species.confidence)} confidence)` : ''}. Retake with bark filling the frame, or try another tree.`
+              : srv.message}
+          </T>
+        </View>
+        <Photo uri={photos[0]} height={220} />
+        <View style={{ flex: 1 }} />
+        <Button title="Retake photos" icon={Camera} onPress={() => router.replace('/scan')} />
+        <Button title="Back home" secondary onPress={() => router.dismissAll()} />
+      </Screen>
+    );
+  }
+
+  // The server's pick goes first, even if the candidate list is ordered differently.
+  const matches = [...res.matches];
+  if (srv?.status === 'existing' && srv.tree_id) {
+    const i = matches.findIndex((m) => m.tree.id === srv.tree_id);
+    if (i > 0) matches.unshift(...matches.splice(i, 1));
+  }
+  const uncertain = srv?.status === 'uncertain';
   const chosen = matches[pick];
-  // A hand-picked alternative counts as a match; the top result must clear the threshold.
-  const isMatch = !!chosen && (pick > 0 || chosen.score >= MATCH_THRESHOLD);
-  const next = (treeId: string | null) => {
-    useApp.getState().setScan({ treeId });
+  // A hand-picked alternative counts as a match. Otherwise the server decides (an uncertain result is shown
+  // as a best guess with its confidence), or offline, the top result must clear the threshold.
+  const isMatch = !!chosen && (pick > 0 || (srv ? srv.status === 'existing' || uncertain : chosen.score >= MATCH_THRESHOLD));
+  const guess = uncertain && pick === 0;
+
+  const next = async (treeId: string | null) => {
+    let id = treeId;
+    const oid = srv?.observation_id ?? null;
+    if (srv && oid) {
+      const already = (srv.status === 'existing' && treeId === srv.tree_id) || (srv.status === 'new' && treeId === null);
+      if (already) id = srv.tree_id;
+      else {
+        setBusy(true);
+        try {
+          id = (await api.assign(oid, treeId ?? 'new')).tree_id;
+        } catch (e) {
+          setBusy(false);
+          return Alert.alert('Could not save', (e as Error).message);
+        }
+      }
+    }
+    useApp.getState().setScan({ treeId: id, observationId: oid, isNew: treeId === null });
     router.push('/health');
   };
-  const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+  const badge = guess
+    ? { ...status.watch, label: 'Best guess' }
+    : isMatch
+      ? { ...status.healthy, label: 'Match found' }
+      : { label: 'No close match', tint: color.well, dot: color.inkSoft, text: color.ink };
 
   return (
     <Screen scroll>
       <BackBar title="Scan result" />
 
       <View style={{ gap: space.sm }}>
-        <View style={[s.badge, { backgroundColor: isMatch ? status.healthy.tint : color.well }]}>
-          <Dot c={isMatch ? status.healthy.dot : color.inkSoft} />
-          <T v="caption" c={isMatch ? status.healthy.text : color.ink} style={{ fontFamily: font.semibold }}>{isMatch ? 'Match found' : 'No close match'}</T>
+        <View style={[s.badge, { backgroundColor: badge.tint }]}>
+          <Dot c={badge.dot} />
+          <T v="caption" c={badge.text} style={{ fontFamily: font.semibold }}>{badge.label}</T>
         </View>
         <T v="hero" style={{ fontSize: 56, lineHeight: 60 }}>{isMatch ? chosen.tree.id : 'New tree'}</T>
-        <T c={color.inkSoft}>{isMatch ? `${chosen.tree.place} · registered ${fmtDate(chosen.tree.created_at)}` : 'None of your trees looks like this one. Register it to start its history.'}</T>
+        <T c={color.inkSoft}>
+          {guess
+            ? `Not certain. This is the closest tree, ${pct(chosen.score)} confident. Confirm it if it looks right, or register a new tree.`
+            : isMatch
+              ? `${chosen.tree.place} · registered ${fmtDate(chosen.tree.created_at)}`
+              : 'None of your trees looks like this one. Register it to start its history.'}
+        </T>
+        {srv?.species && <T v="caption">{`Eastern hemlock · species check ${pct(srv.species.confidence)}`}</T>}
       </View>
 
       {isMatch && (
@@ -63,7 +149,7 @@ export default function Result() {
             <T v="label" c={color.spruce} style={{ fontSize: 14 }}>{`${strength(chosen.score)} · ${pct(chosen.score)}`}</T>
           </View>
           <View style={s.track} accessibilityLabel={`Match strength ${pct(chosen.score)}`}>
-            <View style={[s.fill, { width: pct(chosen.score) as `${number}%` }]} />
+            <View style={[s.fill, { width: pct(chosen.score) as `${number}%`, backgroundColor: guess ? status.watch.dot : color.spruce }]} />
           </View>
         </View>
       )}
@@ -90,7 +176,7 @@ export default function Result() {
       )}
 
       <View style={{ gap: space.md }}>
-        {isMatch ? <Button title={`Yes, this is ${chosen.tree.id}`} icon={Check} onPress={() => next(chosen.tree.id)} /> : <Button title="Register new tree" icon={Plus} onPress={() => next(null)} />}
+        {isMatch ? <Button title={`Yes, this is ${chosen.tree.id}`} icon={Check} onPress={() => next(chosen.tree.id)} disabled={busy} /> : <Button title="Register new tree" icon={Plus} onPress={() => next(null)} disabled={busy} />}
         <View style={s.split}>
           {matches.length > 0 && (
             <View style={{ flex: 1 }}>
@@ -99,7 +185,7 @@ export default function Result() {
           )}
           {isMatch && (
             <View style={{ flex: 1 }}>
-              <Button title="New tree" icon={Plus} secondary onPress={() => next(null)} />
+              <Button title="New tree" icon={Plus} secondary onPress={() => next(null)} disabled={busy} />
             </View>
           )}
         </View>
@@ -113,7 +199,7 @@ const s = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 28, paddingHorizontal: space.md, borderRadius: radius.pill, alignSelf: 'flex-start' },
   between: { flexDirection: 'row', justifyContent: 'space-between' },
   track: { height: 8, borderRadius: radius.pill, backgroundColor: color.line, overflow: 'hidden' },
-  fill: { height: 8, borderRadius: radius.pill, backgroundColor: color.spruce },
+  fill: { height: 8, borderRadius: radius.pill },
   pair: { flexDirection: 'row', gap: space.md },
   fig: { flex: 1, gap: space.sm },
   split: { flexDirection: 'row', gap: space.md },

@@ -1,9 +1,10 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, X, Zap } from '@/icons';
+import { Camera, Images, X, Zap } from '@/icons';
 import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useApp } from '@/device';
 import { color, font, radius, space } from '@/theme';
 import { Button, Dot, Empty, Icon, Screen, T } from '@/ui';
@@ -19,14 +20,25 @@ export default function Scan() {
   const [torch, setTorch] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Bark photos already on the phone (handy for demos, or when the camera is not available).
+  const library = async () => {
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: MAX - photos.length, quality: 0.8 });
+    if (!r.canceled) setPhotos((p) => [...p, ...r.assets.map((a) => a.uri)].slice(0, MAX));
+  };
+  const identify = (shots = photos) => {
+    useApp.getState().setScan({ photos: shots, treeId: null, observationId: null, isNew: false });
+    router.replace('/result');
+  };
+
   if (!permission) return null;
-  if (!permission.granted) {
+  if (!permission.granted && photos.length === 0) {
     return (
       <Screen>
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Empty icon={Camera} title="Camera access needed" body="HemlockID photographs bark to recognise each tree. Photos stay on this phone." />
         </View>
         <Button title="Allow camera" onPress={request} />
+        <Button title="Choose bark photos" icon={Images} secondary onPress={library} />
         <Button title="Not now" secondary onPress={() => router.back()} />
       </Screen>
     );
@@ -41,10 +53,6 @@ export default function Scan() {
     } finally {
       setBusy(false);
     }
-  };
-  const identify = () => {
-    useApp.getState().setScan({ photos, treeId: null });
-    router.replace('/result');
   };
   const n = photos.length;
 
@@ -65,7 +73,11 @@ export default function Scan() {
       </View>
 
       <View style={s.viewport}>
-        <CameraView ref={camera} style={StyleSheet.absoluteFill} facing="back" enableTorch={torch} />
+        {permission.granted ? (
+          <CameraView ref={camera} style={StyleSheet.absoluteFill} facing="back" enableTorch={torch} />
+        ) : n > 0 ? (
+          <Image source={{ uri: photos[n - 1] }} style={StyleSheet.absoluteFill} />
+        ) : null}
         <View style={s.frame} pointerEvents="none">
           {CORNERS.map((c, i) => <View key={i} style={[s.corner, c]} />)}
         </View>
@@ -83,13 +95,17 @@ export default function Scan() {
       </View>
 
       <View style={s.controls}>
-        <T v="label" c={color.nightText} onPress={() => router.back()} style={{ fontFamily: font.medium, flex: 1 }}>Cancel</T>
+        <View style={{ flex: 1, alignItems: 'flex-start' }}>
+          <Pressable style={s.round} onPress={library} disabled={n >= MAX} accessibilityLabel="Choose photos from library">
+            <Icon as={Images} c={color.paper} />
+          </Pressable>
+        </View>
         <Pressable style={s.shutter} onPress={shoot} disabled={busy || n >= MAX} accessibilityLabel="Take photo">
           <View style={[s.shutterCore, (busy || n >= MAX) && { opacity: 0.4 }]} />
         </Pressable>
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           {n >= MIN ? (
-            <Pressable style={s.go} onPress={identify}>
+            <Pressable style={s.go} onPress={() => identify()}>
               <T v="label" c={color.spruce}>Identify</T>
             </Pressable>
           ) : (

@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
-import { Check, ChevronLeft, ChevronRight, Clock, TriangleAlert, type LucideIcon } from './icons';
-import type { PropsWithChildren, ReactNode } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
+import { Check, ChevronLeft, ChevronRight, Clock, Info, TriangleAlert, type LucideIcon } from './icons';
+import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
+import { imageSource } from './api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, font, radius, space, status, type Status } from './theme';
 
@@ -88,7 +89,7 @@ export const IconBox = ({ icon, bg = color.mossTint, fg = color.spruce }: { icon
   </View>
 );
 
-const STATUS_ICON = { healthy: Check, watch: Clock, infested: TriangleAlert } as const;
+const STATUS_ICON = { healthy: Check, watch: Clock, infested: TriangleAlert, unrated: Info } as const;
 export const StatusIcon = ({ s: key }: { s: Status }) => <IconBox icon={STATUS_ICON[key]} bg={status[key].tint} fg={status[key].text} />;
 
 // List row inside a Card. `last` drops the divider.
@@ -128,8 +129,27 @@ export function Segmented<V extends string | number>({ options, value, onChange 
 }
 
 // Bark photo, or a bark-toned block when there is none yet.
-export const Photo = ({ uri, height }: { uri?: string; height: number }) =>
-  uri ? <Image source={{ uri }} style={[s.photo, { height }]} /> : <View style={[s.photo, { height }]} />;
+export const Photo = ({ uri, height }: { uri?: string; height: number }) => {
+  const src = useAuthImage(uri);
+  return src ? <Image source={src} style={[s.photo, { height }]} /> : <View style={[s.photo, { height }]} />;
+};
+
+// Server photos need the sign-in header. Native Image sends it; on web we fetch the image ourselves.
+function useAuthImage(uri?: string) {
+  const src = uri ? imageSource(uri) : undefined;
+  const needsFetch = Platform.OS === 'web' && !!src && 'headers' in src;
+  const [blob, setBlob] = useState<string>();
+  useEffect(() => {
+    if (!needsFetch || !src) return;
+    let url: string | undefined;
+    fetch(src.uri, { headers: (src as { headers: Record<string, string> }).headers })
+      .then((r) => (r.ok ? r.blob() : Promise.reject()))
+      .then((b) => setBlob((url = URL.createObjectURL(b))), () => {});
+    return () => void (url && URL.revokeObjectURL(url));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri, needsFetch]);
+  return needsFetch ? (blob ? { uri: blob } : undefined) : src;
+}
 
 export const Empty = ({ icon, title, body, children }: PropsWithChildren<{ icon: LucideIcon; title: string; body: string }>) => (
   <View style={s.empty}>

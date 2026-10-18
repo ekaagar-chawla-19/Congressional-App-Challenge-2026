@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
-import { ChevronRight, CloudUpload, ScanLine, TreePine } from '@/icons';
+import { ChevronDown, ChevronRight, CloudUpload, ScanLine, TreePine } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ago, dueForRevisit, listTrees, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
+import { shortName, useSession } from '@/session';
 import { color, font, radius, space, status, type Status } from '@/theme';
 import { Card, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, StatusIcon, T } from '@/ui';
 
@@ -12,6 +13,7 @@ export default function Home() {
   const trees = useQuery(listTrees) ?? [];
   const pending = useQuery(pendingCount) ?? 0;
   const unit = useApp((s) => s.unit);
+  const forest = useSession((s) => s.forest);
   const due = dueForRevisit(trees).slice(0, 2);
   const open = (id: string) => router.push(`/tree/${id}`);
   const stat = (label: string, n: number, key?: Status) => (
@@ -27,10 +29,13 @@ export default function Home() {
   return (
     <Screen scroll tabbed>
       <View style={s.header}>
-        <View style={{ gap: 2 }}>
+        <Pressable style={{ gap: 2, flex: 1 }} onPress={() => router.push('/forests')} accessibilityRole="button" accessibilityLabel="Switch forest">
           <T v="caption">{today()}</T>
-          <T v="display" style={{ fontSize: 26 }}>HemlockID</T>
-        </View>
+          <View style={s.inline}>
+            <T v="display" style={{ fontSize: 24, lineHeight: 30, flexShrink: 1 }} numberOfLines={2}>{shortName(forest?.name ?? 'HemlockID')}</T>
+            <Icon as={ChevronDown} c={color.inkSoft} />
+          </View>
+        </Pressable>
         <Pressable style={s.chip} onPress={() => router.navigate('/device')} accessibilityLabel={unit ? `Unit connected, battery ${unit.battery} percent` : 'No unit connected'}>
           <Dot c={unit ? color.moss : color.lichen} />
           <T v="caption" c={color.ink} style={{ fontFamily: font.medium }}>{unit ? `Unit  ${unit.battery}%` : 'No unit'}</T>
@@ -84,7 +89,7 @@ export default function Home() {
 }
 
 const s = StyleSheet.create({
-  header: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   hero: { flexDirection: 'row', alignItems: 'center', gap: space.lg, padding: space.xl, borderRadius: radius.lg, backgroundColor: color.spruce },
   stats: { flexDirection: 'row', gap: space.md },
