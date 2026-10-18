@@ -1,0 +1,25 @@
+// The app's icon set. Per-icon imports keep the other ~1,600 Lucide icons out of the bundle.
+export type { LucideIcon } from 'lucide-react-native';
+export { default as BatteryMedium } from 'lucide-react-native/icons/battery-medium';
+export { default as Camera } from 'lucide-react-native/icons/camera';
+export { default as Check } from 'lucide-react-native/icons/check';
+export { default as ChevronLeft } from 'lucide-react-native/icons/chevron-left';
+export { default as ChevronRight } from 'lucide-react-native/icons/chevron-right';
+export { default as Clock } from 'lucide-react-native/icons/clock';
+export { default as CloudUpload } from 'lucide-react-native/icons/cloud-upload';
+export { default as Cpu } from 'lucide-react-native/icons/cpu';
+export { default as Download } from 'lucide-react-native/icons/download';
+export { default as HardDrive } from 'lucide-react-native/icons/hard-drive';
+export { default as House } from 'lucide-react-native/icons/house';
+export { default as Info } from 'lucide-react-native/icons/info';
+export { default as MapIcon } from 'lucide-react-native/icons/map';
+export { default as MapPin } from 'lucide-react-native/icons/map-pin';
+export { default as Plus } from 'lucide-react-native/icons/plus';
+export { default as RefreshCw } from 'lucide-react-native/icons/refresh-cw';
+export { default as ScanLine } from 'lucide-react-native/icons/scan-line';
+export { default as Search } from 'lucide-react-native/icons/search';
+export { default as TreePine } from 'lucide-react-native/icons/tree-pine';
+export { default as TriangleAlert } from 'lucide-react-native/icons/triangle-alert';
+export { default as Wifi } from 'lucide-react-native/icons/wifi';
+export { default as X } from 'lucide-react-native/icons/x';
+export { default as Zap } from 'lucide-react-native/icons/zap';
