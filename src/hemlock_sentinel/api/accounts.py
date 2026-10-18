@@ -26,7 +26,7 @@ from ..acquisition.mocks import LocalFileStorage
 from ..database.repository import TreeRepository
 from ..pipeline.inference import HemlockSentinel, PipelineConfig
 from ..reid.calibration import Calibration
-from . import field, health
+from . import field, health, sections
 
 TOKEN_TTL_S = 30 * 24 * 3600
 
@@ -154,6 +154,20 @@ class Accounts:
             r = self._db.execute("SELECT * FROM forests WHERE forest_id=? AND user_id=?", (forest_id, user_id)).fetchone()
         return None if r is None else Forest(**dict(r))
 
+    def delete_forest(self, user_id: int, forest_id: int) -> bool:
+        """Remove a forest and its tree database."""
+        import shutil
+
+        with self._lock:
+            if self.forest(user_id, forest_id) is None:
+                return False
+            p = self._pipes.pop(forest_id, None)
+            if p is not None:
+                p.repo.close()
+            self._db.execute("DELETE FROM forests WHERE forest_id=?", (forest_id,))
+            shutil.rmtree(self.root / "forests" / str(forest_id), ignore_errors=True)
+            return True
+
     def pipeline(self, forest: Forest) -> HemlockSentinel:
         with self._lock:
             p = self._pipes.get(forest.forest_id)
@@ -162,6 +176,7 @@ class Accounts:
                 repo = TreeRepository(d / "trees.sqlite")
                 health.ensure_schema(repo)
                 field.ensure_schema(repo)
+                sections.ensure_schema(repo)
                 p = HemlockSentinel(self.runtime, repo, LocalFileStorage(d / "blobs"), self.cal, self.config_factory())
                 self._pipes[forest.forest_id] = p
             return p

@@ -1557,6 +1557,688 @@
         }
       }
     },
+    "/api/v1/landmarks": {
+      "get": {
+        "tags": [
+          "map"
+        ],
+        "summary": "Forest Landmarks",
+        "description": "Streams, ridges, peaks, trails of the current forest as GeoJSON (approximate; demo forests only).",
+        "operationId": "forest_landmarks_api_v1_landmarks_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/sections": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "List Sections",
+        "description": "The forest's named sections with their health summary.",
+        "operationId": "list_sections_api_v1_sections_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Section"
+                  },
+                  "title": "Response List Sections Api V1 Sections Get"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Create Section",
+        "description": "Save an area of the map (e.g. the current view) as a named section.",
+        "operationId": "create_section_api_v1_sections_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Section"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/sections/{section_id}/analysis": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Section Analysis",
+        "description": "Analysis of one section: severity, conditions, hotspots, trends, worst trees, recommendations.",
+        "operationId": "section_analysis_api_v1_sections__section_id__analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "section_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Section Id"
+            }
+          },
+          {
+            "name": "cell_m",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 5000,
+              "minimum": 20,
+              "default": 150,
+              "title": "Cell M"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/sections/{section_id}": {
+      "delete": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Delete Section",
+        "operationId": "delete_section_api_v1_sections__section_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "section_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Section Id"
+            }
+          },
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/api/v1/species-check": {
+      "post": {
+        "tags": [
+          "capture"
+        ],
+        "summary": "Species Check",
+        "description": "Is this a hemlock? Runs the species model on one photo. Nothing is stored.",
+        "operationId": "species_check_api_v1_species_check_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-forest-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "forest to work in (accounts mode)",
+              "title": "X-Forest-Id"
+            },
+            "description": "forest to work in (accounts mode)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_species_check_api_v1_species_check_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeciesCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
     "/api/v1/gallery": {
       "get": {
         "tags": [
@@ -4435,6 +5117,21 @@
         ],
         "title": "Body_identify_oneshot_api_v1_identify_post"
       },
+      "Body_species_check_api_v1_species_check_post": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Image",
+            "description": "one photo of the bark"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_species_check_api_v1_species_check_post"
+      },
       "CalibrationInfo": {
         "properties": {
           "target_false_match_rate": {
@@ -5793,6 +6490,137 @@
         ],
         "title": "RegisterRequest"
       },
+      "Section": {
+        "properties": {
+          "section_id": {
+            "type": "integer",
+            "title": "Section Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "description": "[west, south, east, north]"
+          },
+          "trees": {
+            "type": "integer",
+            "title": "Trees"
+          },
+          "mean_severity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Severity"
+          },
+          "pct_moderate_or_severe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Moderate Or Severe"
+          },
+          "most_prominent_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Prominent Condition"
+          },
+          "stress_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stress Score"
+          },
+          "condition_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Condition Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_id",
+          "name",
+          "bbox",
+          "trees",
+          "mean_severity",
+          "pct_moderate_or_severe",
+          "most_prominent_condition",
+          "stress_score",
+          "condition_counts"
+        ],
+        "title": "Section"
+      },
+      "SectionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "west": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "West"
+          },
+          "south": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "South"
+          },
+          "east": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "East"
+          },
+          "north": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "North"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "west",
+          "south",
+          "east",
+          "north"
+        ],
+        "title": "SectionCreate"
+      },
       "Sensors": {
         "properties": {
           "soil_moisture_pct": {
@@ -5882,6 +6710,39 @@
           "confidence": {
             "type": "number",
             "title": "Confidence"
+          },
+          "hemlock_probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hemlock Probability",
+            "description": "Eastern hemlock probability (all views fused)"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold",
+            "description": "calibrated species threshold; below it the result is unknown"
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/SpeciesScore"
+            },
+            "type": "array",
+            "title": "Top",
+            "description": "most likely species, best first",
+            "default": []
           }
         },
         "type": "object",
@@ -5891,6 +6752,85 @@
           "confidence"
         ],
         "title": "Species"
+      },
+      "SpeciesCheck": {
+        "properties": {
+          "is_hemlock": {
+            "type": "boolean",
+            "title": "Is Hemlock"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "hemlock",
+              "not_hemlock",
+              "unsure"
+            ],
+            "title": "Verdict"
+          },
+          "hemlock_probability": {
+            "type": "number",
+            "title": "Hemlock Probability"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "species": {
+            "$ref": "#/components/schemas/SpeciesScore",
+            "description": "most likely species"
+          },
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/SpeciesScore"
+            },
+            "type": "array",
+            "title": "Top"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/ViewQuality"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_hemlock",
+          "verdict",
+          "hemlock_probability",
+          "threshold",
+          "species",
+          "top",
+          "quality",
+          "message"
+        ],
+        "title": "SpeciesCheck",
+        "description": "Hemlock-or-not check of one photo (nothing is stored)."
+      },
+      "SpeciesScore": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "probability": {
+            "type": "number",
+            "title": "Probability"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "name",
+          "probability"
+        ],
+        "title": "SpeciesScore"
       },
       "TreeDetail": {
         "properties": {
@@ -5972,6 +6912,15 @@
               }
             ],
             "title": "Thumbnail Url"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "object",
+            "title": "Conditions",
+            "description": "latest assessed finding per condition",
+            "default": {}
           },
           "current_conditions": {
             "items": {
@@ -6127,6 +7076,15 @@
               }
             ],
             "title": "Thumbnail Url"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "object",
+            "title": "Conditions",
+            "description": "latest assessed finding per condition",
+            "default": {}
           }
         },
         "type": "object",
@@ -6302,6 +7260,28 @@
           "faces_blurred": {
             "type": "integer",
             "title": "Faces Blurred"
+          },
+          "hemlock_probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hemlock Probability",
+            "description": "this photo alone (null if rejected before the model)"
+          },
+          "top_species": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesScore"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

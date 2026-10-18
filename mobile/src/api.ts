@@ -14,7 +14,7 @@ export type ForestSummary = {
 export type TreeSummary = {
   tree_id: string; species: string; name: string; main_condition: string | null; severity: number | null;
   location: Location | null; created_at: string; last_seen_at: string; observation_count: number;
-  notes: string | null; thumbnail_url: string | null;
+  notes: string | null; thumbnail_url: string | null; conditions?: Record<string, Finding>;
 };
 export type Observation = {
   observation_id: string; severity: number | null; health_notes: string | null; has_photos: boolean;
@@ -23,11 +23,55 @@ export type Observation = {
 };
 export type TreeDetail = TreeSummary & { current_conditions: Finding[]; latest_sensors: Sensors | null; observations: Observation[] };
 export type Candidate = { tree_id: string; probability: number | null; global_score: number | null };
+export type SpeciesScore = { label: string; name: string; probability: number };
+export type Species = { label: string; name: string; confidence: number; hemlock_probability: number | null; top: SpeciesScore[] };
+export type ViewSpec = { key: string; title: string; instruction: string; required: boolean; identity_view: boolean };
+export type ViewQuality = {
+  index: number; view_type: string; accepted: boolean; problems: string[]; warnings: string[];
+  metrics: Record<string, number>; hemlock_probability: number | null; top_species: SpeciesScore | null;
+};
 export type IdentifyResult = {
   status: 'existing' | 'new' | 'uncertain' | 'recapture' | 'rejected_species' | 'unsupported_species' | string;
   action: string; message: string; tree_id: string | null; observation_id: string | null;
-  species: { label: string; name: string; confidence: number } | null; probability: number | null;
+  species: Species | null; probability: number | null; next_view: ViewSpec | null;
   candidates: Candidate[]; best_guess: { tree_id: string; probability: number | null; note: string } | null;
+};
+export type ViewAdded = { view: ViewQuality; accepted_views: number; can_identify: boolean; next_view: ViewSpec | null };
+export type SpeciesCheck = {
+  is_hemlock: boolean; verdict: 'hemlock' | 'not_hemlock' | 'unsure'; hemlock_probability: number; threshold: number;
+  species: SpeciesScore; top: SpeciesScore[]; quality: ViewQuality; message: string;
+};
+export type ConditionKey = 'hwa' | 'ehs' | 'drought_stress';
+export type Bbox = [number, number, number, number]; // west, south, east, north
+export type Section = {
+  section_id: number; name: string; bbox: Bbox; trees: number; mean_severity: number | null;
+  pct_moderate_or_severe: number | null; most_prominent_condition: ConditionKey | null; stress_score: number | null;
+  condition_counts: Record<ConditionKey, number>;
+};
+export type Hotspot = { zone_id: string; bbox: Bbox; center: { lat: number; lon: number }; trees: number; affected: number; share: number; tree_ids: string[] };
+export type Trend = {
+  period: string; visits: number; trees: number; mean_severity: number | null; pct_moderate_or_severe: number | null;
+  conditions: Record<ConditionKey, { pct: number | null; assessed: number }>;
+};
+export type Analysis = {
+  area: { west: number; south: number; east: number; north: number } | null;
+  section?: { section_id: number; name: string; bbox: Bbox };
+  summary: {
+    trees: number; severity_counts: Record<string, number>; mean_severity: number | null; pct_moderate_or_severe: number | null;
+    conditions: Record<ConditionKey, { likely: number; possible: number; assessed: number; name: string }>;
+    most_prominent_condition: ConditionKey | null;
+    sensor_means: Record<string, { mean: number; n: number } | null>; trees_with_sensor_data: number;
+    recommendations: { condition: string; name: string; trees_affected: number; steps: string[]; how_to_confirm: string }[];
+    general_advice: string[];
+  };
+  hotspots: Record<ConditionKey, Hotspot[]>;
+  trends: Trend[];
+  sections: Section[];
+  worst_trees: { tree_id: string; stress_score: number; severity: number | null; main_condition: ConditionKey | null }[];
+};
+export type Landmark = {
+  geometry: { type: 'Point'; coordinates: [number, number] } | { type: 'LineString'; coordinates: [number, number][] };
+  properties: { kind: 'stream' | 'ridge' | 'trail' | 'peak' | 'place'; name: string };
 };
 
 export class ApiError extends Error {
@@ -83,13 +127,42 @@ export const forests = () => request<ForestSummary[]>('/forests');
 export const trees = () => request<{ items: TreeSummary[] }>('/trees?limit=500').then((p) => p.items);
 export const tree = (id: string) => request<TreeDetail>(`/trees/${encodeURIComponent(id)}`);
 
+export const analysis = (bbox?: Bbox) =>
+  request<Analysis>(bbox ? `/analysis?west=${bbox[0]}&south=${bbox[1]}&east=${bbox[2]}&north=${bbox[3]}` : '/analysis', { timeout: 30_000 });
+export const sectionAnalysis = (id: number) => request<Analysis>(`/sections/${id}/analysis`, { timeout: 30_000 });
+export const sections = () => request<Section[]>('/sections');
+export const createSection = (name: string, b: Bbox) =>
+  request<Section>('/sections', { json: { name, west: b[0], south: b[1], east: b[2], north: b[3] } });
+export const deleteSection = (id: number) => request<void>(`/sections/${id}`, { method: 'DELETE' });
+export const landmarks = () => request<{ features: Landmark[] }>('/landmarks').then((r) => r.features);
+
+async function appendPhoto(form: FormData, field: string, uri: string, name: string) {
+  if (Platform.OS === 'web') form.append(field, await (await fetch(uri)).blob(), name);
+  else form.append(field, { uri, name, type: 'image/jpeg' } as unknown as Blob);
+}
+
+// Is this a hemlock? One photo through the species model; nothing is stored.
+export async function speciesCheck(uri: string) {
+  const form = new FormData();
+  await appendPhoto(form, 'image', uri, 'check.jpg');
+  return request<SpeciesCheck>('/species-check', { form, timeout: 60_000 });
+}
+
+// Guided capture: one photo at a time, each checked (sharpness, light, distance, species) as it is taken.
+export const startCapture = () => request<{ capture_id: string; next_view: ViewSpec }>('/captures', { method: 'POST' });
+export async function addView(captureId: string, uri: string, viewKey?: string) {
+  const form = new FormData();
+  await appendPhoto(form, 'image', uri, 'view.jpg');
+  if (viewKey) form.append('view_key', viewKey);
+  return request<ViewAdded>(`/captures/${captureId}/views`, { form, timeout: 60_000 });
+}
+export const identifyCapture = (captureId: string, loc: Location | null, forceCommit = false) =>
+  request<IdentifyResult>(`/captures/${captureId}/identify`, { json: { location: loc, force_commit: forceCommit }, timeout: 60_000 });
+
 // Sends 3-5 bark photos; the server runs the model, stores the visit and answers which tree it is.
 export async function identify(photos: string[], loc: Location | null) {
   const form = new FormData();
-  for (const [i, uri] of photos.entries()) {
-    if (Platform.OS === 'web') form.append('images', await (await fetch(uri)).blob(), `view${i}.jpg`);
-    else form.append('images', { uri, name: `view${i}.jpg`, type: 'image/jpeg' } as unknown as Blob);
-  }
+  for (const [i, uri] of photos.entries()) await appendPhoto(form, 'images', uri, `view${i}.jpg`);
   if (loc) {
     form.append('lat', String(loc.lat));
     form.append('lon', String(loc.lon));

@@ -8,11 +8,13 @@ import { isServer, useSession } from './session';
 import type { Status } from './theme';
 
 export type Tree = { id: string; place: string; lat: number | null; lng: number | null; created_at: number };
-export type TreeRow = Tree & { status: Status | null; last_scan: number | null; photo: string | null };
+// conditions: likelihood 0-1 per condition (server only).
+export type TreeRow = Tree & { status: Status | null; last_scan: number | null; photo: string | null; conditions?: Record<string, number> };
 export type Scan = { id: number; tree_id: string; created_at: number; photos: string; status: Status; note: string; synced: number } & Levels;
 export type Forest = { id: number; name: string; lat: number | null; lng: number | null; trees: number; counts: Record<Status, number>; last_visit: number | null };
 // Extra detail only the server has: disease assessment and the ESP32 reading of the latest visit.
-export type TreeExtras = { conditions: api.Finding[]; sensors: api.Sensors | null };
+// history: per visit (oldest first), the likelihood of each condition assessed on that visit.
+export type TreeExtras = { conditions: api.Finding[]; sensors: api.Sensors | null; history: { at: number; c: Record<string, number> }[] };
 
 // Health signs, scored 0 (none) to 3 (severe).
 export const SIGNS = [
@@ -103,7 +105,7 @@ const ms = (iso: string | null) => (iso ? Date.parse(iso) : null);
 // Server severity 0-3 (observer rating) to the app's status.
 const statusOf = (sev: number | null): Status => (sev == null ? 'unrated' : sev === 0 ? 'healthy' : sev === 1 ? 'watch' : 'infested');
 const conditionLabel = (t: api.TreeSummary) =>
-  ({ hwa: 'Woolly adelgid', ehs: 'Elongate hemlock scale', drought: 'Drought stress' } as Record<string, string>)[t.main_condition ?? ''] ??
+  ({ hwa: 'Woolly adelgid', ehs: 'Elongate hemlock scale', drought_stress: 'Drought stress' } as Record<string, string>)[t.main_condition ?? ''] ??
   (t.severity === 0 ? 'No problems found' : 'No condition confirmed');
 
 export async function listForests(db: SQLiteDatabase): Promise<Forest[]> {
@@ -136,6 +138,7 @@ export async function listTrees(db: SQLiteDatabase): Promise<TreeRow[]> {
   return (await api.trees()).map((t) => ({
     id: t.tree_id, place: conditionLabel(t), lat: t.location?.lat ?? null, lng: t.location?.lon ?? null, created_at: Date.parse(t.created_at),
     status: statusOf(t.severity), last_scan: Date.parse(t.last_seen_at), photo: api.absolute(t.thumbnail_url),
+    conditions: Object.fromEntries(Object.entries(t.conditions ?? {}).map(([k, f]) => [k, f.likelihood])),
   }));
 }
 
@@ -161,7 +164,13 @@ export async function getTree(db: SQLiteDatabase, id: string): Promise<{ tree: T
       id: i, tree_id: t.tree_id, created_at: Date.parse(o.timestamp), status: statusOf(o.severity), note: o.health_notes ?? '', synced: 1,
       photos: JSON.stringify(o.views.map((v) => api.absolute(v.image_url)).filter(Boolean)), ...levelsOf(o),
     })).reverse(),
-    extras: { conditions: t.current_conditions, sensors: t.latest_sensors },
+    extras: {
+      conditions: t.current_conditions, sensors: t.latest_sensors,
+      history: t.observations.map((o) => ({
+        at: Date.parse(o.timestamp),
+        c: Object.fromEntries(o.findings.filter((f) => f.level !== 'unknown').map((f) => [f.condition, f.likelihood])),
+      })),
+    },
   };
 }
 

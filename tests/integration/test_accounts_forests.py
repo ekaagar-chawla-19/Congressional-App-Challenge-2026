@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from hemlock_sentinel.api.accounts import Accounts
-from hemlock_sentinel.api.demo_seed import DEMO_EMAIL, DEMO_PASSWORD, FORESTS, seed_demo
+from hemlock_sentinel.api.demo_seed import CHATTAHOOCHEE_TREES, DEMO_EMAIL, DEMO_PASSWORD, STREAM_FORESTS, seed_demo
 from hemlock_sentinel.api.server import create_api
 from hemlock_sentinel.pipeline.runtime import MockRuntime
 from hemlock_sentinel.reid.calibration import Calibration
@@ -129,7 +129,7 @@ def test_demo_account(client):
     tok = c.post(f"{V}/auth/login", json={"email": DEMO_EMAIL, "password": DEMO_PASSWORD}).json()["token"]
     h = {"Authorization": f"Bearer {tok}"}
     me = c.get(f"{V}/me", headers=h).json()
-    assert sorted(f["tree_count"] for f in me["forests"]) == sorted(n for *_, n, _ in FORESTS)
+    assert sorted(f["tree_count"] for f in me["forests"]) == sorted([CHATTAHOOCHEE_TREES] + [n for *_, n, _ in STREAM_FORESTS])
     assert me["totals"]["severe"] > 0 and me["totals"]["none"] > 0
     f = me["forests"][0]
     m = c.get(f"{V}/forests/{f['forest_id']}/map", headers=h).json()

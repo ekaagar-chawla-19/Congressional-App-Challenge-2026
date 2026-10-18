@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ChevronDown, ChevronRight, CloudUpload, ScanLine, TreePine } from '@/icons';
+import { ChartColumn, ChevronDown, ChevronRight, CloudUpload, Leaf, ScanLine, TreePine } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ago, dueForRevisit, listTrees, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
@@ -36,7 +36,7 @@ export default function Home() {
             <Icon as={ChevronDown} c={color.inkSoft} />
           </View>
         </Pressable>
-        <Pressable style={s.chip} onPress={() => router.navigate('/device')} accessibilityLabel={unit ? `Unit connected, battery ${unit.battery} percent` : 'No unit connected'}>
+        <Pressable style={s.chip} onPress={() => router.push('/device')} accessibilityLabel={unit ? `Unit connected, battery ${unit.battery} percent` : 'No unit connected'}>
           <Dot c={unit ? color.moss : color.lichen} />
           <T v="caption" c={color.ink} style={{ fontFamily: font.medium }}>{unit ? `Unit  ${unit.battery}%` : 'No unit'}</T>
         </Pressable>
@@ -50,6 +50,23 @@ export default function Home() {
         </View>
         <Icon as={ChevronRight} c={color.paper} />
       </Pressable>
+
+      <View style={s.quick}>
+        <Pressable style={s.quickBtn} onPress={() => router.push('/scan?mode=check')} accessibilityRole="button">
+          <IconBox icon={Leaf} />
+          <View style={{ flex: 1 }}>
+            <T v="label" style={{ fontSize: 14 }}>Hemlock check</T>
+            <T v="caption" style={{ fontSize: 12 }}>Is this tree a hemlock?</T>
+          </View>
+        </Pressable>
+        <Pressable style={s.quickBtn} onPress={() => router.navigate('/insights')} accessibilityRole="button">
+          <IconBox icon={ChartColumn} />
+          <View style={{ flex: 1 }}>
+            <T v="label" style={{ fontSize: 14 }}>Insights</T>
+            <T v="caption" style={{ fontSize: 12 }}>Diseases and trends</T>
+          </View>
+        </Pressable>
+      </View>
 
       <View style={s.stats}>
         {stat('Tracked', trees.length)}
@@ -93,6 +110,8 @@ const s = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   hero: { flexDirection: 'row', alignItems: 'center', gap: space.lg, padding: space.xl, borderRadius: radius.lg, backgroundColor: color.spruce },
   stats: { flexDirection: 'row', gap: space.md },
+  quick: { flexDirection: 'row', gap: space.md },
+  quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   stat: { flex: 1, gap: space.sm, padding: space.lg, borderRadius: radius.md, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

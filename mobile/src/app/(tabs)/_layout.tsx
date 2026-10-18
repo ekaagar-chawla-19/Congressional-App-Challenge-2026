@@ -1,6 +1,6 @@
 import { Redirect, router, Tabs } from 'expo-router';
 import Storage from '@/kv';
-import { Cpu, House, MapIcon, ScanLine, TreePine, type LucideIcon } from '@/icons';
+import { ChartColumn, House, MapIcon, ScanLine, TreePine, type LucideIcon } from '@/icons';
 import { useSession } from '@/session';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -11,7 +11,7 @@ const TABS: Record<string, [string, LucideIcon]> = {
   index: ['Home', House],
   trees: ['Trees', TreePine],
   map: ['Map', MapIcon],
-  device: ['Device', Cpu],
+  insights: ['Insights', ChartColumn],
 };
 
 export default function TabsLayout() {

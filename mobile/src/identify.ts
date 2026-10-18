@@ -11,19 +11,24 @@ export type Identification = { matches: Match[]; server?: api.IdentifyResult };
 // (Signed in, the server decides with its calibrated threshold.)
 export const MATCH_THRESHOLD = 0.6;
 
-export async function identify(photos: string[], trees: TreeRow[]): Promise<Identification> {
+export async function identify(photos: string[], trees: TreeRow[], done?: api.IdentifyResult | null): Promise<Identification> {
+  if (done) return { matches: matchesFrom(done, trees), server: done };
   if (isServer()) {
-    // Location is a nice-to-have: never wait more than 5 s for the permission prompt or a GPS fix.
-    const loc = await Promise.race([fixInForest(), new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
-    const r = await api.identify(photos, loc);
-    const byId = new Map(trees.map((t) => [t.id, t]));
-    const matches = r.candidates
-      .filter((c) => byId.has(c.tree_id))
-      .map((c) => ({ tree: byId.get(c.tree_id)!, score: c.probability ?? c.global_score ?? 0 }));
-    return { matches, server: r };
+    const r = await api.identify(photos, await quickFix());
+    return { matches: matchesFrom(r, trees), server: r };
   }
   return { matches: await standIn(photos, trees) };
 }
+
+const matchesFrom = (r: api.IdentifyResult, trees: TreeRow[]) => {
+  const byId = new Map(trees.map((t) => [t.id, t]));
+  return r.candidates
+    .filter((c) => byId.has(c.tree_id))
+    .map((c) => ({ tree: byId.get(c.tree_id)!, score: c.probability ?? c.global_score ?? 0 }));
+};
+
+// Location is a nice-to-have: never wait more than 5 s for the permission prompt or a GPS fix.
+export const quickFix = () => Promise.race([fixInForest(), new Promise<null>((r) => setTimeout(() => r(null), 5000))]);
 
 // Where the photos were taken, if location is allowed and the phone is actually in this forest
 // (so a demo at home does not put a tree 100 km away on the forest map).

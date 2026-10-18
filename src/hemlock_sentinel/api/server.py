@@ -52,12 +52,15 @@ from ..app.server import SESSION_TTL_S, Sessions, build_pipeline, load_model
 from ..database.models import ObservationRecord, TreeRecord
 from ..pipeline.inference import HemlockSentinel, ObservationResult, ViewResult
 from ..preprocessing import decode_image
-from ..species.labels import COMMON_NAMES, ID_PREFIX, REID_SUPPORTED
+from ..species.inference import softmax
+from ..species.labels import COMMON_NAMES, ID_PREFIX, REID_SUPPORTED, SPECIES
 from . import analysis as A
 from . import diseases as D
 from . import field as F
+from . import geography as G
 from . import health as H
 from . import schemas as S
+from . import sections as SEC
 from .accounts import Accounts, Forest, User
 from .assistant import API_ERRORS, Assistant, NotConfigured
 
@@ -108,11 +111,22 @@ def _spec(v: ViewSpec | None) -> S.ViewSpecOut | None:
     return S.ViewSpecOut(**asdict(v)) if v else None
 
 
+def _species_scores(probs: dict[str, float], n: int = 3) -> list[S.SpeciesScore]:
+    best = sorted(probs.items(), key=lambda kv: -kv[1])[:n]
+    return [S.SpeciesScore(label=k, name=COMMON_NAMES.get(k, k), probability=round(float(p), 4)) for k, p in best]
+
+
 def _view_quality(v: ViewResult) -> S.ViewQuality:
-    return S.ViewQuality(index=v.index, view_type=v.view_type, accepted=v.accepted, problems=v.quality.problems,
-                         warnings=v.quality.warnings,
-                         metrics={k: round(float(x), 4) for k, x in v.quality.metrics.items()},
-                         faces_blurred=v.faces_blurred)
+    out = S.ViewQuality(index=v.index, view_type=v.view_type, accepted=v.accepted, problems=v.quality.problems,
+                        warnings=v.quality.warnings,
+                        metrics={k: round(float(x), 4) for k, x in v.quality.metrics.items()},
+                        faces_blurred=v.faces_blurred)
+    if v.species_logits is not None:
+        p = softmax(v.species_logits[None])[0]
+        probs = {SPECIES[i]: float(p[i]) for i in range(len(SPECIES))}
+        out.hemlock_probability = round(probs["tsuga_canadensis"], 4)
+        out.top_species = _species_scores(probs, 1)[0]
+    return out
 
 
 def _candidates(raw: list[dict]) -> list[S.Candidate]:
@@ -129,7 +143,9 @@ def _result(r: ObservationResult, action: str, views: list[ViewResult], nxt: Vie
                            timings_ms={k: round(v, 1) for k, v in r.timings_ms.items()})
     if r.species:
         out.species = S.Species(label=r.species.species, name=r.species.common_name,
-                                confidence=round(r.species.confidence, 4))
+                                confidence=round(r.species.confidence, 4),
+                                hemlock_probability=round(r.species.probabilities.get("tsuga_canadensis", 0.0), 4),
+                                top=_species_scores(r.species.probabilities))
     if r.decision:
         out.probability = round(r.decision.probability, 4)
         out.candidates = _candidates(r.decision.candidates)
@@ -336,7 +352,8 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         return S.TreeSummary(tree_id=t.tree_id, species=t.species, name=COMMON_NAMES.get(t.species, t.species),
                              main_condition=status.get("main_condition"), severity=status.get("severity"), location=_location(status.get("lat"), status.get("lon")),
                              created_at=_iso(t.created_at), last_seen_at=_iso(t.last_seen_at),
-                             observation_count=t.observation_count, notes=t.notes, thumbnail_url=_image_url(thumb))
+                             observation_count=t.observation_count, notes=t.notes, thumbnail_url=_image_url(thumb),
+                             conditions={c: _finding(f) for c, f in status.get("conditions", {}).items()})
 
     def refresh_findings(ws: Workspace, oid: str) -> list[dict]:
         o = ws.repo.get_observation(oid)
@@ -569,16 +586,28 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             return forest_map(Workspace(accounts.pipeline(f), f"{user.user_id}:{f.forest_id}", user, f))
 
     def analysis_for(ws: Workspace, bbox: tuple | None = None, cell_m: float = 150.0) -> dict:
-        profs = A.tree_profiles(ws.repo)
-        if bbox:
-            profs = [p for p in profs if A.in_bbox(p, bbox)]
+        all_profs = A.tree_profiles(ws.repo)
+        profs = [p for p in all_profs if A.in_bbox(p, bbox)] if bbox else all_profs
         z = A.zones(profs, cell_m)
         return {"forest": forest_summary(ws.forest).model_dump() if ws.forest else None,
                 "area": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]} if bbox else None,
                 "summary": A.summarize(profs), "zones": z,
+                "hotspots": A.hotspots(profs, cell_m),
+                "trends": A.trends(ws.repo, {p["tree_id"] for p in profs}),
+                "sections": [section_out(sec, all_profs) for sec in SEC.list_sections(ws.repo)] if not bbox else [],
                 "worst_trees": [{"tree_id": p["tree_id"], "stress_score": A.stress_score(p), "severity": p["severity"],
                                  "main_condition": p["main_condition"], "lat": p["lat"], "lon": p["lon"]}
                                 for p in sorted(profs, key=A.stress_score, reverse=True)[:10]]}
+
+    def section_out(sec: dict, profs: list[dict]) -> dict:
+        ps = [p for p in profs if A.in_bbox(p, tuple(sec["bbox"]))]
+        summ = A.summarize(ps)
+        return S.Section(section_id=sec["section_id"], name=sec["name"], bbox=sec["bbox"], trees=summ["trees"],
+                         mean_severity=summ["mean_severity"], pct_moderate_or_severe=summ["pct_moderate_or_severe"],
+                         most_prominent_condition=summ["most_prominent_condition"],
+                         stress_score=round(sum(A.stress_score(p) for p in ps) / len(ps), 3) if ps else None,
+                         condition_counts={c: v["likely"] + v["possible"] for c, v in summ["conditions"].items()}
+                         ).model_dump()
 
     def parse_bbox(west, south, east, north):
         vals = (west, south, east, north)
@@ -595,6 +624,68 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         """Analysis of the current forest, or of the area west/south/east/north inside it: severity, condition
         prevalence, sensor averages, ranked zones (where trees suffer most), worst trees, recommendations."""
         return analysis_for(ws, parse_bbox(west, south, east, north), cell_m)
+
+    @api.get("/landmarks", tags=["map"])
+    def forest_landmarks(ws: Workspace = WS):
+        """Streams, ridges, peaks, trails of the current forest as GeoJSON (approximate; demo forests only)."""
+        return G.landmarks(ws.forest.name if ws.forest else "")
+
+    @api.get("/sections", response_model=list[S.Section], tags=["analysis"])
+    def list_sections(ws: Workspace = WS):
+        """The forest's named sections with their health summary."""
+        profs = A.tree_profiles(ws.repo)
+        return [section_out(sec, profs) for sec in SEC.list_sections(ws.repo)]
+
+    @api.post("/sections", response_model=S.Section, status_code=201, tags=["analysis"])
+    def create_section(body: S.SectionCreate, ws: Workspace = WS):
+        """Save an area of the map (e.g. the current view) as a named section."""
+        bbox = parse_bbox(body.west, body.south, body.east, body.north)
+        try:
+            sec = SEC.create_section(ws.repo, body.name, bbox)
+        except ValueError as e:
+            raise ApiError(409, "section_exists", str(e)) from e
+        return section_out(sec, A.tree_profiles(ws.repo))
+
+    def find_section(ws: Workspace, section_id: int) -> dict:
+        sec = SEC.get_section(ws.repo, section_id)
+        if sec is None:
+            raise ApiError(404, "section_not_found", f"no section {section_id} in this forest")
+        return sec
+
+    @api.get("/sections/{section_id}/analysis", tags=["analysis"])
+    def section_analysis(section_id: int, cell_m: float = Query(150, ge=20, le=5000), ws: Workspace = WS):
+        """Analysis of one section: severity, conditions, hotspots, trends, worst trees, recommendations."""
+        sec = find_section(ws, section_id)
+        return {**analysis_for(ws, tuple(sec["bbox"]), cell_m), "section": sec}
+
+    @api.delete("/sections/{section_id}", status_code=204, tags=["analysis"])
+    def delete_section(section_id: int, ws: Workspace = WS):
+        find_section(ws, section_id)
+        SEC.delete_section(ws.repo, section_id)
+        return Response(status_code=204)
+
+    @api.post("/species-check", response_model=S.SpeciesCheck, tags=["capture"])
+    async def species_check(image: UploadFile = File(..., description="one photo of the bark"), ws: Workspace = WS):
+        """Is this a hemlock? Runs the species model on one photo. Nothing is stored."""
+        data, rgb = await read_image(image)
+        vr = add_view(ws, [], data, rgb, GUIDED_VIEWS[0].key, None)
+        del rgb
+        q = _view_quality(vr)
+        th = float(ws.pipe.cal.species_threshold)
+        if vr.species_logits is None:
+            raise ApiError(422, "unusable_photo", "photo rejected before the model: " + "; ".join(q.problems))
+        p = softmax(vr.species_logits[None])[0]
+        probs = {SPECIES[i]: float(p[i]) for i in range(len(SPECIES))}
+        top = _species_scores(probs)
+        hp = probs["tsuga_canadensis"]
+        verdict = "hemlock" if top[0].label == "tsuga_canadensis" and hp >= th else \
+            "not_hemlock" if hp < 0.2 else "unsure"
+        msg = {"hemlock": f"Eastern hemlock ({hp:.0%} sure).",
+               "not_hemlock": f"Not a hemlock. Closest match: {top[0].name} ({top[0].probability:.0%}).",
+               "unsure": f"Not sure ({hp:.0%} hemlock). Take a sharper, closer photo of the bark; one photo is "
+                         "less reliable than a full 3-photo scan."}[verdict]
+        return S.SpeciesCheck(is_hemlock=verdict == "hemlock", verdict=verdict, hemlock_probability=round(hp, 4),
+                              threshold=round(th, 4), species=top[0], top=top, quality=q, message=msg)
 
     def gallery_for(ws: Workspace) -> S.Gallery:
         import base64

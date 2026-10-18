@@ -2,11 +2,11 @@ import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { LEVELS, overall, saveScan, saveServerVisit, SIGNS, type Levels } from '@/data';
 import { useApp } from '@/device';
 import { color, font, radius, space, status } from '@/theme';
-import { BackBar, Button, Dot, Screen, Segmented, T } from '@/ui';
+import { BackBar, Button, Dot, Screen, Segmented, T, notify } from '@/ui';
 
 const OPTIONS = LEVELS.map((label, value) => ({ label, value }));
 
@@ -41,7 +41,7 @@ export default function Health() {
       router.dismissAll();
       router.push(`/tree/${id}`);
     } catch (e) {
-      Alert.alert('Could not save scan', String(e));
+      notify('Could not save scan', String(e));
       setSaving(false);
     }
   };

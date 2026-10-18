@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { Finding } from '@/api';
+import type { ConditionKey, Finding } from '@/api';
+import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
 import { fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
 import { color, font, radius, space, status, type Status } from '@/theme';
 import { BackBar, Badge, Button, Card, Icon, Photo, Row, Screen, T } from '@/ui';
@@ -99,7 +100,7 @@ export default function TreeDetail() {
 }
 
 // What the server worked out from the observer's checklist, the photos and the ESP32 sensor node.
-function ServerHealth({ conditions, sensors }: TreeExtras) {
+function ServerHealth({ conditions, sensors, history }: TreeExtras) {
   const reading = (icon: LucideIcon, label: string, v: number | null | undefined, unit: string) => (
     <View key={label} style={s.reading}>
       <Icon as={icon} c={color.inkSoft} />
@@ -132,6 +133,36 @@ function ServerHealth({ conditions, sensors }: TreeExtras) {
           </Card>
         </View>
       )}
+      {history.length >= 2 && (
+        <Card style={{ padding: space.lg, gap: space.md }}>
+          <T v="label">Disease trend by visit</T>
+          {CONDITION_KEYS.map((k: ConditionKey) => {
+            const vals = history.map((h) => h.c[k]);
+            if (vals.every((v) => v == null)) return null;
+            const known = vals.filter((v): v is number => v != null);
+            const d = known.length >= 2 ? known[known.length - 1] - known[0] : 0;
+            return (
+              <View key={k} style={{ gap: 4 }}>
+                <View style={s.between}>
+                  <T v="caption" c={color.ink} style={{ fontFamily: font.medium }}>{CONDITIONS[k].short}</T>
+                  <T v="caption" style={{ fontSize: 12 }}>{d > 0.05 ? 'Rising' : d < -0.05 ? 'Falling' : 'Steady'}</T>
+                </View>
+                <View style={s.spark}>
+                  {vals.map((v, i) => (
+                    <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: 28 }}>
+                      <View style={{ width: '60%', height: v == null ? 2 : Math.max(2, v * 28), borderRadius: 3, backgroundColor: v == null ? color.line : CONDITIONS[k].color }} />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+          <View style={s.spark}>
+            {history.map((h, i) => <T key={i} v="caption" style={{ flex: 1, textAlign: 'center', fontSize: 10 }}>{new Date(h.at).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}</T>)}
+          </View>
+          <T v="caption" style={{ fontSize: 12 }}>Bar height is how likely the condition was on that visit.</T>
+        </Card>
+      )}
       <View style={{ gap: space.md }}>
         <T v="overline">Latest sensor reading</T>
         <View style={s.readings}>
@@ -147,6 +178,7 @@ function ServerHealth({ conditions, sensors }: TreeExtras) {
 }
 
 const s = StyleSheet.create({
+  spark: { flexDirection: 'row', alignItems: 'flex-end' },
   readings: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   reading: { flexBasis: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.sm, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   level: { height: 28, paddingHorizontal: 10, borderRadius: radius.pill, justifyContent: 'center' },

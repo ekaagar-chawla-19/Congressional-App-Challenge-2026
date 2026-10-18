@@ -26,8 +26,23 @@ npx expo start
   shows a real map.
 
 Sign in with the demo account `demo@hemlock.test` / `hemlock-demo` (the "Trying it out?" card
-fills it in). It has two North Georgia forests of sample trees. Photos you scan are identified by
-the real model and stored on the backend.
+fills it in). Pick **Cooper Creek Scenic Area, Chattahoochee NF**: 64 sample hemlocks along Cooper
+Creek and its tributaries, with Yellow Mountain, Duncan Ridge and the trails drawn on the map
+(shapes approximate). Photos you scan are identified by the real model and stored on the backend.
+
+What to try:
+- **Scan** (middle tab): the in-app camera coaches you photo by photo (distance, blur, light, and
+  whether the bark looks like hemlock) until you have three, then identifies the tree.
+- **Hemlock check** (home): one photo, and the species model says whether it is an Eastern hemlock.
+- **Map**: zoom (+/-, drag; pinch on the phone), switch layers between health, woolly adelgid,
+  hemlock scale and drought stress (hotspots outlined), show sections, and **Analyze this view**
+  to get the analysis of exactly the area on screen, which you can save as a section.
+- **Insights**: the forest's diseases, where each is worst, quarterly trends, sections ranked by
+  stress, trees that need attention, sensor averages and what to do. Tree pages show the disease
+  trend by visit.
+
+The camera inside the app needs the Expo Go app on the phone (a phone browser over plain http has
+no camera access); in a desktop browser use "Use photos from the library".
 
 **Offline demo:** "Explore the offline demo" on the sign-in screen needs no backend. It uses three
 sample forests saved on the phone, and a stand-in for the model (a stable pseudo-random ranking).
@@ -45,13 +60,15 @@ npm run lint
 ```
 src/
   app/            routes (one file per screen)
-    (tabs)/       Home, Trees, Map, Device, plus the custom tab bar
-    onboarding    login    forests    pair    scan    result    health    tree/[id]    about
+    (tabs)/       Home, Trees, Map, Insights, plus the custom tab bar (Scan in the middle)
+    onboarding    login    forests    device    pair    scan    result    health    tree/[id]    area    about
   api.ts          hemlock-api client (sign-in, forests, trees, identify, health check)
   session.ts      who is signed in, server or offline demo, current forest
   data.ts         trees, scans and forests: from the server, or SQLite in the offline demo
   identify.ts     tree matching: the server's model, or the offline stand-in
-  MapCanvas       map: react-native-maps on the phone, a plain plot on web (.web.tsx)
+  MapCanvas       map: react-native-maps on the phone, a drawn terrain map on web (.web.tsx)
+  Insights.tsx    forest / section / map-area analysis (diseases, hotspots, trends, sections)
+  conditions.ts   the three conditions (HWA, elongate hemlock scale, drought) and their colors
   kv              small settings store (SQLite key-value on the phone, localStorage on web)
   theme.ts        Forest Floor colors, status colors, spacing, fonts
   ui.tsx          shared components (Screen, Button, Card, Row, Badge, ...)

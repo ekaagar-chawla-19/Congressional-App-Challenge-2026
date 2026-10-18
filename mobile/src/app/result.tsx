@@ -2,14 +2,14 @@ import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Camera, Check, Plus, TriangleAlert } from '@/icons';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { fmtDate, listTrees } from '@/data';
 import { useApp } from '@/device';
 import { identify, MATCH_THRESHOLD, type Identification } from '@/identify';
 import { isServer } from '@/session';
 import { color, font, radius, space, status } from '@/theme';
-import { BackBar, Button, Card, Dot, Empty, Photo, Row, Screen, T } from '@/ui';
+import { BackBar, Button, Card, Dot, Empty, Photo, Row, Screen, T, notify } from '@/ui';
 
 const strength = (x: number) => (x >= 0.85 ? 'Very likely' : x >= 0.7 ? 'Likely' : 'Possible');
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -18,6 +18,7 @@ export default function Result() {
   const db = useSQLiteContext();
   // Taken once: this screen identifies the photos it was opened with, even if a later scan changes them.
   const [photos] = useState(() => useApp.getState().photos);
+  const [done] = useState(() => useApp.getState().serverResult); // already identified by the guided capture
   const [res, setRes] = useState<Identification>();
   const [error, setError] = useState<string>();
   const [pick, setPick] = useState(0);
@@ -25,8 +26,8 @@ export default function Result() {
   const [busy, setBusy] = useState(false);
 
   const run = useCallback(
-    () => listTrees(db).then((trees) => identify(photos, trees)).then(setRes, (e: Error) => setError(e.message)),
-    [db, photos],
+    () => listTrees(db).then((trees) => identify(photos, trees, done)).then(setRes, (e: Error) => setError(e.message)),
+    [db, photos, done],
   );
   useEffect(() => void run(), [run]);
   const retry = () => (setError(undefined), run());
@@ -71,11 +72,12 @@ export default function Result() {
           <T v="display">{notHemlock ? "This doesn't look like an Eastern hemlock" : 'Let’s retake those'}</T>
           <T c={color.inkSoft}>
             {notHemlock
-              ? `The species check could not confirm Eastern hemlock${srv.species ? ` (${pct(srv.species.confidence)} confidence)` : ''}. Retake with bark filling the frame, or try another tree.`
+              ? `The hemlock model could not confirm Eastern hemlock${srv.species?.hemlock_probability != null ? ` (${pct(srv.species.hemlock_probability)} hemlock)` : ''}. Retake with bark filling the frame, or try another tree.`
               : srv.message}
           </T>
         </View>
-        <Photo uri={photos[0]} height={220} />
+        <Photo uri={photos[0]} height={180} />
+        {srv.species && <HemlockCheck sp={srv.species} />}
         <View style={{ flex: 1 }} />
         <Button title="Retake photos" icon={Camera} onPress={() => router.replace('/scan')} />
         <Button title="Back home" secondary onPress={() => router.dismissAll()} />
@@ -108,7 +110,7 @@ export default function Result() {
           id = (await api.assign(oid, treeId ?? 'new')).tree_id;
         } catch (e) {
           setBusy(false);
-          return Alert.alert('Could not save', (e as Error).message);
+          return notify('Could not save', (e as Error).message);
         }
       }
     }
@@ -139,7 +141,7 @@ export default function Result() {
               ? `${chosen.tree.place} · registered ${fmtDate(chosen.tree.created_at)}`
               : 'None of your trees looks like this one. Register it to start its history.'}
         </T>
-        {srv?.species && <T v="caption">{`Eastern hemlock · species check ${pct(srv.species.confidence)}`}</T>}
+
       </View>
 
       {isMatch && (
@@ -167,6 +169,8 @@ export default function Result() {
         )}
       </View>
 
+      {srv?.species && <HemlockCheck sp={srv.species} />}
+
       {browsing && (
         <Card>
           {matches.map((m, i) => (
@@ -191,6 +195,35 @@ export default function Result() {
         </View>
       </View>
     </Screen>
+  );
+}
+
+// The species model's verdict: is this an Eastern hemlock, and what else it might be.
+function HemlockCheck({ sp }: { sp: api.Species }) {
+  const h = sp.hemlock_probability ?? (sp.label === 'tsuga_canadensis' ? sp.confidence : 0);
+  const yes = sp.label === 'tsuga_canadensis';
+  return (
+    <Card style={{ padding: space.lg, gap: space.md }}>
+      <View style={s.between}>
+        <T v="label">Hemlock check</T>
+        <View style={[s.badge, { backgroundColor: yes ? status.healthy.tint : status.watch.tint }]}>
+          <Dot c={yes ? status.healthy.dot : status.watch.dot} />
+          <T v="caption" c={yes ? status.healthy.text : status.watch.text} style={{ fontFamily: font.semibold }}>{yes ? 'Eastern hemlock' : 'Not confirmed'}</T>
+        </View>
+      </View>
+      {(sp.top.length ? sp.top : [{ label: sp.label, name: sp.name, probability: h }]).map((t) => (
+        <View key={t.label} style={{ gap: 4 }}>
+          <View style={s.between}>
+            <T v="caption" c={color.ink}>{t.name}</T>
+            <T v="caption">{pct(t.probability)}</T>
+          </View>
+          <View style={s.track}>
+            <View style={[s.fill, { width: pct(t.probability) as `${number}%`, backgroundColor: t.label === 'tsuga_canadensis' ? color.spruce : color.lichen }]} />
+          </View>
+        </View>
+      ))}
+      <T v="caption" style={{ fontSize: 12 }}>From the species model, averaged over your photos. Only Eastern hemlocks get a tree ID.</T>
+    </Card>
   );
 }
 

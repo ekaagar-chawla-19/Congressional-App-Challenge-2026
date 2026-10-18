@@ -96,6 +96,27 @@ class Species(BaseModel):
     label: str
     name: str
     confidence: float
+    hemlock_probability: float | None = Field(None, description="Eastern hemlock probability (all views fused)")
+    threshold: float | None = Field(None, description="calibrated species threshold; below it the result is unknown")
+    top: list[SpeciesScore] = Field([], description="most likely species, best first")
+
+
+class SpeciesScore(BaseModel):
+    label: str
+    name: str
+    probability: float
+
+
+class SpeciesCheck(BaseModel):
+    """Hemlock-or-not check of one photo (nothing is stored)."""
+    is_hemlock: bool
+    verdict: Literal["hemlock", "not_hemlock", "unsure"]
+    hemlock_probability: float
+    threshold: float
+    species: SpeciesScore = Field(description="most likely species")
+    top: list[SpeciesScore]
+    quality: ViewQuality
+    message: str
 
 
 class Candidate(BaseModel):
@@ -118,6 +139,8 @@ class ViewQuality(BaseModel):
     warnings: list[str]
     metrics: dict[str, float]
     faces_blurred: int
+    hemlock_probability: float | None = Field(None, description="this photo alone (null if rejected before the model)")
+    top_species: SpeciesScore | None = None
 
 
 class CaptureCreated(BaseModel):
@@ -286,6 +309,7 @@ class TreeSummary(BaseModel):
     observation_count: int
     notes: str | None
     thumbnail_url: str | None
+    conditions: dict[str, Finding] = Field({}, description="latest assessed finding per condition")
 
 
 class TreePage(BaseModel):
@@ -375,3 +399,25 @@ class ForestMap(BaseModel):
 
 
 CaptureState.model_rebuild()
+Species.model_rebuild()
+SpeciesCheck.model_rebuild()
+
+
+class SectionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    west: float = Field(ge=-180, le=180)
+    south: float = Field(ge=-90, le=90)
+    east: float = Field(ge=-180, le=180)
+    north: float = Field(ge=-90, le=90)
+
+
+class Section(BaseModel):
+    section_id: int
+    name: str
+    bbox: list[float] = Field(description="[west, south, east, north]")
+    trees: int
+    mean_severity: float | None
+    pct_moderate_or_severe: float | None
+    most_prominent_condition: str | None
+    stress_score: float | None
+    condition_counts: dict[str, int]

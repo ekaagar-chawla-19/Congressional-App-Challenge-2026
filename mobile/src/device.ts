@@ -1,5 +1,6 @@
 import Storage from './kv';
 import { create } from 'zustand';
+import type { IdentifyResult } from './api';
 
 export type Unit = { id: string; name: string; signal: 'Strong' | 'Weak' };
 export type UnitStatus = Unit & { battery: number; storage: string; firmware: string };
@@ -41,7 +42,9 @@ type App = {
   treeId: string | null;
   observationId: string | null;
   isNew: boolean;
-  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew'>>): void;
+  // Set when the guided capture already asked the server which tree this is.
+  serverResult: IdentifyResult | null;
+  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew' | 'serverResult'>>): void;
 };
 
 export const useApp = create<App>((set) => ({
@@ -65,6 +68,7 @@ export const useApp = create<App>((set) => ({
   treeId: null,
   observationId: null,
   isNew: false,
+  serverResult: null,
   setScan: (s) => set(s),
 }));
 

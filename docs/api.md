@@ -343,6 +343,16 @@ All under `/api/v1`. **Forest** = needs `X-Forest-Id` (accounts mode).
 | PUT | `/observations/{id}/health` | `{severity, notes}` |
 | POST | `/observations/{id}/assign` | `{tree_id}`: existing ID or `"new"` |
 | GET | `/images/{key}` | stored photo (JPEG) (**forest**) |
+| POST | `/species-check` | is this a hemlock? one `image` through the species model; nothing stored (**forest**) |
+| GET | `/analysis` | the forest, or an area `?west=&south=&east=&north=`: summary, conditions, `hotspots` per condition, quarterly `trends`, `sections`, worst trees, advice (**forest**) |
+| GET / POST | `/sections` | named areas of the forest with their summary; create `{name, west, south, east, north}` (**forest**) |
+| GET | `/sections/{id}/analysis` | the analysis above for one section |
+| DELETE | `/sections/{id}` | remove a section |
+| GET | `/landmarks` | GeoJSON streams, ridges, peaks, trails (demo Chattahoochee forest; approximate) |
+
+Every photo checked by `/captures/{id}/views` also reports `hemlock_probability` and `top_species`
+(that photo alone) and a `texture_coverage` metric with a "too far" / "almost" distance warning,
+which the phone app turns into coaching ("Okay, you're close. I need you to get this close…").
 
 Full schemas: `/docs` on a running server, or [`docs/api/openapi.json`](api/openapi.json).
 

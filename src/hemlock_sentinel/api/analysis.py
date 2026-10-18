@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import math
 from collections import Counter
 
@@ -117,3 +118,50 @@ def zones(profiles: list[dict], cell_m: float = 150.0) -> list[dict]:
 
 def condition_counter(profiles: list[dict]) -> Counter:
     return Counter(p["main_condition"] for p in profiles if p["main_condition"])
+
+
+def hotspots(profiles: list[dict], cell_m: float = 150.0, top: int = 3) -> dict[str, list[dict]]:
+    """Per condition: the grid cells where the most trees show it (likely or possible), worst first."""
+    out = {}
+    for z in zones(profiles, cell_m):
+        for c, n in z["condition_counts"].items():
+            if n:
+                out.setdefault(c, []).append({"zone_id": z["zone_id"], "bbox": z["bbox"], "center": z["center"],
+                                              "trees": z["trees"], "affected": n, "share": round(n / z["trees"], 3),
+                                              "tree_ids": z["tree_ids"]})
+    return {c: sorted(v, key=lambda h: (-h["affected"], -h["share"]))[:top] for c, v in out.items()} | \
+        {c: [] for c in CONDITION_KEYS if c not in out}
+
+
+def _period(ts: float, period: str) -> str:
+    d = dt.datetime.fromtimestamp(ts, dt.timezone.utc)
+    return f"{d.year}" if period == "year" else f"{d.year}-Q{(d.month - 1) // 3 + 1}"
+
+
+def trends(repo: TreeRepository, tree_ids: set[str] | None = None, period: str = "quarter") -> list[dict]:
+    """How health changed over time: per quarter (or year), over the visits made in it, mean severity,
+    share rated moderate/severe, and per condition the share of assessed visits where it was likely/possible."""
+    rows = [r for r in repo.query("SELECT observation_id, tree_id, timestamp FROM observations "
+                                  "WHERE tree_id IS NOT NULL ORDER BY timestamp")
+            if tree_ids is None or r[1] in tree_ids]
+    sev = health.health_for(repo, [r[0] for r in rows])
+    data = field.visit_data(repo, [r[0] for r in rows])
+    buckets: dict[str, dict] = {}
+    for oid, tid, ts in rows:
+        b = buckets.setdefault(_period(ts, period), {"visits": 0, "trees": set(), "sev": [],
+                                                      "cond": {c: [0, 0] for c in CONDITION_KEYS}})
+        b["visits"] += 1
+        b["trees"].add(tid)
+        s = sev.get(oid, (None, None))[0]
+        if s is not None:
+            b["sev"].append(s)
+        for f in data[oid]["findings"]:
+            if f["level"] != "unknown" and f["condition"] in b["cond"]:
+                b["cond"][f["condition"]][1] += 1
+                b["cond"][f["condition"]][0] += f["level"] in ("likely", "possible")
+    return [{"period": k, "visits": b["visits"], "trees": len(b["trees"]),
+             "mean_severity": round(sum(b["sev"]) / len(b["sev"]), 2) if b["sev"] else None,
+             "pct_moderate_or_severe": round(100 * sum(x >= 2 for x in b["sev"]) / len(b["sev"]), 1) if b["sev"] else None,
+             "conditions": {c: {"pct": round(100 * a / n, 1) if n else None, "assessed": n}
+                            for c, (a, n) in b["cond"].items()}}
+            for k, b in sorted(buckets.items())]

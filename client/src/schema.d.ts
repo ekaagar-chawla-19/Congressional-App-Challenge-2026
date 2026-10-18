@@ -309,6 +309,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/landmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Forest Landmarks
+         * @description Streams, ridges, peaks, trails of the current forest as GeoJSON (approximate; demo forests only).
+         */
+        get: operations["forest_landmarks_api_v1_landmarks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sections
+         * @description The forest's named sections with their health summary.
+         */
+        get: operations["list_sections_api_v1_sections_get"];
+        put?: never;
+        /**
+         * Create Section
+         * @description Save an area of the map (e.g. the current view) as a named section.
+         */
+        post: operations["create_section_api_v1_sections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sections/{section_id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Section Analysis
+         * @description Analysis of one section: severity, conditions, hotspots, trends, worst trees, recommendations.
+         */
+        get: operations["section_analysis_api_v1_sections__section_id__analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sections/{section_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Section */
+        delete: operations["delete_section_api_v1_sections__section_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/species-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Species Check
+         * @description Is this a hemlock? Runs the species model on one photo. Nothing is stored.
+         */
+        post: operations["species_check_api_v1_species_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gallery": {
         parameters: {
             query?: never;
@@ -797,6 +898,14 @@ export interface components {
              * @default true
              */
             commit: boolean;
+        };
+        /** Body_species_check_api_v1_species_check_post */
+        Body_species_check_api_v1_species_check_post: {
+            /**
+             * Image
+             * @description one photo of the bark
+             */
+            image: string;
         };
         /** CalibrationInfo */
         CalibrationInfo: {
@@ -1289,6 +1398,45 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** Section */
+        Section: {
+            /** Section Id */
+            section_id: number;
+            /** Name */
+            name: string;
+            /**
+             * Bbox
+             * @description [west, south, east, north]
+             */
+            bbox: number[];
+            /** Trees */
+            trees: number;
+            /** Mean Severity */
+            mean_severity: number | null;
+            /** Pct Moderate Or Severe */
+            pct_moderate_or_severe: number | null;
+            /** Most Prominent Condition */
+            most_prominent_condition: string | null;
+            /** Stress Score */
+            stress_score: number | null;
+            /** Condition Counts */
+            condition_counts: {
+                [key: string]: number;
+            };
+        };
+        /** SectionCreate */
+        SectionCreate: {
+            /** Name */
+            name: string;
+            /** West */
+            west: number;
+            /** South */
+            south: number;
+            /** East */
+            east: number;
+            /** North */
+            north: number;
+        };
         /**
          * Sensors
          * @description ESP32 sensor-node readings for one visit (any may be missing).
@@ -1319,6 +1467,55 @@ export interface components {
             name: string;
             /** Confidence */
             confidence: number;
+            /**
+             * Hemlock Probability
+             * @description Eastern hemlock probability (all views fused)
+             */
+            hemlock_probability?: number | null;
+            /**
+             * Threshold
+             * @description calibrated species threshold; below it the result is unknown
+             */
+            threshold?: number | null;
+            /**
+             * Top
+             * @description most likely species, best first
+             * @default []
+             */
+            top: components["schemas"]["SpeciesScore"][];
+        };
+        /**
+         * SpeciesCheck
+         * @description Hemlock-or-not check of one photo (nothing is stored).
+         */
+        SpeciesCheck: {
+            /** Is Hemlock */
+            is_hemlock: boolean;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "hemlock" | "not_hemlock" | "unsure";
+            /** Hemlock Probability */
+            hemlock_probability: number;
+            /** Threshold */
+            threshold: number;
+            /** @description most likely species */
+            species: components["schemas"]["SpeciesScore"];
+            /** Top */
+            top: components["schemas"]["SpeciesScore"][];
+            quality: components["schemas"]["ViewQuality"];
+            /** Message */
+            message: string;
+        };
+        /** SpeciesScore */
+        SpeciesScore: {
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Probability */
+            probability: number;
         };
         /** TreeDetail */
         TreeDetail: {
@@ -1346,6 +1543,14 @@ export interface components {
             notes: string | null;
             /** Thumbnail Url */
             thumbnail_url: string | null;
+            /**
+             * Conditions
+             * @description latest assessed finding per condition
+             * @default {}
+             */
+            conditions: {
+                [key: string]: components["schemas"]["Finding"];
+            };
             /**
              * Current Conditions
              * @description latest assessed finding per condition
@@ -1396,6 +1601,14 @@ export interface components {
             notes: string | null;
             /** Thumbnail Url */
             thumbnail_url: string | null;
+            /**
+             * Conditions
+             * @description latest assessed finding per condition
+             * @default {}
+             */
+            conditions: {
+                [key: string]: components["schemas"]["Finding"];
+            };
         };
         /** TreeUpdate */
         TreeUpdate: {
@@ -1454,6 +1667,12 @@ export interface components {
             };
             /** Faces Blurred */
             faces_blurred: number;
+            /**
+             * Hemlock Probability
+             * @description this photo alone (null if rejected before the model)
+             */
+            hemlock_probability?: number | null;
+            top_species?: components["schemas"]["SpeciesScore"] | null;
         };
         /** ViewSpecOut */
         ViewSpecOut: {
@@ -2627,6 +2846,480 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    forest_landmarks_api_v1_landmarks_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_sections_api_v1_sections_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Section"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_section_api_v1_sections_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Section"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    section_analysis_api_v1_sections__section_id__analysis_get: {
+        parameters: {
+            query?: {
+                cell_m?: number;
+            };
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                section_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_section_api_v1_sections__section_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                section_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    species_check_api_v1_species_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_species_check_api_v1_species_check_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeciesCheck"];
                 };
             };
             /** @description Bad Request */

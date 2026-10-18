@@ -4,13 +4,13 @@ import { useSQLiteContext } from 'expo-sqlite';
 import * as Sharing from 'expo-sharing';
 import { BatteryMedium, CloudUpload, Cpu, Download, HardDrive, Info, LogOut, RefreshCw, Server, Trees, Wifi, type LucideIcon } from '@/icons';
 import { useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { logout } from '@/api';
 import { exportCsv, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
 import { shortName, useSession } from '@/session';
 import { color, radius, space, status } from '@/theme';
-import { Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, T } from '@/ui';
+import { BackBar, Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, T, notify } from '@/ui';
 
 export default function Device() {
   const db = useSQLiteContext();
@@ -37,7 +37,7 @@ export default function Device() {
       }
       await Sharing.shareAsync(uri, { mimeType: 'text/csv', dialogTitle: 'Export scans' });
     } catch (e) {
-      Alert.alert('Export failed', String(e));
+      notify('Export failed', String(e));
     }
   };
   const fact = (icon: LucideIcon, label: string, value: string) => (
@@ -51,10 +51,9 @@ export default function Device() {
   );
 
   return (
-    <Screen scroll tabbed>
-      <View style={{ height: 44, justifyContent: 'center' }}>
-        <T v="display">Device</T>
-      </View>
+    <Screen scroll>
+      <BackBar />
+      <T v="display">Device and account</T>
 
       {unit ? (
         <Card style={{ padding: space.lg, gap: space.lg, borderRadius: radius.lg }}>

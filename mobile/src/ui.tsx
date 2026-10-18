@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Check, ChevronLeft, ChevronRight, Clock, Info, TriangleAlert, type LucideIcon } from './icons';
 import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
 import { imageSource } from './api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, font, radius, space, status, type Status } from './theme';
@@ -178,3 +178,9 @@ const s = StyleSheet.create({
   photo: { alignSelf: 'stretch', borderRadius: radius.md, backgroundColor: color.bark },
   empty: { alignItems: 'center', gap: space.sm, paddingVertical: space.xxl, paddingHorizontal: space.xl },
 });
+
+// Alert.alert does nothing in a browser; use the browser's own dialog there.
+export function notify(title: string, message: string) {
+  if (Platform.OS === 'web') globalThis.alert?.(`${title}\n\n${message}`);
+  else Alert.alert(title, message);
+}

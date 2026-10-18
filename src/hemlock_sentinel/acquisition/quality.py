@@ -31,6 +31,11 @@ class QualityThresholds:
     min_mean_luma: float = 35.0
     max_mean_luma: float = 225.0
     min_edge_density: float = 0.06
+    # Distance coaching (warning only): share of 32 px blocks with bark-like texture. Close-up bark
+    # photos score 1.0; the same bark shrunk to ~1/3 of the frame on a smooth background ~0.5.
+    # Leafy backgrounds are textured too, so this can only say "closer", never "too close".
+    good_texture_coverage: float = 0.85
+    min_texture_coverage: float = 0.6
     # Duplicate views (embedding cosine to an earlier view). On bark, re-shoots and genuine
     # next views overlap, so only near-identical captures are rejected; the calibrated soft
     # threshold only warns. Both are overridden by the Calibration file.
@@ -58,8 +63,10 @@ def assess(rgb: np.ndarray, th: QualityThresholds = QualityThresholds()) -> Qual
     lap = float(cv2.Laplacian(g, cv2.CV_64F).var())
     clipped = float(((g <= 3) | (g >= 252)).mean())
     luma = float(g.mean())
-    edges = float((cv2.Canny(g, 50, 150) > 0).mean())
-    m = {"laplacian_var": lap, "clipped_fraction": clipped, "mean_luma": luma, "edge_density": edges}
+    edge_map = cv2.Canny(g, 50, 150) > 0
+    edges = float(edge_map.mean())
+    m = {"laplacian_var": lap, "clipped_fraction": clipped, "mean_luma": luma, "edge_density": edges,
+         "texture_coverage": texture_coverage(edge_map)}
     problems = []
     if lap < th.min_laplacian_var:
         problems.append("blurry: hold the device steady and tap to focus")
@@ -69,9 +76,24 @@ def assess(rgb: np.ndarray, th: QualityThresholds = QualityThresholds()) -> Qual
         problems.append("too dark: move to better light or use the torch")
     if edges < th.min_edge_density:
         problems.append("no tree structure visible: frame the trunk or branches")
+    warnings = []
+    if not problems and m["texture_coverage"] < th.min_texture_coverage:
+        warnings.append("too far: move closer so bark fills the whole frame (30-50 cm)")
+    elif not problems and m["texture_coverage"] < th.good_texture_coverage:
+        warnings.append("almost: a little closer so bark fills the frame edge to edge")
     # Soft weight in [0.25, 1]: sharper views count more in the aggregate.
     weight = float(np.clip(np.log1p(lap) / np.log1p(4 * th.min_laplacian_var), 0.25, 1.0))
-    return QualityReport(ok=not problems, metrics=m, problems=problems, weight=weight)
+    return QualityReport(ok=not problems, metrics=m, problems=problems, warnings=warnings, weight=weight)
+
+
+def texture_coverage(edge_map: np.ndarray, block: int = 32, min_density: float = 0.04) -> float:
+    """Fraction of block x block cells whose edge density looks like bark (0-1)."""
+    h, w = edge_map.shape
+    hb, wb = h // block, w // block
+    if hb == 0 or wb == 0:
+        return 1.0
+    cells = edge_map[: hb * block, : wb * block].reshape(hb, block, wb, block).mean(axis=(1, 3))
+    return float((cells > min_density).mean())
 
 
 ROTATION_SEQUENCE = ("trunk_north", "trunk_right", "trunk_right2", "trunk_right3")
