@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db';
 import { Camera, Check, Plus, TriangleAlert } from '@/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -15,7 +15,7 @@ const strength = (x: number) => (x >= 0.85 ? 'Very likely' : x >= 0.7 ? 'Likely'
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export default function Result() {
-  const db = useSQLiteContext();
+  const db = useDb();
   // Taken once: this screen identifies the photos it was opened with, even if a later scan changes them.
   const [photos] = useState(() => useApp.getState().photos);
   const [done] = useState(() => useApp.getState().serverResult); // already identified by the guided capture

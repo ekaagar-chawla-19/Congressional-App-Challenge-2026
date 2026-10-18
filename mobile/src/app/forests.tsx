@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db';
 import { useState } from 'react';
 import { ChevronRight, LogOut, Trash, Trees } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -12,7 +12,7 @@ import { BackBar, ConfirmDelete, Dot, Empty, Icon, IconBox, Screen, T } from '@/
 const ORDER: Status[] = ['infested', 'watch', 'healthy', 'unrated'];
 
 export default function Forests() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [rev, setRev] = useState(0); // bumped after a delete to reload the list
   const forests = useQuery(listForests, String(rev));
   const { user, mode, forest: current, setForest } = useSession();

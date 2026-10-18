@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { localDbAvailable, useDb } from '@/db';
 import Storage from '@/kv';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -13,7 +13,7 @@ import { Button, Icon, Screen, T } from '@/ui';
 const DEMO = { email: 'demo@hemlock.test', password: 'hemlock-demo' };
 
 export default function Login() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const signIn = useSession((s) => s.signIn);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -91,9 +91,10 @@ export default function Login() {
             <T v="caption">or</T>
             <View style={s.rule} />
           </View>
-          <Button title="Explore the offline demo" secondary onPress={offlineDemo} />
+          <Button title="Explore the offline demo" secondary onPress={offlineDemo} disabled={!localDbAvailable} />
           <T v="caption" style={{ textAlign: 'center' }}>
-            {error?.offline ? 'The server is not running, so sign-in is not possible. The offline demo uses sample forests saved on this phone.' : 'Sample forests saved on this phone. No server needed.'}
+            {!localDbAvailable ? 'The offline demo needs the app (Expo Go) or this page opened as localhost. Here, sign in with the demo account above.'
+              : error?.offline ? 'The server is not running, so sign-in is not possible. The offline demo uses sample forests saved on this phone.' : 'Sample forests saved on this phone. No server needed.'}
           </T>
         </View>
 

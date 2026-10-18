@@ -1,6 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import { useFocusEffect } from 'expo-router';
-import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { useDb } from './db';
 import { useCallback, useState } from 'react';
 import { Platform } from 'react-native';
 import * as api from './api';
@@ -268,7 +269,7 @@ export async function exportCsv(db: SQLiteDatabase) {
 // Runs a query whenever the screen gains focus, so lists reflect new scans.
 // Also reruns when the forest or account changes. A failed server call keeps the previous data.
 export function useQuery<T>(fn: (db: SQLiteDatabase) => Promise<T>, key = '') {
-  const db = useSQLiteContext();
+  const db = useDb();
   const scope = useSession((s) => `${s.mode}:${s.token}:${s.forest?.id}`);
   const [data, setData] = useState<T>();
   useFocusEffect(

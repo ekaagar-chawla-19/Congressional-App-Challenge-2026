@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db';
 import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { LEVELS, overall, saveScan, saveServerVisit, SIGNS, type Levels } from '@/data';
@@ -11,7 +11,7 @@ import { BackBar, Button, Dot, Screen, Segmented, T, notify } from '@/ui';
 const OPTIONS = LEVELS.map((label, value) => ({ label, value }));
 
 export default function Health() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const { photos, treeId, observationId, isNew } = useApp();
   const [levels, setLevels] = useState<Levels>({ wool: 0, needles: 0, crown: 0, dieback: 0 });
   const [note, setNote] = useState('');

@@ -1,3 +1,4 @@
+import { localDbAvailable } from './db';
 import Storage from './kv';
 import { create } from 'zustand';
 
@@ -27,7 +28,9 @@ const EMPTY: State = { mode: 'local', server: '', token: null, user: null, fores
 
 const load = (): State => {
   try {
-    return { ...EMPTY, ...JSON.parse(Storage.getItemSync(KEY) ?? '{}') };
+    const s: State = { ...EMPTY, ...JSON.parse(Storage.getItemSync(KEY) ?? '{}') };
+    // An offline-demo session cannot continue where there is no local database: sign in again.
+    return s.mode === 'local' && !localDbAvailable ? EMPTY : s;
   } catch {
     return EMPTY;
   }

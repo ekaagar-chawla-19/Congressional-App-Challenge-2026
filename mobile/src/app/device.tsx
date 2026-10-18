@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import Storage from '@/kv';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db';
 import * as Sharing from 'expo-sharing';
 import { BatteryMedium, CloudUpload, Cpu, Download, HardDrive, Info, LogOut, RefreshCw, Server, Trees, Wifi, type LucideIcon } from '@/icons';
 import { useState } from 'react';
@@ -13,7 +13,7 @@ import { color, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, T, notify } from '@/ui';
 
 export default function Device() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const unit = useApp((s) => s.unit);
   const pending = useQuery(pendingCount) ?? 0;
   const [sync, setSync] = useState(() => Storage.getItemSync('sync') === 'on');

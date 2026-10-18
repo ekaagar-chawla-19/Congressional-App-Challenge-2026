@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db';
 import { useState } from 'react';
 import { Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -19,7 +19,7 @@ const LEVEL = {
 
 export default function TreeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const db = useSQLiteContext();
+  const db = useDb();
   const data = useQuery((db) => getTree(db, id), id);
   const [confirm, setConfirm] = useState(false);
   if (!data?.tree) return <Screen>{data ? <BackBar title="Tree not found" /> : null}</Screen>;
