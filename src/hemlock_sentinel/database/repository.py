@@ -151,6 +151,24 @@ class TreeRepository:
                       " WHERE tree_id=?", (keep, drop))
             self._refresh_tree(c, keep)
 
+    def delete_tree(self, tree_id: str, extra_tables: tuple[str, ...] = ()) -> list[str]:
+        """Remove a tree, its observations and their views (and rows keyed by observation_id in
+        extra_tables). Its ID is retired, not reused. Returns image keys no longer referenced."""
+        with self.tx() as c:
+            oids = [r[0] for r in c.execute("SELECT observation_id FROM observations WHERE tree_id=?", (tree_id,))]
+            q = ",".join("?" * len(oids))
+            keys = [r[0] for r in c.execute(f"SELECT image_key FROM views WHERE observation_id IN ({q}) "
+                                            "AND image_key IS NOT NULL", oids)] if oids else []
+            have = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            for t in [x for x in extra_tables if x in have] + ["views"]:
+                if oids:
+                    c.execute(f"DELETE FROM {t} WHERE observation_id IN ({q})", oids)
+            c.execute("DELETE FROM observations WHERE tree_id=?", (tree_id,))
+            c.execute("DELETE FROM trees WHERE tree_id=?", (tree_id,))
+            c.execute("UPDATE trees SET merged_into=NULL WHERE merged_into=?", (tree_id,))
+            still = {r[0] for r in c.execute("SELECT DISTINCT image_key FROM views WHERE image_key IS NOT NULL")}
+        return [k for k in set(keys) if k not in still]
+
     def get_observations(self, tree_id: str, with_views: bool = True) -> list[ObservationRecord]:
         rows = self._conn.execute("SELECT * FROM observations WHERE tree_id=? ORDER BY timestamp", (tree_id,))
         return [self._obs(r, with_views) for r in rows.fetchall()]

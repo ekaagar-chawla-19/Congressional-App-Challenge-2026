@@ -1,17 +1,28 @@
 import { router } from 'expo-router';
-import { ChevronRight, LogOut, Trees } from '@/icons';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useState } from 'react';
+import { ChevronRight, LogOut, Trash, Trees } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { logout } from '@/api';
-import { ago, listForests, useQuery, type Forest } from '@/data';
+import { ago, deleteForest, listForests, useQuery, type Forest } from '@/data';
 import { shortName, useSession } from '@/session';
 import { color, font, radius, space, status, type Status } from '@/theme';
-import { BackBar, Dot, Empty, Icon, IconBox, Screen, T } from '@/ui';
+import { BackBar, ConfirmDelete, Dot, Empty, Icon, IconBox, Screen, T } from '@/ui';
 
 const ORDER: Status[] = ['infested', 'watch', 'healthy', 'unrated'];
 
 export default function Forests() {
-  const forests = useQuery(listForests);
+  const db = useSQLiteContext();
+  const [rev, setRev] = useState(0); // bumped after a delete to reload the list
+  const forests = useQuery(listForests, String(rev));
   const { user, mode, forest: current, setForest } = useSession();
+  const [doomed, setDoomed] = useState<Forest | null>(null);
+  const remove = async () => {
+    await deleteForest(db, doomed!);
+    if (current?.id === doomed!.id) setForest(null); // nothing selected until they pick again
+    setDoomed(null);
+    setRev((r) => r + 1);
+  };
 
   const pick = (f: Forest) => {
     setForest({ id: f.id, name: f.name, lat: f.lat, lng: f.lng });
@@ -39,13 +50,16 @@ export default function Forests() {
         {forests?.map((f) => {
           const on = f.id === current?.id;
           return (
-            <Pressable key={f.id} onPress={() => pick(f)} accessibilityRole="button" style={({ pressed }) => [s.card, on && s.cardOn, pressed && { opacity: 0.9 }]}>
+            // The delete button sits beside (not inside) the card's pressable area: no nested buttons.
+            <View key={f.id}>
+            <Pressable onPress={() => pick(f)} accessibilityRole="button" style={({ pressed }) => [s.card, on && s.cardOn, pressed && { opacity: 0.9 }]}>
               <View style={s.head}>
                 <IconBox icon={Trees} bg={on ? color.spruce : color.mossTint} fg={on ? color.paper : color.spruce} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T v="title">{shortName(f.name)}</T>
                   <T v="caption">{`${f.trees} hemlocks · last visit ${ago(f.last_visit).toLowerCase()}`}</T>
                 </View>
+                <View style={{ width: 36 }} />
                 <Icon as={ChevronRight} c={color.lichen} />
               </View>
               {f.trees > 0 && (
@@ -64,9 +78,16 @@ export default function Forests() {
                 </>
               )}
             </Pressable>
+            <Pressable onPress={() => setDoomed(f)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Delete ${shortName(f.name)}`} style={s.trash}>
+              <Icon as={Trash} c={color.inkSoft} />
+            </Pressable>
+            </View>
           );
         })}
       </View>
+
+      <ConfirmDelete visible={!!doomed} what="forest" name={doomed?.name ?? ''} onCancel={() => setDoomed(null)} onConfirm={remove}
+        consequences={`All ${doomed?.trees ?? 0} trees in ${doomed ? shortName(doomed.name) : ''}, with every visit, photo, sensor reading and section, will be completely lost.`} />
 
       <Pressable onPress={signOut} style={s.signOut} accessibilityRole="button">
         <Icon as={LogOut} c={color.inkSoft} />
@@ -83,5 +104,6 @@ const s = StyleSheet.create({
   bar: { flexDirection: 'row', height: 10, borderRadius: radius.pill, overflow: 'hidden', gap: 2, backgroundColor: color.lineSoft },
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   item: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trash: { position: 'absolute', top: space.lg + 4, right: space.lg + 30, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   signOut: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, padding: space.md },
 });

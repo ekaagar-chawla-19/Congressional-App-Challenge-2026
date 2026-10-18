@@ -512,6 +512,18 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         def get_forest_summary(forest_id: int, user: User = Depends(current_user)):
             return forest_summary(get_forest(user, forest_id))
 
+        @api.delete("/forests/{forest_id}", status_code=204, tags=["account"])
+        def delete_forest(forest_id: int, confirm_name: str = Query(..., description="the forest's exact name"),
+                          user: User = Depends(current_user)):
+            """Delete a forest with all its trees, visits, photos and sections. Cannot be undone, so the
+            forest's exact name must be sent as `confirm_name`."""
+            f = get_forest(user, forest_id)
+            if confirm_name.strip() != f.name:
+                raise ApiError(400, "name_mismatch", f"type the forest's name exactly to delete it: {f.name}")
+            with db_lock:
+                accounts.delete_forest(user.user_id, forest_id)
+            return Response(status_code=204)
+
         def ws_for(user: User, forest_id: int) -> Workspace:
             f = get_forest(user, forest_id)
             return Workspace(accounts.pipeline(f), f"{user.user_id}:{f.forest_id}", user, f)
@@ -880,6 +892,21 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         get_tree(ws, tree_id)
         ws.repo.set_notes(tree_id, body.notes)
         return tree_summary(ws, ws.repo.get_tree(tree_id))
+
+    @api.delete("/trees/{tree_id}", status_code=204, tags=["trees"])
+    def delete_tree(tree_id: str, ws: Workspace = WS):
+        """Delete a tree with all its visits, health records, sensor readings and photos (cannot be undone)."""
+        t = get_tree(ws, tree_id)
+        with db_lock:
+            gone = ws.repo.delete_tree(t.tree_id, ("tree_health", "visit_sensors", "visit_signs", "visit_findings",
+                                                   "visit_ai_inspection"))
+            ws.pipe.index.invalidate(t.species)
+        for k in gone:
+            try:
+                Path(ws.pipe.storage.path(k)).unlink(missing_ok=True)
+            except (OSError, AttributeError):
+                pass
+        return Response(status_code=204)
 
     @api.post("/trees/{tree_id}/merge", response_model=S.TreeDetail, tags=["trees"])
     def merge_trees(tree_id: str, body: S.MergeRequest, ws: Workspace = WS):

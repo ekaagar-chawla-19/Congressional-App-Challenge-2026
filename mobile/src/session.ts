@@ -18,7 +18,7 @@ type State = {
 
 type Session = State & {
   signIn(s: Pick<State, 'mode' | 'server' | 'token' | 'user'>): void;
-  setForest(f: ForestRef): void;
+  setForest(f: ForestRef | null): void;
   signOut(): void;
 };
 

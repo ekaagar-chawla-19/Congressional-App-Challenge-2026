@@ -208,6 +208,24 @@ export async function saveScan(db: SQLiteDatabase, o: { treeId?: string; place?:
   return treeId!;
 }
 
+// Deleting cannot be undone; the screens ask the user to type the name first.
+export async function deleteForest(db: SQLiteDatabase, f: { id: number; name: string }) {
+  if (isServer()) return api.deleteForest(f.id, f.name);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM scans WHERE tree_id IN (SELECT id FROM trees WHERE forest_id = ?)', f.id);
+    await db.runAsync('DELETE FROM trees WHERE forest_id = ?', f.id);
+    await db.runAsync('DELETE FROM forests WHERE id = ?', f.id);
+  });
+}
+
+export async function deleteTree(db: SQLiteDatabase, id: string) {
+  if (isServer()) return api.deleteTree(id);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM scans WHERE tree_id = ?', id);
+    await db.runAsync('DELETE FROM trees WHERE id = ?', id);
+  });
+}
+
 // The four signs as the server's checklist, and the severity matching the status shown on the health screen.
 export function toServer(l: Levels) {
   const signs = [

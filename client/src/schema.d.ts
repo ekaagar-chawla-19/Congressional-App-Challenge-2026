@@ -222,7 +222,12 @@ export interface paths {
         get: operations["get_forest_summary_api_v1_forests__forest_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Forest
+         * @description Delete a forest with all its trees, visits, photos and sections. Cannot be undone, so the
+         *     forest's exact name must be sent as `confirm_name`.
+         */
+        delete: operations["delete_forest_api_v1_forests__forest_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -581,7 +586,11 @@ export interface paths {
         get: operations["tree_detail_api_v1_trees__tree_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Tree
+         * @description Delete a tree with all its visits, health records, sensor readings and photos (cannot be undone).
+         */
+        delete: operations["delete_tree_api_v1_trees__tree_id__delete"];
         options?: never;
         head?: never;
         /** Update Tree */
@@ -2585,6 +2594,83 @@ export interface operations {
             };
         };
     };
+    delete_forest_api_v1_forests__forest_id__delete: {
+        parameters: {
+            query: {
+                /** @description the forest's exact name */
+                confirm_name: string;
+            };
+            header?: never;
+            path: {
+                forest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     forest_analysis_api_v1_forests__forest_id__analysis_get: {
         parameters: {
             query?: {
@@ -4115,6 +4201,83 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TreeDetail"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_tree_api_v1_trees__tree_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description forest to work in (accounts mode) */
+                "x-forest-id"?: string | null;
+            };
+            path: {
+                tree_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

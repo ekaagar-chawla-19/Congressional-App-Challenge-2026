@@ -124,6 +124,10 @@ export const login = (server: string, email: string, password: string) =>
 export const logout = () => request<void>('/auth/logout', { method: 'POST', timeout: 3000 });
 
 export const forests = () => request<ForestSummary[]>('/forests');
+// Deleting needs the forest's exact name as confirmation (the server checks it too).
+export const deleteForest = (id: number, name: string) =>
+  request<void>(`/forests/${id}?confirm_name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+export const deleteTree = (id: string) => request<void>(`/trees/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const trees = () => request<{ items: TreeSummary[] }>('/trees?limit=500').then((p) => p.items);
 export const tree = (id: string) => request<TreeDetail>(`/trees/${encodeURIComponent(id)}`);
 

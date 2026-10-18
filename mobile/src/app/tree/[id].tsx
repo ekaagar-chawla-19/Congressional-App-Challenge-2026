@@ -1,11 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useState } from 'react';
 import { Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ConditionKey, Finding } from '@/api';
 import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
-import { fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
+import { deleteTree, fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
 import { color, font, radius, space, status, type Status } from '@/theme';
-import { BackBar, Badge, Button, Card, Icon, Photo, Row, Screen, T } from '@/ui';
+import { BackBar, Badge, Button, Card, ConfirmDelete, DeleteLink, Icon, Photo, Row, Screen, T } from '@/ui';
 
 const BAR: Record<Status, number> = { healthy: 20, watch: 40, infested: 64, unrated: 8 };
 const LEVEL = {
@@ -17,7 +19,9 @@ const LEVEL = {
 
 export default function TreeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const db = useSQLiteContext();
   const data = useQuery((db) => getTree(db, id), id);
+  const [confirm, setConfirm] = useState(false);
   if (!data?.tree) return <Screen>{data ? <BackBar title="Tree not found" /> : null}</Screen>;
 
   const { tree, scans } = data;
@@ -95,6 +99,10 @@ export default function TreeDetail() {
       ) : null}
 
       <Button title="Scan this tree again" icon={ScanLine} onPress={() => router.push('/scan')} />
+      <DeleteLink label="Delete this tree" onPress={() => setConfirm(true)} />
+      <ConfirmDelete visible={confirm} what="tree" name={tree.id} onCancel={() => setConfirm(false)}
+        onConfirm={async () => { await deleteTree(db, tree.id); setConfirm(false); router.back(); }}
+        consequences={`${tree.id} and all ${scans.length} of its visits, photos and health records will be completely lost. Its ID is never reused.`} />
     </Screen>
   );
 }

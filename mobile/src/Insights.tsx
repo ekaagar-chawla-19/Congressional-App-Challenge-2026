@@ -3,10 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as api from './api';
 import { CONDITIONS, CONDITION_KEYS } from './conditions';
-import { BookmarkPlus, ChevronRight, Droplets, Flame, Lightbulb, MapPin, Sun, Thermometer, Trash, TrendingDown, TrendingUp, type LucideIcon } from './icons';
+import { BookmarkPlus, ChevronRight, Droplets, Flame, Lightbulb, MapPin, Sun, Thermometer, TrendingDown, TrendingUp, type LucideIcon } from './icons';
 import { shortName, useSession } from './session';
 import { color, font, radius, space, status } from './theme';
-import { BackBar, Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, T, notify } from './ui';
+import { BackBar, Button, Card, ConfirmDelete, DeleteLink, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, T, notify } from './ui';
 
 export type Scope = { kind: 'forest' } | { kind: 'section'; id: number } | { kind: 'area'; bbox: api.Bbox };
 
@@ -235,15 +235,14 @@ function SaveSection({ bbox }: { bbox: api.Bbox }) {
 }
 
 function DeleteSection({ id, name }: { id: number; name: string }) {
-  const del = async () => {
-    await api.deleteSection(id).catch(() => {});
-    router.back();
-  };
+  const [confirm, setConfirm] = useState(false);
   return (
-    <Pressable onPress={del} style={[s.inline, { alignSelf: 'center', padding: space.md }]} accessibilityRole="button">
-      <Icon as={Trash} c={color.inkSoft} />
-      <T v="label" c={color.inkSoft}>{`Delete section "${name}"`}</T>
-    </Pressable>
+    <>
+      <DeleteLink label="Delete this section" onPress={() => setConfirm(true)} />
+      <ConfirmDelete visible={confirm} what="section" name={name} onCancel={() => setConfirm(false)}
+        onConfirm={async () => { await api.deleteSection(id); setConfirm(false); router.back(); }}
+        consequences="The section's outline will be removed. Its trees and their visits stay in the forest." />
+    </>
   );
 }
 

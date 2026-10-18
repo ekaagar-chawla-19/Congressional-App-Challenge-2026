@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
-import { Check, ChevronLeft, ChevronRight, Clock, Info, TriangleAlert, type LucideIcon } from './icons';
+import { Check, ChevronLeft, ChevronRight, Clock, Info, Trash, TriangleAlert, type LucideIcon } from './icons';
 import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, TextInput, ScrollView, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
 import { imageSource } from './api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, font, radius, space, status, type Status } from './theme';
@@ -177,6 +177,10 @@ const s = StyleSheet.create({
   segOn: { backgroundColor: color.card, shadowColor: color.ink, shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   photo: { alignSelf: 'stretch', borderRadius: radius.md, backgroundColor: color.bark },
   empty: { alignItems: 'center', gap: space.sm, paddingVertical: space.xxl, paddingHorizontal: space.xl },
+  scrim: { flex: 1, backgroundColor: 'rgba(22, 32, 28, 0.55)', justifyContent: 'center', padding: space.xl },
+  dialog: { gap: space.md, padding: space.xl, borderRadius: radius.lg, backgroundColor: color.card, width: '100%', maxWidth: 420, alignSelf: 'center' },
+  confirm: { height: 48, paddingHorizontal: space.lg, borderRadius: 14, backgroundColor: color.paper, borderWidth: 1, borderColor: color.lineStrong, fontFamily: font.medium, fontSize: 16, color: color.ink },
+  danger: { backgroundColor: status.infested.dot },
 });
 
 // Alert.alert does nothing in a browser; use the browser's own dialog there.
@@ -184,3 +188,57 @@ export function notify(title: string, message: string) {
   if (Platform.OS === 'web') globalThis.alert?.(`${title}\n\n${message}`);
   else Alert.alert(title, message);
 }
+
+// "Are you sure?" for things that cannot be undone: the user must type the exact name to enable Delete.
+export function ConfirmDelete({ visible, what, name, consequences, onCancel, onConfirm }: {
+  visible: boolean; what: string; name: string; consequences: string; onCancel(): void; onConfirm(): Promise<void>;
+}) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const ok = typed.trim() === name;
+  const close = () => (setTyped(''), setError(''), onCancel());
+  const go = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await onConfirm();
+      setTyped('');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+      <View style={s.scrim}>
+        <View style={s.dialog} accessibilityRole="alert">
+          <View style={[s.iconBox, { backgroundColor: status.infested.tint }]}><Icon as={TriangleAlert} c={status.infested.text} /></View>
+          <T v="title">{`Delete ${what}?`}</T>
+          <T c={color.inkSoft}>{`Are you sure? ${consequences} This cannot be undone.`}</T>
+          <T v="label" style={{ fontSize: 14 }}>
+            Type <T v="label" style={{ fontSize: 14, color: status.infested.text }}>{name}</T> to confirm.
+          </T>
+          <TextInput value={typed} onChangeText={setTyped} placeholder={name} placeholderTextColor={color.lichen}
+            autoCapitalize="none" autoCorrect={false} style={s.confirm} accessibilityLabel={`Type ${name} to confirm`} />
+          {error ? <T v="caption" c={status.infested.text}>{error}</T> : null}
+          <Pressable onPress={go} disabled={!ok || busy} accessibilityRole="button" accessibilityState={{ disabled: !ok || busy }}
+            style={[s.button, s.danger, { opacity: !ok || busy ? 0.4 : 1 }]}>
+            {busy ? <ActivityIndicator color={color.paper} /> : <Icon as={Trash} c={color.paper} />}
+            <T v="label" c={color.paper}>{`Delete ${what}`}</T>
+          </Pressable>
+          <Button title="Cancel" secondary onPress={close} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// Quiet "Delete …" link at the bottom of a screen.
+export const DeleteLink = ({ label, onPress }: { label: string; onPress(): void }) => (
+  <Pressable onPress={onPress} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'center', gap: space.sm, padding: space.md }}>
+    <Icon as={Trash} c={status.infested.text} />
+    <T v="label" c={status.infested.text}>{label}</T>
+  </Pressable>
+);

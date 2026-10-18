@@ -326,6 +326,7 @@ All under `/api/v1`. **Forest** = needs `X-Forest-Id` (accounts mode).
 | GET | `/me` | the account: every forest with tree count, visits, severity breakdown |
 | GET / POST | `/forests` | list / create |
 | GET | `/forests/{id}` | one forest's summary |
+| DELETE | `/forests/{id}?confirm_name=` | delete a forest and everything in it; `confirm_name` must be its exact name (`400 name_mismatch` otherwise) |
 | GET | `/forests/{id}/map` | GeoJSON: every tree with location and latest severity |
 | GET | `/map` | same, for the current forest (**forest**) |
 | POST | `/captures` | start a guided capture (held in memory 30 min) (**forest**) |
@@ -337,6 +338,7 @@ All under `/api/v1`. **Forest** = needs `X-Forest-Id` (accounts mode).
 | GET | `/trees` | trees with latest severity and location, most recently seen first (**forest**) |
 | GET | `/trees/{id}` | a tree and its full history (severity per visit) |
 | PATCH | `/trees/{id}` | `{notes}` |
+| DELETE | `/trees/{id}` | delete a tree with its visits, health records, sensor readings and photos (ID never reused) |
 | POST | `/trees/{id}/merge` | `{duplicate_tree_id}` |
 | GET | `/observations` | `status` (repeatable), `unassigned`, paging; review queue = `?status=uncertain&unassigned=true` |
 | GET | `/observations/{id}` | one observation |

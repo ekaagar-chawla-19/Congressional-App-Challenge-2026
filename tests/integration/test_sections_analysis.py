@@ -111,3 +111,43 @@ def test_distance_warning():
         (w - small.shape[1]) // 2: (w - small.shape[1]) // 2 + small.shape[1]] = small
     q = assess(np.ascontiguousarray(far))
     assert not q.problems and q.warnings and q.metrics["texture_coverage"] < 0.85
+
+
+def test_delete_forest_needs_exact_name(tmp_path):
+    from tests.integration.test_accounts_forests import capture
+
+    acc = make_accounts(tmp_path)
+    c = TestClient(create_api(accounts=acc))
+    h = signup(c, "d@example.org")
+    other = signup(c, "o@example.org")
+    f = c.post(f"{V}/forests", json={"name": "Ridge Plot"}, headers=h).json()
+    capture(c, h, f["forest_id"], seed=1)
+    fid = f["forest_id"]
+    assert c.delete(f"{V}/forests/{fid}?confirm_name=ridge plot", headers=h).json()["error"]["code"] == "name_mismatch"
+    assert c.delete(f"{V}/forests/{fid}?confirm_name=Ridge Plot", headers=other).status_code == 404
+    assert c.delete(f"{V}/forests/{fid}?confirm_name=Ridge Plot", headers=h).status_code == 204
+    assert c.get(f"{V}/forests", headers=h).json() == []
+    assert not (acc.root / "forests" / str(fid)).exists()
+
+
+def test_delete_tree_removes_visits_and_photos(tmp_path):
+    from tests.integration.test_accounts_forests import capture
+
+    acc = make_accounts(tmp_path)
+    c = TestClient(create_api(accounts=acc))
+    h = signup(c, "t@example.org")
+    f = c.post(f"{V}/forests", json={"name": "T"}, headers=h).json()
+    hf = {**h, "X-Forest-Id": str(f["forest_id"])}
+    a = capture(c, h, f["forest_id"], seed=1, severity=2, signs="hwa_wool")
+    capture(c, h, f["forest_id"], seed=2)
+    repo = acc.pipeline(acc.forest(1, f["forest_id"])).repo
+    keys = [r[0] for r in repo.query("SELECT image_key FROM views v JOIN observations o USING(observation_id) "
+                                     "WHERE o.tree_id=?", (a["tree_id"],))]
+    assert c.delete(f"{V}/trees/{a['tree_id']}", headers=hf).status_code == 204
+    assert c.get(f"{V}/trees/{a['tree_id']}", headers=hf).status_code == 404
+    assert [t["tree_id"] for t in c.get(f"{V}/trees", headers=hf).json()["items"]] == ["H-002"]
+    assert not repo.query("SELECT 1 FROM tree_health WHERE observation_id=?", (a["observation_id"],))
+    storage = acc.pipeline(acc.forest(1, f["forest_id"])).storage
+    assert keys and not any(__import__("os").path.exists(storage.path(k)) for k in keys)
+    # IDs are never reused
+    assert capture(c, h, f["forest_id"], seed=3)["tree_id"] == "H-003"
