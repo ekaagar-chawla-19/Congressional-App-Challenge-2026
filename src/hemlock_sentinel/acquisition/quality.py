@@ -62,6 +62,7 @@ def assess(rgb: np.ndarray, th: QualityThresholds = QualityThresholds()) -> Qual
         g = cv2.resize(g, (int(w * s), int(h * s)), interpolation=cv2.INTER_AREA)
     lap = float(cv2.Laplacian(g, cv2.CV_64F).var())
     clipped = float(((g <= 3) | (g >= 252)).mean())
+    blown = float((g >= 252).mean())  # only bright clipping means over-exposed (a black frame is "too dark")
     luma = float(g.mean())
     edge_map = cv2.Canny(g, 50, 150) > 0
     edges = float(edge_map.mean())
@@ -70,7 +71,7 @@ def assess(rgb: np.ndarray, th: QualityThresholds = QualityThresholds()) -> Qual
     problems = []
     if lap < th.min_laplacian_var:
         problems.append("blurry: hold the device steady and tap to focus")
-    if clipped > th.max_clipped_fraction or luma > th.max_mean_luma:
+    if blown > th.max_clipped_fraction or luma > th.max_mean_luma:
         problems.append("over-exposed: avoid pointing at the sun / bright sky")
     if luma < th.min_mean_luma:
         problems.append("too dark: move to better light or use the torch")

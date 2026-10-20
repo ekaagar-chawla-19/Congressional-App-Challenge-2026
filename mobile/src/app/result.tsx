@@ -6,7 +6,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { fmtDate, listTrees } from '@/data';
 import { useApp } from '@/device';
-import { identify, MATCH_THRESHOLD, type Identification } from '@/identify';
+import { identify, type Identification } from '@/identify';
 import { isServer } from '@/session';
 import { color, font, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Empty, Photo, Row, Screen, T, notify } from '@/ui';
@@ -22,6 +22,7 @@ export default function Result() {
   const [res, setRes] = useState<Identification>();
   const [error, setError] = useState<string>();
   const [pick, setPick] = useState(0);
+  const [picked, setPicked] = useState(false); // offline: the user chose the tree by hand
   const [browsing, setBrowsing] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -95,7 +96,8 @@ export default function Result() {
   const chosen = matches[pick];
   // A hand-picked alternative counts as a match. Otherwise the server decides (an uncertain result is shown
   // as a best guess with its confidence), or offline, the top result must clear the threshold.
-  const isMatch = !!chosen && (pick > 0 || (srv ? srv.status === 'existing' || uncertain : chosen.score >= MATCH_THRESHOLD));
+  // Offline (no model) nothing is a match until the user picks a tree by hand.
+  const isMatch = !!chosen && (res.offline ? picked : pick > 0 || (!!srv && (srv.status === 'existing' || uncertain)));
   const guess = uncertain && pick === 0;
 
   const next = async (treeId: string | null) => {
@@ -121,8 +123,8 @@ export default function Result() {
   const badge = guess
     ? { ...status.watch, label: 'Best guess' }
     : isMatch
-      ? { ...status.healthy, label: 'Match found' }
-      : { label: 'No close match', tint: color.well, dot: color.inkSoft, text: color.ink };
+      ? { ...status.healthy, label: res.offline ? 'Picked by you' : 'Match found' }
+      : { label: res.offline ? 'Offline: no model' : 'No close match', tint: color.well, dot: color.inkSoft, text: color.ink };
 
   return (
     <Screen scroll>
@@ -133,18 +135,20 @@ export default function Result() {
           <Dot c={badge.dot} />
           <T v="caption" c={badge.text} style={{ fontFamily: font.semibold }}>{badge.label}</T>
         </View>
-        <T v="hero" style={{ fontSize: 56, lineHeight: 60 }}>{isMatch ? chosen.tree.id : 'New tree'}</T>
+        <T v="hero" style={{ fontSize: 56, lineHeight: 60 }}>{isMatch ? chosen.tree.id : res.offline ? 'Not identified' : 'New tree'}</T>
         <T c={color.inkSoft}>
           {guess
             ? `Not certain. This is the closest tree, ${pct(chosen.score)} confident. Confirm it if it looks right, or register a new tree.`
             : isMatch
               ? `${chosen.tree.place} · registered ${fmtDate(chosen.tree.created_at)}`
-              : 'None of your trees looks like this one. Register it to start its history.'}
+              : res.offline
+                ? 'The offline demo cannot run the tree-recognition model (it runs on the server). Register this as a new tree, or pick the tree yourself.'
+                : 'None of your trees looks like this one. Register it to start its history.'}
         </T>
 
       </View>
 
-      {isMatch && (
+      {isMatch && !res.offline && (
         <View style={{ gap: space.sm }}>
           <View style={s.between}>
             <T v="label" style={{ fontSize: 14 }}>Match strength</T>
@@ -174,7 +178,7 @@ export default function Result() {
       {browsing && (
         <Card>
           {matches.map((m, i) => (
-            <Row key={m.tree.id} title={<T v="id">{m.tree.id}</T>} sub={`${m.tree.place} · ${pct(m.score)}`} right={i === pick && isMatch ? <T v="caption" c={color.spruce}>Selected</T> : undefined} onPress={() => (setPick(i), setBrowsing(false))} last={i === matches.length - 1} />
+            <Row key={m.tree.id} title={<T v="id">{m.tree.id}</T>} sub={Number.isNaN(m.score) ? m.tree.place : `${m.tree.place} · ${pct(m.score)}`} right={i === pick && isMatch ? <T v="caption" c={color.spruce}>Selected</T> : undefined} onPress={() => (setPick(i), setPicked(true), setBrowsing(false))} last={i === matches.length - 1} />
           ))}
         </Card>
       )}
@@ -184,7 +188,7 @@ export default function Result() {
         <View style={s.split}>
           {matches.length > 0 && (
             <View style={{ flex: 1 }}>
-              <Button title={browsing ? 'Hide matches' : 'Other matches'} secondary onPress={() => setBrowsing(!browsing)} />
+              <Button title={browsing ? 'Hide trees' : res.offline ? 'Pick the tree' : 'Other matches'} secondary onPress={() => setBrowsing(!browsing)} />
             </View>
           )}
           {isMatch && (

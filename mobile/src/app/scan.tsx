@@ -21,7 +21,9 @@ type Msg = { id: number; text: string; tone?: 'good' | 'warn' | 'bad' };
 // Coaching for one checked photo, in plain words.
 function feedback(v: api.ViewQuality): { text: string; tone: Msg['tone'] } {
   if (!v.accepted) {
-    const p = v.problems[0] ?? '';
+    // A black or blank frame also fails the blur check; name the real cause first.
+    const order = ['too dark', 'over-exposed', 'no tree', 'same as view', 'blurry'];
+    const p = [...v.problems].sort((a, b) => (order.findIndex((o) => a.startsWith(o)) + 99) % 99 - (order.findIndex((o) => b.startsWith(o)) + 99) % 99)[0] ?? '';
     const text = p.startsWith('blurry') ? "That one's blurry. Hold the phone steady, tap the bark to focus, and take it again."
       : p.startsWith('too dark') ? 'Too dark to see the bark. Step into better light or turn on the light (top right).'
       : p.startsWith('over-exposed') ? 'Too bright. Turn away from the sun so the bark is evenly lit.'

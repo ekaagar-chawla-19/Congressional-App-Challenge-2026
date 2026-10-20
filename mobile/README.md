@@ -45,7 +45,7 @@ The camera inside the app needs the Expo Go app on the phone (a phone browser ov
 no camera access); in a desktop browser use "Use photos from the library".
 
 **Offline demo:** "Explore the offline demo" on the sign-in screen needs no backend. It uses three
-sample forests saved on the phone, and a stand-in for the model (a stable pseudo-random ranking).
+sample forests saved on the phone. It does not identify trees (the model runs on the server): after a scan you register a new tree or pick the tree yourself, with no made-up match scores.
 
 If the backend runs elsewhere, tap "Change" next to the server address on the sign-in screen, or
 start Expo with `EXPO_PUBLIC_API_URL=http://<host>:8000`.

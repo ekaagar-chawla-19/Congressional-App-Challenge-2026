@@ -172,10 +172,10 @@ export function assessQuality(rgb: Uint8Array, w: number, h: number) {
   const s = QUALITY.analysisSide / Math.max(w, h);
   if (s < 1) { const nw = Math.trunc(w * s), nh = Math.trunc(h * s); g = resizeArea(g, w, h, 1, nw, nh); w = nw; h = nh; }
   const at = (x: number, y: number) => g[reflect(y, h) * w + reflect(x, w)];
-  let sum = 0, sum2 = 0, clipped = 0, luma = 0;
+  let sum = 0, sum2 = 0, clipped = 0, blown = 0, luma = 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const v = g[y * w + x];
-    luma += v; if (v <= 3 || v >= 252) clipped++;
+    luma += v; if (v <= 3 || v >= 252) clipped++; if (v >= 252) blown++;
     const lap = at(x - 1, y) + at(x + 1, y) + at(x, y - 1) + at(x, y + 1) - 4 * v;
     sum += lap; sum2 += lap * lap;
   }
@@ -183,7 +183,8 @@ export function assessQuality(rgb: Uint8Array, w: number, h: number) {
   const metrics = { laplacian_var: sum2 / n - mean * mean, clipped_fraction: clipped / n, mean_luma: luma / n };
   const problems: string[] = [];
   if (metrics.laplacian_var < QUALITY.minLaplacianVar) problems.push("blurry: hold the device steady and tap to focus");
-  if (metrics.clipped_fraction > QUALITY.maxClipped || metrics.mean_luma > QUALITY.maxLuma) problems.push("over-exposed: avoid pointing at the sun / bright sky");
+  // only bright clipping means over-exposed (a black frame is "too dark"), as on the server
+  if (blown / n > QUALITY.maxClipped || metrics.mean_luma > QUALITY.maxLuma) problems.push("over-exposed: avoid pointing at the sun / bright sky");
   if (metrics.mean_luma < QUALITY.minLuma) problems.push("too dark: move to better light or use the torch");
   const weight = Math.min(1, Math.max(0.25, Math.log1p(metrics.laplacian_var) / Math.log1p(4 * QUALITY.minLaplacianVar)));
   return { metrics, problems, weight };

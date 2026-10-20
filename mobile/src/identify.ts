@@ -5,11 +5,8 @@ import { isServer, useSession } from './session';
 
 export type Match = { tree: TreeRow; score: number };
 // `server` is set when hemlock-api ran the model: its decision, the stored visit and the species check.
-export type Identification = { matches: Match[]; server?: api.IdentifyResult };
-
-// Offline demo only: cosine similarity a match must clear; below it the photos are treated as a new tree.
-// (Signed in, the server decides with its calibrated threshold.)
-export const MATCH_THRESHOLD = 0.6;
+// offline: no model ran (offline demo); matches are the forest's trees, unscored, for a manual pick.
+export type Identification = { matches: Match[]; server?: api.IdentifyResult; offline?: boolean };
 
 export async function identify(photos: string[], trees: TreeRow[], done?: api.IdentifyResult | null): Promise<Identification> {
   if (done) return { matches: matchesFrom(done, trees), server: done };
@@ -17,7 +14,8 @@ export async function identify(photos: string[], trees: TreeRow[], done?: api.Id
     const r = await api.identify(photos, await quickFix());
     return { matches: matchesFrom(r, trees), server: r };
   }
-  return { matches: await standIn(photos, trees) };
+  // The model runs on the server. Offline there is no identification: never invent a match score.
+  return { matches: trees.map((tree) => ({ tree, score: NaN })), offline: true };
 }
 
 const matchesFrom = (r: api.IdentifyResult, trees: TreeRow[]) => {
@@ -47,18 +45,3 @@ async function fixInForest(): Promise<api.Location | null> {
 
 const km = (a: number, b: number, c: number, d: number) =>
   Math.hypot((a - c) * 111.32, (b - d) * 111.32 * Math.cos((a * Math.PI) / 180));
-
-// Offline demo stand-in for the model: a stable pseudo-random ranking so the flow can be tried without a server.
-async function standIn(photos: string[], trees: TreeRow[]): Promise<Match[]> {
-  await new Promise((r) => setTimeout(r, 900));
-  const seed = photos.join('');
-  const score = (id: string) => {
-    let h = 0;
-    for (const ch of seed + id) h = (h * 31 + ch.charCodeAt(0)) | 0;
-    return 0.3 + ((h >>> 0) % 66) / 100; // 0.30 to 0.95
-  };
-  return trees
-    .map((tree) => ({ tree, score: score(tree.id) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-}
