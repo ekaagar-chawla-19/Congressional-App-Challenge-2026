@@ -112,8 +112,11 @@ async function request<T>(path: string, o: Opts = {}): Promise<T> {
       body: o.form ?? (o.json !== undefined ? JSON.stringify(o.json) : undefined),
       signal: ctl.signal,
     });
-  } catch {
-    throw new ApiError(0, 'offline', `Can't reach the HemlockID server at ${o.server ?? server}.`);
+  } catch (e) {
+    if (ctl.signal.aborted) {
+      throw new ApiError(0, 'timeout', `The HemlockID server at ${o.server ?? server} took too long to answer (${Math.round((o.timeout ?? 15_000) / 1000)} s). Check the hemlock-api window on the computer.`);
+    }
+    throw new ApiError(0, 'offline', `Can't reach the HemlockID server at ${o.server ?? server}${path}: ${(e as Error)?.message ?? 'network error'}. Is hemlock-api running, and is this phone on the same Wi-Fi?`);
   } finally {
     clearTimeout(timer);
   }
