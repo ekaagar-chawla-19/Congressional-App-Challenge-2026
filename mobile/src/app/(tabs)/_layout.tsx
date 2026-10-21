@@ -29,7 +29,7 @@ export default function TabsLayout() {
 type BarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 // Five equal slots; Scan sits in the middle and opens the scan flow instead of a tab.
-function TabBar({ state, navigateToTab, insets }: BarProps) {
+function TabBar({ state, navigation, insets }: BarProps) {
   const slot = (label: string, icon: LucideIcon, on: boolean, onPress: () => void, filled = false) => (
     <Pressable key={label} onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: on }} style={s.slot}>
       <View style={[s.pill, on && { backgroundColor: color.mossTint }, filled && { backgroundColor: color.spruce }]}>
@@ -38,7 +38,11 @@ function TabBar({ state, navigateToTab, insets }: BarProps) {
       <Text style={[s.label, on || filled ? s.labelOn : null]}>{label}</Text>
     </Pressable>
   );
-  const items = state.routes.map((r, i) => slot(...TABS[r.name], state.index === i, () => navigateToTab(r.key)));
+  const go = (key: string, name: string, focused: boolean) => {
+    const e = navigation.emit({ type: 'tabPress', target: key, canPreventDefault: true });
+    if (!focused && !e.defaultPrevented) navigation.navigate(name);
+  };
+  const items = state.routes.map((r, i) => slot(...TABS[r.name], state.index === i, () => go(r.key, r.name, state.index === i)));
   items.splice(2, 0, slot('Scan', ScanLine, false, () => router.push('/scan'), true));
   return <View style={[s.bar, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>{items}</View>;
 }

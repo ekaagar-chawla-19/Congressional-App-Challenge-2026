@@ -1,7 +1,7 @@
 # HemlockID app
 
 Phone app for HemlockID: sign in, pick a forest, scan a hemlock's bark, recognize which tree it is,
-and record its health over time. Expo SDK 58, Expo Router, TypeScript.
+and record its health over time. Expo SDK 57 (what the App Store Expo Go runs), Expo Router, TypeScript.
 
 ## Run it
 
