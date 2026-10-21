@@ -5,7 +5,7 @@
     "scheme": "hemlockid",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "assets/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F5F2EC",
     "ios": {
