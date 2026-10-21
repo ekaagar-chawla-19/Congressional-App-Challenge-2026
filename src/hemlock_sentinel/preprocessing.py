@@ -16,8 +16,25 @@ IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 DECODE_MIN_SIDE = 640  # enough for quality checks (512 px), keypoints (640 px) and the network (322 px)
 
 
+_HEIF = None
+
+
+def _register_heif() -> bool:
+    """iPhones save photos as HEIC; pillow-heif teaches Pillow to open them (once per process)."""
+    global _HEIF
+    if _HEIF is None:
+        try:
+            from pillow_heif import register_heif_opener
+
+            register_heif_opener()
+            _HEIF = True
+        except ImportError:
+            _HEIF = False
+    return _HEIF
+
+
 def decode_image(data: bytes, min_side: int | None = DECODE_MIN_SIDE) -> np.ndarray:
-    """JPEG/PNG bytes -> RGB uint8 (H, W, 3), EXIF-oriented.
+    """JPEG/PNG/HEIC bytes -> RGB uint8 (H, W, 3), EXIF-oriented (HEIC needs pillow-heif).
 
     For JPEGs, ``min_side`` lets libjpeg decode directly at 1/2, 1/4 or 1/8 scale
     (DCT scaling, Pillow ``draft``) while keeping the short side >= min_side.
@@ -29,6 +46,7 @@ def decode_image(data: bytes, min_side: int | None = DECODE_MIN_SIDE) -> np.ndar
 
     from PIL import Image, ImageOps
 
+    _register_heif()
     im = Image.open(io.BytesIO(data))
     if min_side is not None and im.format == "JPEG":
         w, h = im.size

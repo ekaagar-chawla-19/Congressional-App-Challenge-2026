@@ -386,6 +386,12 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         try:
             return data, decode_image(data)
         except Exception as e:  # noqa: BLE001
+            heic = data[4:12] in (b"ftypheic", b"ftypheix", b"ftypmif1", b"ftyphevc") or \
+                (upload.filename or "").lower().endswith((".heic", ".heif"))
+            if heic:
+                raise ApiError(400, "heic_unsupported", "This is an iPhone HEIC photo and the server cannot read HEIC: "
+                                                        "run `pip install pillow-heif` on the server computer and "
+                                                        "restart hemlock-api.") from e
             raise ApiError(400, "bad_image", f"{upload.filename}: cannot decode image ({e})") from e
 
     def add_view(ws: Workspace, views: list[ViewResult], data: bytes, rgb, view_key: str,

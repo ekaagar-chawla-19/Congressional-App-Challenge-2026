@@ -270,3 +270,29 @@ def test_a_later_moist_reading_supersedes_an_earlier_dry_one(env):
     c.post(f"{V}/trees/{tid}/visits", json={"sensors": dry}, headers=h)  # dry again: back to likely
     cur = {f["condition"]: f for f in c.get(f"{V}/trees/{tid}", headers=h).json()["current_conditions"]}
     assert cur["drought_stress"]["level"] in ("likely", "possible")
+
+
+@pytest.mark.parametrize("model", ["delta", "gamma"])
+def test_iphone_heic_photos_are_accepted(env, model):
+    """iPhones save HEIC; photos picked from the library or AirDropped arrive as .heic files."""
+    pytest.importorskip("pillow_heif")
+    import io
+
+    from PIL import Image
+
+    c, h, _, _ = env
+
+    def heic(img):
+        buf = io.BytesIO()
+        Image.fromarray(img).save(buf, format="HEIF", quality=90)
+        return buf.getvalue()
+
+    cap = c.post(f"{V}/captures", json={"model": model}, headers=h).json()
+    for v in range(3):
+        data = heic(tree_view(81, v))
+        assert data[4:12] in (b"ftypheic", b"ftypmif1")
+        r = c.post(f"{V}/captures/{cap['capture_id']}/views", files={"image": (f"IMG_{v}.HEIC", data, "image/heic")},
+                   headers=h).json()
+        assert r["view"]["accepted"], r
+    r = c.post(f"{V}/captures/{cap['capture_id']}/identify", json={"force_commit": True}, headers=h).json()
+    assert r["status"] == "new" and r["model"] == model

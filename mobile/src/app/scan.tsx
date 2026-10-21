@@ -146,7 +146,7 @@ export default function Scan() {
     if (busy || shots.length >= MAX + 3 || ok >= MAX) return;
     setBusy(true);
     try {
-      const pic = await camera.current?.takePictureAsync({ quality: 0.8 });
+      const pic = await camera.current?.takePictureAsync({ quality: 0.8, imageType: 'jpg' });
       if (pic) await addShot(pic.uri);
     } finally {
       setBusy(false);
@@ -154,7 +154,11 @@ export default function Scan() {
   };
   // Bark photos already on the phone (handy for demos, or when the camera is not available).
   const library = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: !check, selectionLimit: check ? 1 : MAX - ok, quality: 0.8 });
+    // Compatible: iOS hands over a JPEG copy instead of the HEIC original.
+    const r = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], allowsMultipleSelection: !check, selectionLimit: check ? 1 : MAX - ok, quality: 0.8,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
     if (!r.canceled) for (const a of r.assets) await addShot(a.uri);
   };
 
