@@ -92,4 +92,8 @@ def load_models(delta_model: str | None, delta_cal: str | None, gamma_model: str
         if not gamma_cal or not Path(gamma_cal).exists():
             raise SystemExit(f"model gamma needs its calibration: {gamma_cal}")
         out["gamma"] = spec("gamma", GammaRuntime(gamma_model), Calibration.load(gamma_cal))
+    elif gamma_model:
+        print(f"WARNING: model gamma not loaded: {gamma_model} does not exist. Run `git pull` in the repository "
+              "(models/gamma/gamma.onnx is 88 MB), start hemlock-api from the repository folder, or pass "
+              "--gamma-model and --gamma-calibration.", flush=True)
     return out
