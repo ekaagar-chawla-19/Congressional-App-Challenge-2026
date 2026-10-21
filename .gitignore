@@ -9,4 +9,5 @@ data/
 *.onnx
 !models/third_party/*.onnx
 !models/production/*.onnx
+!models/gamma/*.onnx
 .venv/
