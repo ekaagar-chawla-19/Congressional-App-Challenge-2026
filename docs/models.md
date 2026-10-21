@@ -81,7 +81,7 @@ Two fixes came from testing with the real model:
 
 Checked with yesterday's code: a data folder made before this change (demo account + a tree registered by delta)
 starts with today's server; at start-up every stored visit gets a gamma fingerprint from its stored photos and
-every demo placeholder a gamma placeholder (187 of 187), and gamma then recognises the stored tree.
+every demo placeholder a gamma placeholder (187 of 187), and gamma then recognises the stored tree from other photos taken with the same phone (score 0.85 against at most 0.15 for any other tree). In that run delta's species check turned the same photos away as not a hemlock, its known weakness.
 
 ## Limitations
 
