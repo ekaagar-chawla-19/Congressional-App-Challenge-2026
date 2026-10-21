@@ -8,6 +8,63 @@ Compared on the same photos and under the same rules, on CPU, on 2026-10-20:
 
 Both friend checkpoints are from the `barknet-rtx3060` release. They were loaded read-only in eval mode and never modified; their hashes match the release.
 
+## Update 2026-10-21: real phone photos reverse the verdict
+
+The BarkNet test below has only 14 hemlock trees that neither model trained on, all photographed in one stand with one camera setup. To test on more hemlocks, I built a set from iNaturalist.
+
+**How the set was built:**
+- **Source:** 30,618 research-grade, wild Eastern hemlock observations with 2 or more photos (86,748 photos).
+- **Bark filter:** a CLIP model, which is neither model under test, kept close-up bark photos. It passes all of the BarkNet bark photos it was checked on.
+- **Duplicates removed:** near-identical photos, and observations that are probably the same tree (same observer, within 25 m).
+- **Result:**
+  - 128 trees with 2 to 4 bark photos each. These are the trees to re-identify: enrolled with their first photo(s), queried with the rest.
+  - 2,243 trees with one bark photo. Half fill the gallery as other trees in the forest; the other half are never-enrolled trees.
+- **What's committed:** the photo lists, as observation ID and photo index, are in `inat_photos.csv` and `inatsingle_photos.csv`. The images are not committed.
+
+**Method:** every model gets identical queries over 10 random splits. The 95% confidence intervals and "P(ours better)" come from resampling the 128 trees. Full numbers are in `report_inat.json`.
+
+| One-photo queries | Top-1 | Top-5 | New-tree AUROC | Right at 5% false matches (same rate for all) |
+|---|---|---|---|---|
+| **128-tree forest** | | | | |
+| Ours | 55% (47–64) | 74% | 0.64 (0.59–0.69) | 23% |
+| **f448** | **66% (59–75)** | **83%** | **0.77 (0.72–0.82)** | **44%** |
+| f224 | 62% (55–72) | 79% | 0.72 | 33% |
+| **With about 1,100 other hemlocks in the forest** | | | | |
+| Ours | 35% (26–42) | 50% | 0.55 (0.50–0.60) | 18% |
+| **f448** | **53% (44–62)** | **66%** | **0.73 (0.68–0.78)** | **35%** |
+| f224 | 47% (39–55) | 61% | 0.66 | 26% |
+
+**f448 beats ours on every metric, with P(ours better) = 0.00.** It also beats f224.
+
+### Decisions with each model's shipped threshold
+
+| | Right tree confirmed | Wrong tree confirmed | Never-enrolled tree matched |
+|---|---:|---:|---:|
+| Ours | 0.6% | 0% | 0.1% |
+| f448 | 26% | 1.1% | 1.0% |
+| f224 | 26% | 3.0% | 5.6% |
+
+- **f448's shipped threshold behaves well on phone photos.** On BarkNet it over-matched; there, every tree comes from one stand and looks alike.
+- **Ours confirms almost nothing.** Its threshold is far too strict, and its species check is blocking most photos.
+
+### Our species check fails on real photos
+
+Our species check accepts 97% of BarkNet hemlock photos, but only **13.6% of the 2,522 iNaturalist hemlock bark photos**:
+- 29.9% come back "unsure".
+- 56.6% come back "not a hemlock", mostly called red maple (1,393 photos).
+
+It learned BarkNet's capture conditions rather than hemlock bark. In the app, most real hemlocks would be turned away before matching.
+
+### Revised verdict
+
+- **f448 is the better re-ID model on real photos.** It is the one likely to hold up when the app is used in the field.
+- **Our re-ID embedding and our species check both overfit BarkNet.** The BarkNet-only verdict further down is superseded.
+- **f448 still needs integration work before the app can use it.** It needs an ONNX export (already verified), CPU latency is about 1.3 s per photo with five crops, and it has no species check. Our photo-quality checks can be reused unchanged.
+
+**Caveats:**
+- Within an iNaturalist observation, the photos are taken minutes apart, not on a later visit.
+- A few observations may be mislabelled, or the bark filter may have kept a non-bark photo. The same photos are used for every model, so this does not change the ranking.
+
 ## His model is run the way he ran it
 
 His code repo (`ekaagar-chawla-19/CAC`) is not accessible, so his model was rebuilt from the config saved in the checkpoint. The checkpoint loads with strict key matching. On his own protocol, the rebuild reproduces his reported numbers:
@@ -83,7 +140,7 @@ The results on all 45 trees are in `report_reid.json`. Our model trained on 31 o
 | Thresholds calibrated on held-out hemlocks | Too strict, needs refitting | Shipped threshold confirms the wrong tree in 16% of scans |
 | CPU time per photo, including decode | 0.5 s | 1.3 s (five 448 px crops) |
 
-## Verdict
+## Verdict (BarkNet only; superseded by the iNaturalist update above)
 
 - **Best results:** ours. It picks the right tree more often and separates new trees from enrolled ones better on hemlocks no model trained on.
 - **Most deployable:** ours. It is already integrated and is the only one with species and quality checks.

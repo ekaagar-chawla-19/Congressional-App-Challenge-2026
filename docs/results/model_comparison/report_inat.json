@@ -1,0 +1,300 @@
+{
+ "trees_matched": 128,
+ "photos_matched": 279,
+ "single_photo_trees": 2243,
+ "ours_species_gate_accepts_real_hemlock_photos": 0.136,
+ "128-tree forest | ours": {
+  "top1": [
+   0.554,
+   0.465,
+   0.639
+  ],
+  "top5": [
+   0.74,
+   0.679,
+   0.811
+  ],
+  "auroc_new_tree": [
+   0.636,
+   0.59,
+   0.692
+  ],
+  "right@5%FM(equal)": [
+   0.23,
+   0.15,
+   0.305
+  ],
+  "shipped_right": [
+   0.006,
+   0.0,
+   0.02
+  ],
+  "shipped_wrong_tree": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "shipped_new_tree_matched": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "128-tree forest | f448": {
+  "top1": [
+   0.663,
+   0.589,
+   0.745
+  ],
+  "top5": [
+   0.828,
+   0.768,
+   0.891
+  ],
+  "auroc_new_tree": [
+   0.768,
+   0.721,
+   0.817
+  ],
+  "right@5%FM(equal)": [
+   0.444,
+   0.332,
+   0.525
+  ],
+  "shipped_right": [
+   0.26,
+   0.17,
+   0.328
+  ],
+  "shipped_wrong_tree": [
+   0.007,
+   0.0,
+   0.022
+  ],
+  "shipped_new_tree_matched": [
+   0.01,
+   0.001,
+   0.021
+  ]
+ },
+ "128-tree forest | f224": {
+  "top1": [
+   0.624,
+   0.546,
+   0.72
+  ],
+  "top5": [
+   0.789,
+   0.731,
+   0.859
+  ],
+  "auroc_new_tree": [
+   0.724,
+   0.675,
+   0.781
+  ],
+  "right@5%FM(equal)": [
+   0.333,
+   0.254,
+   0.417
+  ],
+  "shipped_right": [
+   0.264,
+   0.194,
+   0.335
+  ],
+  "shipped_wrong_tree": [
+   0.012,
+   0.0,
+   0.029
+  ],
+  "shipped_new_tree_matched": [
+   0.017,
+   0.004,
+   0.031
+  ]
+ },
+ "128-tree forest | ours vs f448": {
+  "top1": {
+   "diff": -0.11,
+   "P(ours better)": 0.0
+  },
+  "top5": {
+   "diff": -0.089,
+   "P(ours better)": 0.0
+  },
+  "auroc_new_tree": {
+   "diff": -0.132,
+   "P(ours better)": 0.0
+  },
+  "right@5%FM(equal)": {
+   "diff": -0.214,
+   "P(ours better)": 0.0
+  }
+ },
+ "128-tree forest | ours vs f224": {
+  "top1": {
+   "diff": -0.071,
+   "P(ours better)": 0.005
+  },
+  "top5": {
+   "diff": -0.049,
+   "P(ours better)": 0.055
+  },
+  "auroc_new_tree": {
+   "diff": -0.088,
+   "P(ours better)": 0.0
+  },
+  "right@5%FM(equal)": {
+   "diff": -0.103,
+   "P(ours better)": 0.005
+  }
+ },
+ "with ~1,100 other trees in the forest | ours": {
+  "top1": [
+   0.347,
+   0.263,
+   0.424
+  ],
+  "top5": [
+   0.495,
+   0.41,
+   0.584
+  ],
+  "auroc_new_tree": [
+   0.551,
+   0.504,
+   0.596
+  ],
+  "right@5%FM(equal)": [
+   0.18,
+   0.122,
+   0.242
+  ],
+  "shipped_right": [
+   0.006,
+   0.0,
+   0.02
+  ],
+  "shipped_wrong_tree": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "shipped_new_tree_matched": [
+   0.001,
+   0.001,
+   0.001
+  ]
+ },
+ "with ~1,100 other trees in the forest | f448": {
+  "top1": [
+   0.529,
+   0.443,
+   0.615
+  ],
+  "top5": [
+   0.66,
+   0.573,
+   0.75
+  ],
+  "auroc_new_tree": [
+   0.729,
+   0.68,
+   0.779
+  ],
+  "right@5%FM(equal)": [
+   0.349,
+   0.269,
+   0.432
+  ],
+  "shipped_right": [
+   0.26,
+   0.17,
+   0.328
+  ],
+  "shipped_wrong_tree": [
+   0.011,
+   0.0,
+   0.028
+  ],
+  "shipped_new_tree_matched": [
+   0.01,
+   0.009,
+   0.011
+  ]
+ },
+ "with ~1,100 other trees in the forest | f224": {
+  "top1": [
+   0.467,
+   0.392,
+   0.553
+  ],
+  "top5": [
+   0.61,
+   0.529,
+   0.711
+  ],
+  "auroc_new_tree": [
+   0.661,
+   0.611,
+   0.708
+  ],
+  "right@5%FM(equal)": [
+   0.26,
+   0.19,
+   0.327
+  ],
+  "shipped_right": [
+   0.26,
+   0.19,
+   0.327
+  ],
+  "shipped_wrong_tree": [
+   0.03,
+   0.009,
+   0.052
+  ],
+  "shipped_new_tree_matched": [
+   0.056,
+   0.054,
+   0.058
+  ]
+ },
+ "with ~1,100 other trees in the forest | ours vs f448": {
+  "top1": {
+   "diff": -0.182,
+   "P(ours better)": 0.0
+  },
+  "top5": {
+   "diff": -0.165,
+   "P(ours better)": 0.0
+  },
+  "auroc_new_tree": {
+   "diff": -0.178,
+   "P(ours better)": 0.0
+  },
+  "right@5%FM(equal)": {
+   "diff": -0.17,
+   "P(ours better)": 0.0
+  }
+ },
+ "with ~1,100 other trees in the forest | ours vs f224": {
+  "top1": {
+   "diff": -0.121,
+   "P(ours better)": 0.0
+  },
+  "top5": {
+   "diff": -0.115,
+   "P(ours better)": 0.0
+  },
+  "auroc_new_tree": {
+   "diff": -0.11,
+   "P(ours better)": 0.0
+  },
+  "right@5%FM(equal)": {
+   "diff": -0.08,
+   "P(ours better)": 0.005
+  }
+ }
+}
