@@ -252,3 +252,21 @@ def test_stored_observation_without_photos_is_not_backfilled(env):
     assert acc.sync(f, "gamma") == 0
     _, r = guided(c, h, 61, "gamma")
     assert r["status"] == "new"
+
+
+def test_a_later_moist_reading_supersedes_an_earlier_dry_one(env):
+    """Tree status shows each condition's latest assessment: a wet ESP32 reading must clear 'drought likely'."""
+    c, h, _, _ = env
+    dry = parse_reading(ESP32_JSON)["sensors"]
+    _, r = guided(c, h, 71, "gamma", sensors=dry, signs=["drought_browning"])
+    tid = r["tree_id"]
+    cur = {f["condition"]: f for f in c.get(f"{V}/trees/{tid}", headers=h).json()["current_conditions"]}
+    assert cur["drought_stress"]["level"] == "likely"
+    wet = {"soil_moisture_pct": 44.0, "air_temp_c": 18.0, "humidity_pct": 83.0, "light_lux": 2100.0}
+    v = c.post(f"{V}/trees/{tid}/visits", json={"sensors": wet}, headers=h).json()
+    assert {f["condition"]: f for f in v["findings"]}["drought_stress"]["level"] == "low"
+    cur = {f["condition"]: f for f in c.get(f"{V}/trees/{tid}", headers=h).json()["current_conditions"]}
+    assert cur["drought_stress"]["level"] == "low" and "not dry" in cur["drought_stress"]["evidence"][0]
+    c.post(f"{V}/trees/{tid}/visits", json={"sensors": dry}, headers=h)  # dry again: back to likely
+    cur = {f["condition"]: f for f in c.get(f"{V}/trees/{tid}", headers=h).json()["current_conditions"]}
+    assert cur["drought_stress"]["level"] in ("likely", "possible")

@@ -1,11 +1,12 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useDb } from '@/db';
-import { useState } from 'react';
-import { Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
+import { useCallback, useState } from 'react';
+import { Cpu, Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ConditionKey, Finding } from '@/api';
 import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
 import { deleteTree, fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
+import { isServer } from '@/session';
 import { color, font, radius, space, status, type Status } from '@/theme';
 import { BackBar, Badge, Button, Card, ConfirmDelete, DeleteLink, Icon, Photo, Row, Screen, T } from '@/ui';
 
@@ -20,7 +21,10 @@ const LEVEL = {
 export default function TreeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const db = useDb();
-  const data = useQuery((db) => getTree(db, id), id);
+  // Reload when coming back from adding a reading or a scan.
+  const [rev, setRev] = useState(0);
+  useFocusEffect(useCallback(() => setRev((r) => r + 1), []));
+  const data = useQuery((db) => getTree(db, id), `${id}:${rev}`);
   const [confirm, setConfirm] = useState(false);
   if (!data?.tree) return <Screen>{data ? <BackBar title="Tree not found" /> : null}</Screen>;
 
@@ -101,6 +105,7 @@ export default function TreeDetail() {
       ) : null}
 
       <Button title="Scan this tree again" icon={ScanLine} onPress={() => router.push('/scan')} />
+      {isServer() && <Button title="Add ESP32 reading" icon={Cpu} secondary onPress={() => router.push({ pathname: '/reading', params: { id: tree.id } })} />}
       <DeleteLink label="Delete this tree" onPress={() => setConfirm(true)} />
       <ConfirmDelete visible={confirm} what="tree" name={tree.id} onCancel={() => setConfirm(false)}
         onConfirm={async () => { await deleteTree(db, tree.id); setConfirm(false); router.back(); }}

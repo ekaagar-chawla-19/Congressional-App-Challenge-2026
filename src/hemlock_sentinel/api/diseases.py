@@ -224,7 +224,11 @@ def assess(signs: list[str] | None, sensors: dict | None, severity: int | None =
         ev.append("crown decline without insects on the twigs points to abiotic stress")
     if p:
         add("drought_stress", min(0.9, p), ev)
-    elif soil is None and not s & {"drought_browning", "borer_holes", "root_rot_signs"}:
+    elif soil is not None:
+        # a measured, moist soil is evidence against drought at this visit: record it as low (not omit it),
+        # so it supersedes an earlier dry reading in the tree's current status
+        add("drought_stress", 0.05, [f"soil moisture {soil:.0f}% (not dry)"])
+    elif not s & {"drought_browning", "borer_holes", "root_rot_signs"}:
         unknown("drought_stress", "not assessed: no soil-moisture reading or stress signs recorded")
 
     lux = sensors.get("light_lux")

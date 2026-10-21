@@ -6,8 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { useApp } from '@/device';
-import { Camera, Check, Images, Leaf, X, Zap } from '@/icons';
+import { Camera, Check, ChevronDown, Images, Leaf, X, Zap } from '@/icons';
 import { quickFix } from '@/identify';
+import { ModelPicker } from '@/ModelPicker';
+import { useModels } from '@/models';
 import { isServer } from '@/session';
 import { color, font, radius, space } from '@/theme';
 import { Button, Dot, Empty, Icon, Screen, T } from '@/ui';
@@ -64,18 +66,41 @@ export default function Scan() {
   const count = useRef({ shots: 0, ok: 0 }); // shots can be added several at a time (library), so not from state
   const say = (text: string, tone?: Msg['tone']) => setMsgs((m) => [...m, { id: m.length, text, tone }]);
 
-  // Open a guided capture on the server, and get a location fix in the background meanwhile.
+  // Before the first photo the user picks the model (delta or gamma) that this scan runs on the server.
+  const askModel = !check && server;
+  const models = useModels();
+  const [picker, setPicker] = useState<'first' | 'switch' | null>(askModel ? 'first' : null);
+  const [active, setActive] = useState<{ key: api.ModelKey; name: string } | null>(null);
+
+  // List the models and get a location fix in the background while the picker is open.
   useEffect(() => {
-    if (check || !server) return;
+    if (!askModel) return;
     loc.current = quickFix();
-    api.startCapture().then(
-      (c) => {
-        capture.current = { id: c.capture_id, next: c.next_view };
-        setMsgs((m) => [...m, { id: m.length, text: `Photo 1: start on the ${c.next_view.key === 'trunk_north' ? 'north' : 'first'} side of the trunk, bark at chest height. I'll check each photo as you go.` }]);
-      },
-      (e: Error) => setMsgs((m) => [...m, { id: m.length, text: `${e.message} Photos will be checked when you tap Identify.`, tone: 'warn' }]),
-    );
-  }, [check, server]);
+    useModels.getState().load();
+  }, [askModel]);
+
+  // Open a guided capture on the server with the chosen model. Switching models starts the scan again.
+  const begin = async (key: api.ModelKey | null) => {
+    setPicker(null);
+    if (capture.current && active && key === active.key) return;
+    if (key) useModels.getState().choose(key);
+    if (capture.current) {
+      api.cancelCapture(capture.current.id).catch(() => {});
+      capture.current = null;
+      count.current = { shots: 0, ok: 0 };
+      setShots([]);
+    }
+    try {
+      const c = await api.startCapture(key ?? undefined);
+      capture.current = { id: c.capture_id, next: c.next_view };
+      setActive({ key: c.model, name: c.model_name });
+      const m = useModels.getState().list?.find((x) => x.key === c.model);
+      const species = !m ? '' : m.checks_species ? ' It checks that each photo is hemlock bark.' : " It doesn't check the species, so make sure this is a hemlock.";
+      say(`Using ${c.model_name}.${species} Photo 1: start on the ${c.next_view.key === 'trunk_north' ? 'north' : 'first'} side of the trunk, bark at chest height. I'll check each photo as you go.`);
+    } catch (e) {
+      say(`${(e as Error).message} Photos will be checked when you tap Identify.`, 'warn');
+    }
+  };
 
   const ok = shots.filter((s) => s.state === 'ok').length;
   const checking = shots.some((s) => s.state === 'checking');
@@ -140,7 +165,7 @@ export default function Scan() {
       return router.replace('/result');
     }
     setBusy(true);
-    say('Comparing this bark with every tree in the forest…');
+    say(`Comparing this bark with every tree in the forest${active ? ` using ${active.name}` : ''}…`);
     try {
       const r = await api.identifyCapture(capture.current.id, await (loc.current ?? Promise.resolve(null)));
       if (r.action === 'capture_another_view') {
@@ -160,6 +185,19 @@ export default function Scan() {
     }
   };
 
+  const pickerEl = (
+    <ModelPicker
+      visible={picker !== null}
+      models={models.list}
+      error={models.error}
+      value={active?.key ?? models.chosen}
+      photos={shots.length}
+      first={picker === 'first'}
+      onChoose={begin}
+      onCancel={() => (picker === 'first' ? router.back() : setPicker(null))}
+    />
+  );
+
   if (!permission) return null;
   if (!permission.granted && shots.length === 0) {
     return (
@@ -167,9 +205,21 @@ export default function Scan() {
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Empty icon={Camera} title="Turn on the camera" body="HemlockID takes the bark photos right here in the app and coaches you through each one." />
         </View>
+        {askModel && (
+          <Pressable style={s.modelRow} onPress={() => setPicker('switch')} accessibilityRole="button"
+            accessibilityLabel={`Model: ${active?.name ?? 'not chosen'}. Change model`}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <T v="caption">Scanning with</T>
+              <T v="label">{active?.name ?? 'No model chosen yet'}</T>
+            </View>
+            <T v="label" c={color.spruce}>Change</T>
+          </Pressable>
+        )}
+        {askModel && msgs.length > 1 && <T v="caption" c={color.inkSoft}>{msgs[msgs.length - 1].text}</T>}
         <Button title="Allow camera" icon={Camera} onPress={request} />
         <Button title="Use photos from the library" icon={Images} secondary onPress={library} />
         <Button title="Not now" secondary onPress={() => router.back()} />
+        {pickerEl}
       </Screen>
     );
   }
@@ -183,10 +233,19 @@ export default function Scan() {
         <Pressable style={s.round} onPress={() => router.back()} accessibilityLabel="Close scan">
           <Icon as={X} c={color.paper} />
         </Pressable>
-        <View style={s.chip}>
-          <Dot c={unit ? color.live : color.lichen} />
-          <T v="caption" c={color.paper} style={{ fontFamily: font.medium }}>{check ? 'Hemlock check' : unit ? `Live from ${unit.name}` : 'Bark scan'}</T>
-        </View>
+        {askModel ? (
+          <Pressable style={s.chip} onPress={() => setPicker('switch')} accessibilityRole="button"
+            accessibilityLabel={`Model: ${active?.name ?? 'not chosen'}. Change model`}>
+            <Dot c={active ? color.live : color.lichen} />
+            <T v="caption" c={color.paper} style={{ fontFamily: font.medium }}>{active?.name ?? 'Choose model'}</T>
+            <ChevronDown size={16} strokeWidth={1.75} color={color.paper} />
+          </Pressable>
+        ) : (
+          <View style={s.chip}>
+            <Dot c={unit ? color.live : color.lichen} />
+            <T v="caption" c={color.paper} style={{ fontFamily: font.medium }}>{check ? 'Hemlock check · Model delta' : unit ? `Live from ${unit.name}` : 'Bark scan'}</T>
+          </View>
+        )}
         <Pressable style={[s.round, torch && { backgroundColor: color.paper }]} onPress={() => setTorch(!torch)} accessibilityLabel="Toggle light" accessibilityState={{ selected: torch }}>
           <Icon as={Zap} c={torch ? color.ink : color.paper} />
         </Pressable>
@@ -275,6 +334,7 @@ export default function Scan() {
           </View>
         </>
       )}
+      {pickerEl}
     </Screen>
   );
 }
@@ -289,6 +349,7 @@ const CORNERS = [
 ];
 
 const s = StyleSheet.create({
+  modelRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.md, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   top: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   round: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: color.nightCard, alignItems: 'center', justifyContent: 'center' },
   labelled: { alignItems: 'center', gap: 4 },

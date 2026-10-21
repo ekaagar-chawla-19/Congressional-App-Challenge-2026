@@ -24,8 +24,9 @@ TEXT = {
         "name": "Model delta",
         "tagline": "Faster, checks the species first",
         "description": "DINOv2 ViT-S/14 at 322 px, fine-tuned on BarkNet. Checks that the bark is an Eastern "
-                       "hemlock before matching. About 0.5 s per photo. On 2,371 real phone photos of hemlocks it "
-                       "picked the right tree first 35% of the time, and its species check accepted 14% of them.",
+                       "hemlock before matching. Under half a second per photo on a laptop CPU. On 2,371 real "
+                       "phone photos of hemlocks it picked the right tree first 35% of the time, and its species "
+                       "check accepted 14% of them.",
         "real_photo_top1": 0.35,
         "speed": "fast",
     },
@@ -33,8 +34,9 @@ TEXT = {
         "name": "Model gamma",
         "tagline": "Best match accuracy on real photos",
         "description": "DINOv2 ViT-S/14 at 448 px (RTX 3060 BarkNet run), five crops per photo. Does not check "
-                       "the species: it assumes the tree is an Eastern hemlock. About 2 s per photo. On 2,371 "
-                       "real phone photos of hemlocks it picked the right tree first 53% of the time.",
+                       "the species: it assumes the tree is an Eastern hemlock. About 2 to 3 s per photo on a "
+                       "laptop CPU. On 2,371 real phone photos of hemlocks it picked the right tree first 53% of "
+                       "the time.",
         "real_photo_top1": 0.53,
         "speed": "slower",
     },

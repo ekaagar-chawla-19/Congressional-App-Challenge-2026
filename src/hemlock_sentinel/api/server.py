@@ -1211,6 +1211,7 @@ def main() -> None:
             mode = f"accounts (demo sign-in: {DEMO_EMAIL} / {DEMO_PASSWORD})"
         else:
             mode = "accounts"
+        accounts.warm_up()  # fingerprint stored trees with every model in the background
         app = create_api(demo=demo, api_key=key, cors_origins=args.cors.split(","), accounts=accounts)
     names = ", ".join(f"{k}={m.version}" for k, m in (accounts.models.items() if not args.single else {}.items()))
     print(f"Hemlock Sentinel API: model={'DEMO (mock)' if demo else runtime.version}, mode={mode}\n"

@@ -2,24 +2,16 @@ import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
-import type { Sensors } from '@/api';
 import { LEVELS, NO_CHECKS, overall, saveScan, saveServerVisit, type Checks, type Levels } from '@/data';
 import { useDb } from '@/db';
 import { useApp } from '@/device';
-import { Check, Cpu } from '@/icons';
+import { Esp32Readings, parseFields } from '@/Esp32Readings';
+import { Check } from '@/icons';
 import { isServer } from '@/session';
 import { color, font, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Icon, Screen, Segmented, T, notify } from '@/ui';
 
 const OPTIONS = LEVELS.map((label, value) => ({ label, value }));
-
-// ESP32 readings: label, unit, valid range (same as the backend)
-const READINGS: { key: keyof Sensors; label: string; unit: string; min: number; max: number }[] = [
-  { key: 'soil_moisture_pct', label: 'Soil moisture', unit: '%', min: 0, max: 100 },
-  { key: 'air_temp_c', label: 'Air temp', unit: '°C', min: -40, max: 60 },
-  { key: 'humidity_pct', label: 'Humidity', unit: '%', min: 0, max: 100 },
-  { key: 'light_lux', label: 'Light', unit: 'lux', min: 0, max: 200000 },
-];
 
 export default function Health() {
   const db = useDb();
@@ -45,12 +37,7 @@ export default function Health() {
     })().catch(() => {});
   }, [treeId]);
 
-  const parsed = Object.fromEntries(READINGS.map((r) => {
-    const raw = (readings[r.key] ?? '').trim().replace(',', '.');
-    const v = raw === '' ? null : Number(raw);
-    return [r.key, v];
-  })) as Sensors;
-  const bad = READINGS.filter((r) => { const v = parsed[r.key]; return v != null && !(Number.isFinite(v) && v >= r.min && v <= r.max); });
+  const { sensors: parsed, bad } = parseFields(readings);
 
   const save = async () => {
     if (bad.length) return notify('Check the sensor values', bad.map((r) => `${r.label}: ${r.min} to ${r.max} ${r.unit}`).join('\n'));
@@ -142,29 +129,7 @@ export default function Health() {
         </View>
       </Card>
 
-      {server && (
-        <Card style={s.card}>
-          <View style={s.inline}>
-            <Icon as={Cpu} c={color.spruce} />
-            <T v="title" style={{ flex: 1 }}>4. ESP32 readings</T>
-            <T v="caption">optional</T>
-          </View>
-          <View style={s.grid}>
-            {READINGS.map((r) => {
-              const wrong = bad.includes(r);
-              return (
-                <View key={r.key} style={s.cell}>
-                  <T v="caption" c={wrong ? status.infested.text : color.inkSoft}>{`${r.label} (${r.unit})`}</T>
-                  <TextInput value={readings[r.key] ?? ''} onChangeText={(t) => setReadings({ ...readings, [r.key]: t })}
-                    placeholder="N/A" placeholderTextColor={color.lichen} keyboardType="decimal-pad" accessibilityLabel={r.label}
-                    style={[s.input, s.num, wrong && { borderColor: status.infested.dot }]} />
-                </View>
-              );
-            })}
-          </View>
-          <T v="caption" style={{ fontSize: 12 }}>Type what the sensor node shows; blank means N/A. Low soil moisture, heat and dry air raise drought-stress risk.</T>
-        </Card>
-      )}
+      {server && <Esp32Readings title="4. ESP32 readings" fields={readings} onChange={setReadings} />}
 
       <View style={[s.overall, { backgroundColor: st.tint }]}>
         <View style={{ gap: 2 }}>
@@ -183,14 +148,10 @@ export default function Health() {
 const s = StyleSheet.create({
   card: { padding: space.lg, gap: space.lg },
   between: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: color.paper, borderWidth: 1, borderColor: color.lineStrong },
   chipOn: { backgroundColor: color.spruce, borderColor: color.spruce },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
-  cell: { flexBasis: '45%', flexGrow: 1, gap: 4 },
   input: { minHeight: 48, paddingHorizontal: space.lg, borderRadius: 14, backgroundColor: color.card, borderWidth: 1, borderColor: color.line, fontFamily: font.regular, fontSize: 15, color: color.ink },
-  num: { backgroundColor: color.paper },
   note: { minHeight: 96, paddingTop: space.md, textAlignVertical: 'top' },
   overall: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.lg, borderRadius: radius.md },
 });

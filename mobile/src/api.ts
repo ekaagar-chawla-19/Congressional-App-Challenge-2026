@@ -30,9 +30,16 @@ export type ViewQuality = {
   index: number; view_type: string; accepted: boolean; problems: string[]; warnings: string[];
   metrics: Record<string, number>; hemlock_probability: number | null; top_species: SpeciesScore | null;
 };
+export type ModelKey = 'delta' | 'gamma' | string;
+// The re-ID models the server runs (GET /models). Both run on the server; the app only chooses.
+export type ModelChoice = {
+  key: ModelKey; name: string; tagline: string; description: string; version: string; checks_species: boolean;
+  embedding_dim: number; image_size: number; real_photo_top1: number | null; speed: string | null; default: boolean; demo: boolean;
+};
 export type IdentifyResult = {
   status: 'existing' | 'new' | 'uncertain' | 'recapture' | 'rejected_species' | 'unsupported_species' | string;
   action: string; message: string; tree_id: string | null; observation_id: string | null;
+  model?: ModelKey | null; model_name?: string | null; species_checked?: boolean;
   species: Species | null; probability: number | null; next_view: ViewSpec | null;
   candidates: Candidate[]; best_guess: { tree_id: string; probability: number | null; note: string } | null;
 };
@@ -152,8 +159,13 @@ export async function speciesCheck(uri: string) {
   return request<SpeciesCheck>('/species-check', { form, timeout: 60_000 });
 }
 
+export const models = () => request<{ default: ModelKey; models: ModelChoice[] }>('/models', { timeout: 8000 });
+
 // Guided capture: one photo at a time, each checked (sharpness, light, distance, species) as it is taken.
-export const startCapture = () => request<{ capture_id: string; next_view: ViewSpec }>('/captures', { method: 'POST' });
+// `model` picks the re-ID model for the whole capture.
+export const startCapture = (model?: ModelKey) =>
+  request<{ capture_id: string; next_view: ViewSpec; model: ModelKey; model_name: string }>('/captures', { json: model ? { model } : {} });
+export const cancelCapture = (captureId: string) => request<void>(`/captures/${captureId}`, { method: 'DELETE', timeout: 5000 });
 export async function addView(captureId: string, uri: string, viewKey?: string) {
   const form = new FormData();
   await appendPhoto(form, 'image', uri, 'view.jpg');
@@ -161,18 +173,19 @@ export async function addView(captureId: string, uri: string, viewKey?: string) 
   return request<ViewAdded>(`/captures/${captureId}/views`, { form, timeout: 60_000 });
 }
 export const identifyCapture = (captureId: string, loc: Location | null, forceCommit = false) =>
-  request<IdentifyResult>(`/captures/${captureId}/identify`, { json: { location: loc, force_commit: forceCommit }, timeout: 60_000 });
+  request<IdentifyResult>(`/captures/${captureId}/identify`, { json: { location: loc, force_commit: forceCommit }, timeout: 180_000 });
 
 // Sends 3-5 bark photos; the server runs the model, stores the visit and answers which tree it is.
-export async function identify(photos: string[], loc: Location | null) {
+export async function identify(photos: string[], loc: Location | null, model?: ModelKey) {
   const form = new FormData();
+  if (model) form.append('model', model);
   for (const [i, uri] of photos.entries()) await appendPhoto(form, 'images', uri, `view${i}.jpg`);
   if (loc) {
     form.append('lat', String(loc.lat));
     form.append('lon', String(loc.lon));
     if (loc.accuracy_m != null) form.append('accuracy_m', String(loc.accuracy_m));
   }
-  return request<IdentifyResult>('/identify', { form, timeout: 120_000 });
+  return request<IdentifyResult>('/identify', { form, timeout: 180_000 });
 }
 
 export const assign = (observationId: string, treeId: string | 'new') =>
@@ -181,6 +194,9 @@ export const setSigns = (observationId: string, signs: string[]) =>
   request<Observation>(`/observations/${observationId}/signs`, { method: 'PUT', json: { signs } });
 export const setSensors = (observationId: string, sensors: Sensors) =>
   request<Observation>(`/observations/${observationId}/sensors`, { method: 'PUT', json: sensors });
+// A visit without photos at a known tree: an ESP32 reading (and/or signs, notes). The server re-runs the diagnosis.
+export const addVisit = (treeId: string, body: { sensors?: Sensors | null; signs?: string[]; health_notes?: string | null; location?: Location | null }) =>
+  request<Observation>(`/trees/${encodeURIComponent(treeId)}/visits`, { json: body });
 export const setHealth = (observationId: string, severity: number, notes: string) =>
   request<Observation>(`/observations/${observationId}/health`, { method: 'PUT', json: { severity, notes: notes || null } });
 

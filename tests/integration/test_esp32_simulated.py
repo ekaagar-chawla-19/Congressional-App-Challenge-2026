@@ -73,6 +73,34 @@ def test_firmware_output_parses_identically_in_python_and_the_app(tmp_path):
         for k in out:
             assert ts[k]["sensors"] == s[k], k  # same N/A decisions, same numbers
 
+    # The phone app's own parser (mobile/src/esp32reading.ts, used by the health check and Add ESP32 reading)
+    if shutil.which("node"):
+        ts_in = "".join(f"{k}\t{v}\n" for k, v in out.items())
+        res = subprocess.run(["node", "--experimental-strip-types", "--no-warnings", "test/esp32reading.mjs"],
+                             cwd=ROOT / "mobile", input=ts_in, capture_output=True, text=True, check=True).stdout
+        app = {k: json.loads(v) for k, v in (ln.split("\t", 1) for ln in res.strip().splitlines())}
+        for k in out:
+            assert app[k]["sensors"] == s[k], k
+            assert app[k]["device"] == "HS-ESP32-1A2B"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_app_parser_rejects_and_tolerates_like_the_backend():
+    cases = {"pad": '{"v":1,"soil_moisture_pct":20,"air_temp_c":"bad","humidity_pct":"NaN"}\x00\x00\r',
+             "brace": "{", "v2": '{"v":2}', "list": "[1,2]", "text": '"text"', "event": '{"event":"ready"}',
+             "range": '{"v":1,"soil_moisture_pct":140,"air_temp_c":-41,"humidity_pct":50,"light_lux":-1}',
+             "ok": '{"v":1,"device":"HS-ESP32-1A2B","soil_moisture_pct":31.5,"air_temp_c":19.2,"humidity_pct":77,"light_lux":4100}'}
+    res = subprocess.run(["node", "--experimental-strip-types", "--no-warnings", "test/esp32reading.mjs"],
+                         cwd=ROOT / "mobile", input="".join(f"{k}\t{v}\n" for k, v in cases.items()),
+                         capture_output=True, text=True, check=True).stdout
+    app = {k: json.loads(v) for k, v in (ln.split("\t", 1) for ln in res.strip().splitlines())}
+    for k, raw in cases.items():
+        try:
+            py = parse_reading(raw.encode())["sensors"]
+        except BadReading:
+            py = None
+        assert app[k].get("sensors") == py, (k, app[k])  # None: both reject it
+
 
 def test_parser_rejects_and_tolerates():
     pad = b'{"v":1,"soil_moisture_pct":20,"air_temp_c":"bad","humidity_pct":"NaN"}\x00\x00\r\n'

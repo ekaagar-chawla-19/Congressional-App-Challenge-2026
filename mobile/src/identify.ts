@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import * as api from './api';
+import { useModels } from './models';
 import type { TreeRow } from './data';
 import { isServer, useSession } from './session';
 
@@ -11,7 +12,7 @@ export type Identification = { matches: Match[]; server?: api.IdentifyResult; of
 export async function identify(photos: string[], trees: TreeRow[], done?: api.IdentifyResult | null): Promise<Identification> {
   if (done) return { matches: matchesFrom(done, trees), server: done };
   if (isServer()) {
-    const r = await api.identify(photos, await quickFix());
+    const r = await api.identify(photos, await quickFix(), useModels.getState().chosen ?? undefined);
     return { matches: matchesFrom(r, trees), server: r };
   }
   // The model runs on the server. Offline there is no identification: never invent a match score.

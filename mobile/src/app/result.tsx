@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useDb } from '@/db';
-import { Camera, Check, Plus, TriangleAlert } from '@/icons';
+import { Camera, Check, Cpu, Plus, TriangleAlert } from '@/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
@@ -131,9 +131,12 @@ export default function Result() {
       <BackBar title="Scan result" />
 
       <View style={{ gap: space.sm }}>
-        <View style={[s.badge, { backgroundColor: badge.tint }]}>
-          <Dot c={badge.dot} />
-          <T v="caption" c={badge.text} style={{ fontFamily: font.semibold }}>{badge.label}</T>
+        <View style={s.badges}>
+          <View style={[s.badge, { backgroundColor: badge.tint }]}>
+            <Dot c={badge.dot} />
+            <T v="caption" c={badge.text} style={{ fontFamily: font.semibold }}>{badge.label}</T>
+          </View>
+          {srv?.model_name && <ModelTag name={srv.model_name} />}
         </View>
         <T v="hero" style={{ fontSize: 56, lineHeight: 60 }}>{isMatch ? chosen.tree.id : res.offline ? 'Not identified' : 'New tree'}</T>
         <T c={color.inkSoft}>
@@ -174,6 +177,7 @@ export default function Result() {
       </View>
 
       {srv?.species && <HemlockCheck sp={srv.species} />}
+      {srv?.species_checked === false && <SpeciesNotChecked model={srv.model_name ?? 'This model'} />}
 
       {browsing && (
         <Card>
@@ -199,6 +203,32 @@ export default function Result() {
         </View>
       </View>
     </Screen>
+  );
+}
+
+// Which re-ID model produced this result (chosen in the picker before the scan).
+const ModelTag = ({ name }: { name: string }) => (
+  <View style={[s.badge, { backgroundColor: color.well }]} accessibilityLabel={`Identified with ${name}`}>
+    <Cpu size={14} strokeWidth={1.75} color={color.inkSoft} />
+    <T v="caption" c={color.ink} style={{ fontFamily: font.medium }}>{name}</T>
+  </View>
+);
+
+// Model gamma has no species head: say so instead of showing a hemlock percentage it never measured.
+function SpeciesNotChecked({ model }: { model: string }) {
+  return (
+    <Card style={{ padding: space.lg, gap: space.sm }}>
+      <View style={s.between}>
+        <T v="label">Hemlock check</T>
+        <View style={[s.badge, { backgroundColor: color.well }]}>
+          <Dot c={color.lichen} />
+          <T v="caption" c={color.ink} style={{ fontFamily: font.semibold }}>Not checked</T>
+        </View>
+      </View>
+      <T v="caption" c={color.inkSoft}>
+        {`${model} does not check the species: it assumes this tree is an Eastern hemlock. If you are not sure, use Hemlock check on the home screen (it runs Model delta's species check).`}
+      </T>
+    </Card>
   );
 }
 
@@ -233,6 +263,7 @@ function HemlockCheck({ sp }: { sp: api.Species }) {
 
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   badge: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 28, paddingHorizontal: space.md, borderRadius: radius.pill, alignSelf: 'flex-start' },
   between: { flexDirection: 'row', justifyContent: 'space-between' },
   track: { height: 8, borderRadius: radius.pill, backgroundColor: color.line, overflow: 'hidden' },

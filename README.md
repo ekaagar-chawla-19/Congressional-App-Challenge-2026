@@ -112,7 +112,12 @@ hemlock-api                         # terminal 1: backend on port 8000
 cd mobile && npm ci && npx expo start   # terminal 2: scan the QR code with Expo Go, or press w for the browser
 ```
 
-Sign in with `demo@hemlock.test` / `hemlock-demo`. Details: [`mobile/README.md`](mobile/README.md).
+Sign in with `demo@hemlock.test` / `hemlock-demo`. Before each scan the app asks which model to use:
+**Model delta** (ours: faster, checks the species) or **Model gamma** (the RTX 3060 448 px checkpoint, unchanged:
+best on real phone photos, no species check). Both run for real on the server, and every tree is fingerprinted
+by both, so either model recognises trees registered with the other: [`docs/models.md`](docs/models.md).
+ESP32 readings can be read over Bluetooth (Chrome on Android), pasted or typed, at a scan or later from the tree
+page (**Add ESP32 reading**). Details: [`mobile/README.md`](mobile/README.md).
 
 ## Try the app (demo mode, no trained model)
 

@@ -254,6 +254,16 @@ class Accounts:
         except Exception as e:  # noqa: BLE001  (never kill the worker; identify syncs again anyway)
             self._bg_errors.append(f"{key} forest {forest.forest_id}: {e}")
 
+    def warm_up(self) -> int:
+        """At start-up: queue every model's catch-up for every forest (trees stored before a model was added).
+        Returns how many jobs were queued; scans still catch up synchronously if a job has not run yet."""
+        with self._lock:
+            forests = [Forest(**dict(r)) for r in self._db.execute("SELECT * FROM forests").fetchall()]
+        for f in forests:
+            for k in self.models:
+                self._bg.submit(self._bg_sync, f, k)
+        return len(forests) * len(self.models)
+
     def wait_background(self, timeout: float = 120.0) -> None:
         """Tests and shutdown: wait until queued background fingerprinting has finished."""
         self._bg.submit(lambda: None).result(timeout)
