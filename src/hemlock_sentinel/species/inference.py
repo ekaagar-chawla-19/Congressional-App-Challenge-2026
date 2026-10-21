@@ -21,10 +21,16 @@ class SpeciesResult:
     confidence: float
     probabilities: dict[str, float]
     reid_allowed: bool
+    checked: bool = True  # False: the model has no species head; the species is assumed, not measured
 
     @property
     def common_name(self) -> str:
         return COMMON_NAMES.get(self.species, self.species)
+
+
+def assumed_hemlock() -> SpeciesResult:
+    """For a model without a species head (model gamma): the user is scanning hemlocks, nothing was measured."""
+    return SpeciesResult("tsuga_canadensis", float("nan"), {}, True, checked=False)
 
 
 def classify_observation(view_logits: np.ndarray, threshold: float, labels: list[str] = SPECIES,

@@ -22,6 +22,7 @@ import math
 import random
 import time
 import uuid
+import zlib
 
 import numpy as np
 
@@ -54,7 +55,26 @@ def seed_demo(accounts: Accounts, now: float | None = None, seed: int = 7) -> Us
     for i, spec in enumerate(STREAM_FORESTS):
         if spec[0] not in have:
             _seed_stream_forest(accounts, user, spec, now, np.random.default_rng(seed + i))
+    for f in accounts.forests(user.user_id):
+        _ensure_model_embeddings(accounts, f)
     return user
+
+
+def _ensure_model_embeddings(accounts: Accounts, forest) -> None:
+    """Placeholder visits get a random fingerprint in every model's space (one per tree, like the original
+    seed), so every model sees the same demo trees; random vectors never match a real photo."""
+    repo = accounts.pipeline(forest).repo
+    for key, m in accounts.models.items():
+        rows = repo.query("SELECT o.observation_id, o.tree_id, o.aggregated_embedding FROM observations o "
+                          "WHERE o.model_version='demo_seed' AND NOT EXISTS (SELECT 1 FROM model_embeddings e "
+                          "WHERE e.observation_id=o.observation_id AND e.model=?)", (key,))
+        dim = m.runtime.embedding_dim
+        for oid, tid, blob in rows:
+            if blob is not None and len(blob) == 2 * dim and key == accounts.default_model:
+                emb = np.frombuffer(blob, np.float16).astype(np.float32)
+            else:
+                emb = np.random.default_rng(zlib.crc32(f"{key}:{tid}".encode())).normal(0, 1, dim).astype(np.float32)
+            repo.add_model_embedding(oid, key, emb)
 
 
 def _only_demo_data(accounts: Accounts, forest) -> bool:

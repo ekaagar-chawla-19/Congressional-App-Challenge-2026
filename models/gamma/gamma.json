@@ -1,0 +1,20 @@
+{
+ "model_key": "gamma",
+ "name": "Model gamma",
+ "image_size": 448,
+ "resize_short_side": 640,
+ "crops": "five",
+ "embedding_dim": 256,
+ "species_labels": [],
+ "version": "gamma-vits448-barknet-rtx3060",
+ "backbone": "vit_small_patch14_dinov2.lvd142m",
+ "pooling": "cls_mean",
+ "preprocessing": "RGB, resize short side to 640, five 448 px crops (centre + corners), /255, ImageNet mean/std; embedding = L2-normalised mean of the crop embeddings",
+ "source_checkpoint": {
+  "file": "vits_448_best.pt",
+  "sha256": "5dfff6e501a3f9264f9d1ba43810964a2b821a83ba0763a0145b6ee9dbb0a749",
+  "release": "https://github.com/ekaagar-chawla-19/Congressional-App-Challenge-2026/releases/tag/barknet-rtx3060",
+  "weights_modified": false
+ },
+ "onnx_max_abs_diff_vs_pytorch": 3.0547380447387695e-07
+}

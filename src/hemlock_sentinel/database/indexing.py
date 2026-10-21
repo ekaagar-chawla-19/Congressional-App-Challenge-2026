@@ -13,15 +13,16 @@ from .repository import TreeRepository
 
 
 class IndexCache:
-    def __init__(self, repo: TreeRepository, dim: int):
+    def __init__(self, repo: TreeRepository, dim: int, model: str | None = None):
         self.repo = repo
         self.dim = dim
+        self.model = model  # None: observations.aggregated_embedding (single-model databases)
         self._by_species: dict[str, EmbeddingIndex] = {}
 
     def get(self, species: str) -> EmbeddingIndex:
         if species not in self._by_species:
             idx = EmbeddingIndex(self.dim)
-            tids, oids, emb = self.repo.gallery(species)
+            tids, oids, emb = self.repo.gallery(species, self.model)
             if tids:
                 idx.add_many(tids, emb, oids)
             self._by_species[species] = idx

@@ -1,0 +1,128 @@
+{
+  "species_threshold": 0.0,
+  "match_threshold": 0.40333800656638646,
+  "global_threshold": 0.8463091850280763,
+  "target_fmr": 0.01,
+  "view_contradiction_margin": 0.16550254821777344,
+  "view_match_threshold": 0.8012219667434693,
+  "duplicate_cosine": 0.9631717896461487,
+  "duplicate_hard_cosine": 0.9697311704158783,
+  "gap_floor": 0.613593339920044,
+  "fusers": {
+    "global+gap+agreement": {
+      "feature_names": [
+        "global",
+        "gap",
+        "agreement"
+      ],
+      "coef": [
+        2.5490868401943847,
+        0.9601533746765956,
+        0.5317708875148079
+      ],
+      "intercept": -8.614859497694262,
+      "mean": [
+        0.3315221653894822,
+        -0.3064784769816771,
+        0.32523409742731446
+      ],
+      "scale": [
+        0.23768875903165101,
+        0.2191174278270001,
+        0.44827218958445947
+      ]
+    }
+  },
+  "provenance": {
+    "model": "gamma (vits_448_best.pt, weights unchanged)",
+    "date": "2026-10-21",
+    "fitted_on": "BarkNet PRU trees outside the test split (31) + iNaturalist trees with even observation id (70 multi-photo, 1111 one-photo)",
+    "n_fit_queries": 101500,
+    "n_fit_candidate_pairs": 311480,
+    "species_threshold": "not used: model gamma has no species head",
+    "duplicate_views": {
+      "hard": 0.9697311704158783,
+      "warn": 0.9631717896461487,
+      "next_view_cos_p50": 0.8259105086326599,
+      "n_next_view_pairs": 639,
+      "reshoot_cos_p1": 0.9148830902576447,
+      "reshoot_cos_median": 0.9683118462562561,
+      "reshoots_caught_at_hard": 0.4666666666666667,
+      "n_reshoots": 30
+    },
+    "held_out_decisions": {
+      "barknet_14_test_trees": {
+        "known_tree_queries": 660,
+        "existing_right": 0.3348,
+        "existing_wrong": 0.0076,
+        "uncertain": 0.4758,
+        "new": 0.1818,
+        "never_enrolled_queries": 180,
+        "never_enrolled_matched": 0.1056
+      },
+      "inaturalist_held_out_half": {
+        "known_tree_queries": 440,
+        "existing_right": 0.2318,
+        "existing_wrong": 0.0,
+        "uncertain": 0.0045,
+        "new": 0.7636,
+        "never_enrolled_queries": 5800,
+        "never_enrolled_matched": 0.0
+      },
+      "new_forest_1_trees_barknet": {
+        "known_tree_queries": 90,
+        "existing_right": 0.7778,
+        "existing_wrong": 0.0,
+        "uncertain": 0.1,
+        "new": 0.1222,
+        "never_enrolled_queries": 1170,
+        "never_enrolled_matched": 0.1111
+      },
+      "new_forest_1_trees_inaturalist": {
+        "known_tree_queries": 30,
+        "existing_right": 0.4333,
+        "existing_wrong": 0.0,
+        "uncertain": 0.0,
+        "new": 0.5667,
+        "never_enrolled_queries": 7710,
+        "never_enrolled_matched": 0.0
+      },
+      "new_forest_2_trees_barknet": {
+        "known_tree_queries": 180,
+        "existing_right": 0.6111,
+        "existing_wrong": 0.0,
+        "uncertain": 0.2167,
+        "new": 0.1722,
+        "never_enrolled_queries": 1080,
+        "never_enrolled_matched": 0.1269
+      },
+      "new_forest_2_trees_inaturalist": {
+        "known_tree_queries": 60,
+        "existing_right": 0.35,
+        "existing_wrong": 0.0,
+        "uncertain": 0.0,
+        "new": 0.65,
+        "never_enrolled_queries": 7680,
+        "never_enrolled_matched": 0.0
+      },
+      "new_forest_5_trees_barknet": {
+        "known_tree_queries": 450,
+        "existing_right": 0.4356,
+        "existing_wrong": 0.0133,
+        "uncertain": 0.3711,
+        "new": 0.18,
+        "never_enrolled_queries": 810,
+        "never_enrolled_matched": 0.063
+      },
+      "new_forest_5_trees_inaturalist": {
+        "known_tree_queries": 150,
+        "existing_right": 0.32,
+        "existing_wrong": 0.0,
+        "uncertain": 0.0,
+        "new": 0.68,
+        "never_enrolled_queries": 7590,
+        "never_enrolled_matched": 0.0
+      }
+    }
+  }
+}

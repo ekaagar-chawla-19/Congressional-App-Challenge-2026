@@ -10,6 +10,9 @@ Design notes
   re-embedding comparisons) and per-observation aggregate (what retrieval
   searches). The tree's canonical embedding is derived (normalised mean of
   its observation embeddings) and cached on the tree row.
+* Each re-ID model (delta, gamma) has its own embedding space, so every observation keeps one
+  aggregate embedding per model in ``model_embeddings``; a model searches only its own rows.
+  ``observations.aggregated_embedding`` stays as the embedding of the model that stored it.
 * Observations are timestamped and ordered per tree, which is all the future
   longitudinal / health-change work needs from this layer.
 """
@@ -63,6 +66,13 @@ CREATE TABLE IF NOT EXISTS views (
     heading_deg REAL
 );
 CREATE INDEX IF NOT EXISTS idx_views_obs ON views(observation_id);
+CREATE TABLE IF NOT EXISTS model_embeddings (
+    observation_id TEXT NOT NULL REFERENCES observations(observation_id) ON DELETE CASCADE,
+    model TEXT NOT NULL,
+    embedding BLOB NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (observation_id, model)
+);
 """
 
 

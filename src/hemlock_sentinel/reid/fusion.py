@@ -59,11 +59,15 @@ def view_consistency(view_tree_scores: np.ndarray, tree_names: list[str], candid
 
 def candidate_features(agg_scores: np.ndarray, view_scores: np.ndarray, tree_names: list[str],
                        candidate: str, local: float | None = None,
-                       structure: float | None = None) -> dict[str, float]:
+                       structure: float | None = None, gap_floor: float | None = None) -> dict[str, float]:
+    """gap_floor: score of a virtual competing tree (Calibration.gap_floor), so small forests get a real gap."""
     ci = tree_names.index(candidate)
     g = float(agg_scores[ci])
     others = np.delete(agg_scores, ci)
-    gap = g - float(others.max()) if len(others) else g
+    best_other = float(others.max()) if len(others) else None
+    if gap_floor is not None:
+        best_other = gap_floor if best_other is None else max(best_other, gap_floor)
+    gap = g - best_other if best_other is not None else g
     agreement = float((np.asarray(view_scores).argmax(1) == ci).mean())
     f = {"global": g, "gap": gap, "agreement": agreement}
     if local is not None:

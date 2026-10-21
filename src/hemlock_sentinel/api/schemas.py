@@ -24,6 +24,7 @@ class Health(BaseModel):
     demo: bool
     model_version: str
     face_blur: bool = Field(description="false = face detector missing; photos are stored unscreened")
+    models: list[str] = Field([], description="re-ID models this server runs (GET /api/v1/models for details)")
 
 
 class CalibrationInfo(BaseModel):
@@ -52,6 +53,31 @@ class ModelInfo(BaseModel):
     species_labels: list[str]
     reid_supported_species: list[str]
     calibration: CalibrationInfo
+
+
+class ModelChoice(BaseModel):
+    key: str = Field(description="send this as `model`: delta | gamma")
+    name: str
+    tagline: str
+    description: str
+    version: str
+    checks_species: bool = Field(description="false = the model cannot tell species apart; it assumes a hemlock")
+    embedding_dim: int
+    image_size: int
+    real_photo_top1: float | None = Field(None, description="share of real phone photos (2,371 iNaturalist "
+                                                            "hemlocks) where the right tree was ranked first")
+    speed: str | None = None
+    default: bool
+    demo: bool
+
+
+class ModelList(BaseModel):
+    default: str
+    models: list[ModelChoice]
+
+
+class CaptureCreate(BaseModel):
+    model: str | None = Field(None, description="re-ID model for this capture: delta (default) or gamma")
 
 
 class ViewSpecOut(BaseModel):
@@ -145,6 +171,8 @@ class ViewQuality(BaseModel):
 
 class CaptureCreated(BaseModel):
     capture_id: str
+    model: str = Field(description="the re-ID model this capture runs")
+    model_name: str
     next_view: ViewSpecOut
     expires_in_s: int
 
@@ -236,6 +264,10 @@ class ChatReply(BaseModel):
 
 class IdentifyResult(BaseModel):
     status: Status
+    model: str | None = Field(None, description="re-ID model that produced this result (delta | gamma)")
+    model_name: str | None = None
+    species_checked: bool = Field(True, description="false = this model has no species check; `species` is "
+                                                    "null and the tree is assumed to be an Eastern hemlock")
     action: Action = Field(description="what the app should do next")
     message: str
     tree_id: str | None

@@ -4,7 +4,9 @@
   (stored as a SHA-256 hash, 30-day expiry);
 * each user owns forests; each forest has its OWN tree database and photo store,
   so trees, IDs (H-001...) and matching never mix between forests or users;
-* the model (runtime) and calibration are loaded once and shared by all forests.
+* the models (delta, gamma: runtime + calibration) are loaded once and shared by all forests; each forest
+  has one pipeline per model over the same tree database. When a visit is stored with one model, the other
+  models fingerprint its photos in the background, so any model can recognise any tree later.
 
 This is enough for a demo. Before real deployment add HTTPS, rate limiting,
 password reset and account deletion.
@@ -18,6 +20,8 @@ import secrets
 import sqlite3
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,6 +29,7 @@ from ..acquisition.interfaces import ModelRuntime
 from ..acquisition.mocks import LocalFileStorage
 from ..database.repository import TreeRepository
 from ..pipeline.inference import HemlockSentinel, PipelineConfig
+from ..pipeline.registry import DEFAULT_MODEL, ModelSpec, spec
 from ..reid.calibration import Calibration
 from . import field, health, sections
 
@@ -81,16 +86,24 @@ def _hash_token(token: str) -> str:
 
 
 class Accounts:
-    def __init__(self, root: str | Path, runtime: ModelRuntime, calibration: Calibration,
-                 config_factory=PipelineConfig):
+    def __init__(self, root: str | Path, runtime: ModelRuntime | None = None, calibration: Calibration | None = None,
+                 config_factory=PipelineConfig, models: dict[str, ModelSpec] | None = None):
+        """Pass ``models`` (delta, gamma...), or a single runtime + calibration (registered as delta)."""
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
-        self.runtime, self.cal, self.config_factory = runtime, calibration, config_factory
+        self.models = models or {DEFAULT_MODEL: spec(DEFAULT_MODEL, runtime, calibration)}
+        self.default_model = DEFAULT_MODEL if DEFAULT_MODEL in self.models else next(iter(self.models))
+        d = self.models[self.default_model]
+        self.runtime, self.cal, self.config_factory = d.runtime, d.cal, config_factory
+        self._stores: dict[int, tuple[TreeRepository, LocalFileStorage]] = {}
+        self._model_locks: dict[tuple[int, str], threading.RLock] = {}
+        self._bg = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cross-embed")
+        self._bg_errors: list[str] = []
         self._db = sqlite3.connect(self.root / "accounts.sqlite", check_same_thread=False, isolation_level=None)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
         self._lock = threading.RLock()
-        self._pipes: dict[int, HemlockSentinel] = {}
+        self._pipes: dict[tuple[int, str], HemlockSentinel] = {}
 
     # ----------------------------------------------------------------- users
     def register(self, email: str, password: str, name: str) -> User:
@@ -161,22 +174,86 @@ class Accounts:
         with self._lock:
             if self.forest(user_id, forest_id) is None:
                 return False
-            p = self._pipes.pop(forest_id, None)
-            if p is not None:
-                p.repo.close()
+            for k in [k for k in self._pipes if k[0] == forest_id]:
+                self._pipes.pop(k)
+            st = self._stores.pop(forest_id, None)
+            if st is not None:
+                st[0].close()
             self._db.execute("DELETE FROM forests WHERE forest_id=?", (forest_id,))
             shutil.rmtree(self.root / "forests" / str(forest_id), ignore_errors=True)
             return True
 
-    def pipeline(self, forest: Forest) -> HemlockSentinel:
+    def _store(self, forest: Forest) -> tuple[TreeRepository, LocalFileStorage]:
+        st = self._stores.get(forest.forest_id)
+        if st is None:
+            d = self.root / "forests" / str(forest.forest_id)
+            repo = TreeRepository(d / "trees.sqlite")
+            health.ensure_schema(repo)
+            field.ensure_schema(repo)
+            sections.ensure_schema(repo)
+            st = self._stores[forest.forest_id] = (repo, LocalFileStorage(d / "blobs"))
+        return st
+
+    def model(self, key: str | None) -> ModelSpec:
+        """The model ``key`` (None: the default). KeyError for an unknown key."""
+        return self.models[key or self.default_model]
+
+    def pipeline(self, forest: Forest, model: str | None = None) -> HemlockSentinel:
+        """The pipeline of one model in one forest (all models share the forest's tree database)."""
+        key = model or self.default_model
+        m = self.models[key]
         with self._lock:
-            p = self._pipes.get(forest.forest_id)
+            p = self._pipes.get((forest.forest_id, key))
             if p is None:
-                d = self.root / "forests" / str(forest.forest_id)
-                repo = TreeRepository(d / "trees.sqlite")
-                health.ensure_schema(repo)
-                field.ensure_schema(repo)
-                sections.ensure_schema(repo)
-                p = HemlockSentinel(self.runtime, repo, LocalFileStorage(d / "blobs"), self.cal, self.config_factory())
-                self._pipes[forest.forest_id] = p
+                repo, storage = self._store(forest)
+                p = HemlockSentinel(m.runtime, repo, storage, m.cal, self.config_factory(), model_key=key)
+                self._pipes[(forest.forest_id, key)] = p
             return p
+
+    def pipelines(self, forest: Forest) -> dict[str, HemlockSentinel]:
+        return {k: self.pipeline(forest, k) for k in self.models}
+
+    def _model_lock(self, forest: Forest, key: str) -> threading.RLock:
+        with self._lock:
+            return self._model_locks.setdefault((forest.forest_id, key), threading.RLock())
+
+    def sync(self, forest: Forest, model: str | None = None) -> int:
+        """Bring one model's fingerprints of this forest up to date: adopt embeddings stored before per-model
+        storage existed (default model only) and embed stored photos it has not seen. Returns how many
+        observations were added."""
+        key = model or self.default_model
+        p = self.pipeline(forest, key)
+        with self._model_lock(forest, key):
+            n = 0
+            if key == self.default_model:
+                others = [k for k in self.models if k != key]
+                n = p.repo.adopt_legacy_embeddings(key, p.runtime.embedding_dim,
+                                                   exclude_version_prefix=others[0] if len(others) == 1 else None)
+                if n:
+                    p.index.invalidate()
+            return n + p.backfill_embeddings()
+
+    @contextmanager
+    def ready(self, forest: Forest, model: str | None = None):
+        """Hold this model's lock with its fingerprints up to date (identify inside this block)."""
+        key = model or self.default_model
+        with self._model_lock(forest, key):
+            self.sync(forest, key)
+            yield self.pipeline(forest, key)
+
+    def after_commit(self, forest: Forest, model: str | None) -> None:
+        """A visit was stored with ``model``: the other models fingerprint its photos in the background."""
+        key = model or self.default_model
+        for other in [k for k in self.models if k != key]:
+            self._bg.submit(self._bg_sync, forest, other)
+
+    def _bg_sync(self, forest: Forest, key: str) -> None:
+        try:
+            if self.forest(forest.user_id, forest.forest_id) is not None:
+                self.sync(forest, key)
+        except Exception as e:  # noqa: BLE001  (never kill the worker; identify syncs again anyway)
+            self._bg_errors.append(f"{key} forest {forest.forest_id}: {e}")
+
+    def wait_background(self, timeout: float = 120.0) -> None:
+        """Tests and shutdown: wait until queued background fingerprinting has finished."""
+        self._bg.submit(lambda: None).result(timeout)

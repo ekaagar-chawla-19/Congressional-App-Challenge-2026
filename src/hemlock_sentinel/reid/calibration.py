@@ -107,6 +107,10 @@ class Calibration:
     # view (scripts/calibrate_duplicate.py). Model-specific, so it lives here.
     duplicate_cosine: float | None = None  # soft: warn ("did you move?")
     duplicate_hard_cosine: float | None = None  # hard: reject as a re-shoot
+    # Score of a virtual competing tree for the `gap` feature: max(best other tree, gap_floor). Without it, a
+    # forest with one tree gives gap = global (no competitor), which a model whose different trees already
+    # score high (gamma: 0.7-0.8) turns into near-certain false matches. None = no floor (as delta was fitted).
+    gap_floor: float | None = None
     fusers: dict[str, LogisticCalibrator] = field(default_factory=dict)  # key: "+".join(features)
     provenance: dict = field(default_factory=dict)  # split, n pairs, date — for honesty
 

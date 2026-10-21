@@ -25,12 +25,12 @@ from ..acquisition.quality import QualityReport, QualityThresholds, assess, head
 from ..database.indexing import IndexCache
 from ..database.models import ObservationRecord, ViewRecord
 from ..database.repository import TreeRepository
-from ..preprocessing import to_network_input
+from ..preprocessing import decode_image, to_network_input
 from ..reid.calibration import Calibration
 from ..reid.fusion import IdentityDecision, candidate_features, decide
 from ..reid.local_matching import KeypointMatcher, LocalFeatures, profile_similarity, trunk_profile_from_depth, Intrinsics
 from ..reid.multiview import aggregate_mean, l2_normalize
-from ..species.inference import SpeciesResult, classify_observation
+from ..species.inference import SpeciesResult, assumed_hemlock, classify_observation
 from ..species.labels import ID_PREFIX
 
 
@@ -82,8 +82,11 @@ class PipelineConfig:
 class HemlockSentinel:
     def __init__(self, runtime: ModelRuntime, repo: TreeRepository, storage: Storage, calibration: Calibration,
                  config: PipelineConfig | None = None, gps: GPS | None = None,
-                 sensors: EnvironmentalSensors | None = None):
+                 sensors: EnvironmentalSensors | None = None, model_key: str | None = None):
+        """model_key: name of this re-ID model ("delta", "gamma") when several share one database; its
+        embeddings are kept per model (model_embeddings) and retrieval only searches its own."""
         self.runtime = runtime
+        self.model_key = model_key
         self.repo = repo
         self.storage = storage
         self.cal = calibration
@@ -94,7 +97,7 @@ class HemlockSentinel:
             self.cfg.quality.max_duplicate_cosine = calibration.duplicate_hard_cosine
         self.gps = gps
         self.sensors = sensors
-        self.index = IndexCache(repo, runtime.embedding_dim)
+        self.index = IndexCache(repo, runtime.embedding_dim, model_key)
         self.matcher = KeypointMatcher() if self.cfg.use_local_matching else None
         self._local_cache: dict[str, LocalFeatures] = {}
 
@@ -117,9 +120,7 @@ class HemlockSentinel:
         if self.cfg.blur_faces:
             rgb, faces = blur_faces(rgb)
         vr.faces_blurred = faces
-        x = to_network_input(rgb, self.runtime.input_size)[None]
-        emb, logits = self.runtime.run(x)
-        vr.embedding, vr.species_logits = emb[0], logits[0]
+        vr.embedding, vr.species_logits = self.embed(rgb)
         for p in previous or []:
             if p.embedding is None:
                 continue
@@ -140,6 +141,45 @@ class HemlockSentinel:
                 vr.image_bytes = frame.encoded  # store the original bytes, no re-encode
         return vr
 
+    def embed(self, rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
+        """One decoded photo -> (embedding, species logits or None). Runtimes with their own preprocessing
+        (model gamma: five crops) implement embed_rgb; the others take to_network_input batches."""
+        if hasattr(self.runtime, "embed_rgb"):
+            return self.runtime.embed_rgb(rgb)
+        emb, logits = self.runtime.run(to_network_input(rgb, self.runtime.input_size)[None])
+        return emb[0], (logits[0] if logits is not None and logits.shape[-1] else None)
+
+    @property
+    def checks_species(self) -> bool:
+        return bool(getattr(self.runtime, "species_labels", None))
+
+    def backfill_embeddings(self, limit: int = 1000) -> int:
+        """Embed stored observations this model has not seen yet (e.g. trees registered with the other model),
+        from their stored photos, so it can match them. Returns how many observations were added."""
+        if self.model_key is None:
+            return 0
+        done = 0
+        for oid in self.repo.missing_model_embeddings(self.model_key, limit):
+            o = self.repo.get_observation(oid)
+            views = [v for v in o.views if v.image_key and _is_identity_view(v.view_type)] or \
+                    [v for v in o.views if v.image_key]
+            embs, w = [], []
+            for v in views:
+                try:
+                    rgb = decode_image(self.storage.get(v.image_key))
+                except Exception:  # noqa: BLE001  (missing or unreadable blob: skip that view)
+                    continue
+                embs.append(self.embed(rgb)[0])
+                w.append(float(v.quality.get("weight", 1.0)))
+            if not embs:
+                continue
+            agg = aggregate_mean(np.stack(embs), np.array(w))
+            self.repo.add_model_embedding(oid, self.model_key, agg)
+            if o.tree_id is not None and o.species:
+                self.index.add(o.species, o.tree_id, agg, oid)
+            done += 1
+        return done
+
     # --------------------------------------------------------------- identify
     def identify(self, views: list[ViewResult], commit: bool = True, now: float | None = None,
                  fix: GeoFix | None = None) -> ObservationResult:
@@ -150,8 +190,12 @@ class HemlockSentinel:
         if len(id_views) < MIN_VIEWS:
             return ObservationResult("recapture", None, None, None, None,
                                      f"need {MIN_VIEWS} good trunk views, have {len(id_views)}")
-        species = classify_observation(np.stack([v.species_logits for v in id_views]), self.cal.species_threshold,
-                                       self.runtime.species_labels, np.array([v.quality.weight for v in id_views]))
+        if self.checks_species:
+            species = classify_observation(np.stack([v.species_logits for v in id_views]),
+                                           self.cal.species_threshold, self.runtime.species_labels,
+                                           np.array([v.quality.weight for v in id_views]))
+        else:
+            species = assumed_hemlock()
         if species.species == "unknown":
             return self._finish(views, species, None, "rejected_species", None,
                                 f"species uncertain ({species.confidence:.0%}); retake photos or species not supported",
@@ -176,7 +220,8 @@ class HemlockSentinel:
                 tid = names[i]
                 local = self._local_score(tid, id_views) if self.matcher is not None else None
                 structure = self._structure_score(tid, id_views) if self.cfg.use_depth else None
-                feats.append((tid, candidate_features(agg_scores, view_scores, names, tid, local, structure)))
+                feats.append((tid, candidate_features(agg_scores, view_scores, names, tid, local, structure,
+                                                            self.cal.gap_floor)))
             decision = decide(feats, self.cal, view_scores, names)
         timings = {"retrieval_decision_ms": (time.perf_counter() - t_ret) * 1000}
         msg = {"existing": f"Matched existing tree {decision.tree_id}",
@@ -262,7 +307,7 @@ class HemlockSentinel:
                                      "faces_blurred": v.faces_blurred}, d_key, lf_key, v.heading_deg))
         obs = ObservationRecord(
             uuid.uuid4().hex, res.tree_id if status in ("existing", "new") else None, now, status,
-            species.species if species else None, species.confidence if species else None,
+            species.species if species else None, species.confidence if species and species.checked else None,
             decision.probability if decision else None, agg,
             fix.lat if fix else None, fix.lon if fix else None, fix.accuracy_m if fix else None,
             getattr(self.runtime, "version", None), env,
@@ -271,6 +316,8 @@ class HemlockSentinel:
              if decision and decision.consistency else []},
             vrecs)
         res.observation_id = self.repo.add_observation(obs)
+        if agg is not None and self.model_key is not None:
+            self.repo.add_model_embedding(res.observation_id, self.model_key, agg, now)
         if obs.tree_id is not None and agg is not None:
             self.index.add(species.species, obs.tree_id, agg, res.observation_id)
         res.committed = True

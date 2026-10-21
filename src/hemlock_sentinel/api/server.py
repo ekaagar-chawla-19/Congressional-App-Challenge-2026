@@ -16,6 +16,10 @@ Two ways to identify a tree:
             quality feedback) -> POST /captures/{id}/identify
 * one-shot: POST /identify with all 3-7 photos in one multipart request.
 Uncertain results are stored unassigned; resolve them with POST /observations/{id}/assign.
+
+Two re-ID models can be chosen per capture (GET /models): delta (default, checks the species) and gamma
+(448 px, best on real photos, no species check). Choose with {"model": "gamma"} on POST /captures, the
+`model` form field on POST /identify, or the X-Model header. Every tree is fingerprinted by every model.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ import hmac
 import os
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -48,7 +53,7 @@ from ..acquisition.protocol import (
     next_view,
     spec_for,
 )
-from ..app.server import SESSION_TTL_S, Sessions, build_pipeline, load_model
+from ..app.server import SESSION_TTL_S, Sessions, build_pipeline
 from ..database.models import ObservationRecord, TreeRecord
 from ..pipeline.inference import HemlockSentinel, ObservationResult, ViewResult
 from ..preprocessing import decode_image
@@ -61,6 +66,9 @@ from . import geography as G
 from . import health as H
 from . import schemas as S
 from . import sections as SEC
+from ..pipeline.registry import DEFAULT_MODEL as DEFAULT_KEY
+from ..pipeline.registry import ModelSpec, load_models
+from ..pipeline.registry import spec as model_spec
 from .accounts import Accounts, Forest, User
 from .assistant import API_ERRORS, Assistant, NotConfigured
 
@@ -74,8 +82,18 @@ def _find_production(name: str) -> Path:
     return Path(__file__).resolve().parents[3] / rel
 
 
-DEFAULT_MODEL = _find_production("hemlock.onnx")
-DEFAULT_CALIBRATION = _find_production("calibration.json")
+def _find_model(rel: str) -> Path:
+    for base in (Path(__file__).resolve().parents[3], Path.cwd(), Path("/app")):
+        if (base / rel).exists():
+            return base / rel
+    return Path(__file__).resolve().parents[3] / rel
+
+
+DELTA_MODEL = _find_production("hemlock.onnx")
+DELTA_CALIBRATION = _find_production("calibration.json")
+GAMMA_MODEL = _find_model("models/gamma/gamma.onnx")
+GAMMA_CALIBRATION = _find_model("models/gamma/calibration.json")
+DEFAULT_MODEL, DEFAULT_CALIBRATION = DELTA_MODEL, DELTA_CALIBRATION  # older names
 STATIC = Path(__file__).parent / "static"
 MAX_IMAGE_BYTES = 25_000_000
 PREFIX = "/api/v1"
@@ -93,10 +111,17 @@ class Workspace:
     key: str
     user: User | None = None
     forest: Forest | None = None
+    model: str = DEFAULT_KEY
+    peers: dict | None = None  # every model's pipeline over this database
 
     @property
     def repo(self):
         return self.pipe.repo
+
+    def invalidate(self, species: str | None = None) -> None:
+        """Tree assignments changed: every model's retrieval index must reload."""
+        for p in (self.peers or {self.model: self.pipe}).values():
+            p.index.invalidate(species)
 
 
 def _iso(t: float | None) -> str | None:
@@ -141,7 +166,7 @@ def _result(r: ObservationResult, action: str, views: list[ViewResult], nxt: Vie
                            observation_id=r.observation_id, next_view=_spec(nxt),
                            views=[_view_quality(v) for v in views],
                            timings_ms={k: round(v, 1) for k, v in r.timings_ms.items()})
-    if r.species:
+    if r.species and r.species.checked:
         out.species = S.Species(label=r.species.species, name=r.species.common_name,
                                 confidence=round(r.species.confidence, 4),
                                 hemlock_probability=round(r.species.probabilities.get("tsuga_canadensis", 0.0), 4),
@@ -225,6 +250,9 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     db_lock = threading.Lock()
     runtime = pipeline.runtime if pipeline else accounts.runtime
     cal = pipeline.cal if pipeline else accounts.cal
+    single_key = (pipeline.model_key or DEFAULT_KEY) if pipeline else None
+    models: dict[str, ModelSpec] = accounts.models if accounts else {single_key: model_spec(single_key, runtime, cal, demo)}
+    default_model = accounts.default_model if accounts else single_key
     blur_enabled = (pipeline.cfg if pipeline else accounts.config_factory()).blur_faces
     version = getattr(runtime, "version", "unknown")
     model_path = getattr(runtime, "model_path", None)
@@ -284,10 +312,38 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             raise ApiError(404, "forest_not_found", f"no forest {forest_id} on this account")
         return f
 
+    def check_model(key: str | None) -> str:
+        key = (key or default_model).strip().lower()
+        if key not in models:
+            raise ApiError(400, "unknown_model", f"unknown model {key!r}; available: {', '.join(models)}")
+        return key
+
+    def pipe_for(ws: Workspace, key: str) -> HemlockSentinel:
+        return ws.peers[key] if ws.peers and key in ws.peers else ws.pipe
+
+    def model_result(out: S.IdentifyResult, key: str, pipe: HemlockSentinel) -> S.IdentifyResult:
+        out.model, out.model_name = key, models[key].name
+        if not pipe.checks_species:
+            out.species, out.species_checked = None, False
+            if out.status in ("existing", "new", "uncertain"):
+                out.message += f" ({models[key].name} does not check the species; it assumes an Eastern hemlock.)"
+        return out
+
+    @contextmanager
+    def model_ready(ws: Workspace, key: str):
+        """This model's pipeline with its fingerprints of the forest up to date (and its lock held)."""
+        if accounts is None or ws.forest is None:
+            yield pipe_for(ws, key)
+        else:
+            with accounts.ready(ws.forest, key) as p:
+                yield p
+
     def workspace(request: Request, _creds: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-                  x_forest_id: str | None = Header(None, description="forest to work in (accounts mode)")) -> Workspace:
+                  x_forest_id: str | None = Header(None, description="forest to work in (accounts mode)"),
+                  x_model: str | None = Header(None, description="re-ID model: delta (default) or gamma")) -> Workspace:
+        model = check_model(x_model or request.query_params.get("model"))
         if pipeline is not None:
-            return Workspace(pipeline, "single")
+            return Workspace(pipeline, "single", model=model, peers={single_key: pipeline})
         user = current_user(request)
         raw = x_forest_id or request.query_params.get("forest_id")
         if not raw:
@@ -298,7 +354,8 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         except ValueError as e:
             raise ApiError(400, "forest_required", "X-Forest-Id must be a number") from e
         f = get_forest(user, fid)
-        return Workspace(accounts.pipeline(f), f"{user.user_id}:{f.forest_id}", user, f)
+        peers = accounts.pipelines(f)
+        return Workspace(peers[model], f"{user.user_id}:{f.forest_id}", user, f, model, peers)
 
     errors = {r: {"model": S.ErrorResponse} for r in (400, 401, 404, 409, 413, 422)}
     api = APIRouter(prefix=PREFIX, dependencies=[Depends(require_key)], responses=errors)
@@ -332,9 +389,9 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             raise ApiError(400, "bad_image", f"{upload.filename}: cannot decode image ({e})") from e
 
     def add_view(ws: Workspace, views: list[ViewResult], data: bytes, rgb, view_key: str,
-                 heading: float | None) -> ViewResult:
+                 heading: float | None, model: str | None = None) -> ViewResult:
         prev = [v for v in views if v.view_type != view_key]
-        return ws.pipe.process_view(Frame(rgb, time.time(), encoded=data, heading_deg=heading), len(prev), prev,
+        return pipe_for(ws, model or ws.model).process_view(Frame(rgb, time.time(), encoded=data, heading_deg=heading), len(prev), prev,
                                     view_key=view_key)
 
     def check_view_key(key: str) -> None:
@@ -381,7 +438,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             return False
         top = r.decision.candidates[0]
         ws.repo.assign_observation(r.observation_id, top["tree_id"], "best_guess")
-        ws.pipe.index.invalidate(r.species.species)
+        ws.invalidate(r.species.species)
         r.tree_id = top["tree_id"]
         r.message = f"Assigned to best guess {top['tree_id']} ({top['probability']:.0%} confident); correct it " \
                     "from the tree page if wrong"
@@ -426,17 +483,32 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     def health():
         """Liveness check (no sign-in needed)."""
         return S.Health(status="ok", demo=demo, model_version=version,
-                        face_blur=blur_enabled and privacy._get_detector() is not False)
+                        face_blur=blur_enabled and privacy._get_detector() is not False, models=list(models))
+
+    def model_choice(k: str) -> S.ModelChoice:
+        m = models[k]
+        return S.ModelChoice(key=k, name=m.name, tagline=m.text.get("tagline", ""),
+                             description=m.text.get("description", ""), version=m.version,
+                             checks_species=m.checks_species, embedding_dim=m.runtime.embedding_dim,
+                             image_size=m.runtime.input_size, real_photo_top1=None if m.demo else m.text.get("real_photo_top1"),
+                             speed=m.text.get("speed"), default=k == default_model, demo=m.demo)
+
+    @app.get(f"{PREFIX}/models", response_model=S.ModelList, tags=["meta"])
+    def list_models():
+        """The re-ID models the app can choose between before a scan (no sign-in needed)."""
+        return S.ModelList(default=default_model, models=[model_choice(k) for k in models])
 
     @api.get("/model", response_model=S.ModelInfo, tags=["meta"])
-    def model_info():
+    def model_info(model: str | None = Query(None, description="delta (default) or gamma")):
+        m = models[check_model(model)]
+        rt, c = m.runtime, m.cal
         return S.ModelInfo(
-            version=version, demo=demo, on_device=model_files, backbone=getattr(runtime, "backbone", None),
-            embedding_dim=runtime.embedding_dim, image_size=runtime.input_size,
-            species_labels=list(runtime.species_labels), reid_supported_species=sorted(REID_SUPPORTED),
-            calibration=S.CalibrationInfo(target_false_match_rate=getattr(cal, "target_fmr", None),
-                                          species_threshold=cal.species_threshold,
-                                          match_threshold=cal.match_threshold, provenance=cal.provenance or {}))
+            version=m.version, demo=demo, on_device=model_files if m.key == default_model else None,
+            backbone=getattr(rt, "backbone", None), embedding_dim=rt.embedding_dim, image_size=rt.input_size,
+            species_labels=list(rt.species_labels), reid_supported_species=sorted(REID_SUPPORTED),
+            calibration=S.CalibrationInfo(target_false_match_rate=getattr(c, "target_fmr", None),
+                                          species_threshold=c.species_threshold,
+                                          match_threshold=c.match_threshold, provenance=c.provenance or {}))
 
     @api.get("/model/files/{name}", tags=["on-device"], response_class=FileResponse,
              responses={200: {"content": {"application/octet-stream": {}}}})
@@ -680,10 +752,13 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
     async def species_check(image: UploadFile = File(..., description="one photo of the bark"), ws: Workspace = WS):
         """Is this a hemlock? Runs the species model on one photo. Nothing is stored."""
         data, rgb = await read_image(image)
-        vr = add_view(ws, [], data, rgb, GUIDED_VIEWS[0].key, None)
+        sp_key = next((k for k, m in models.items() if m.checks_species), None)
+        if sp_key is None:
+            raise ApiError(409, "no_species_model", "no loaded model has a species check")
+        vr = add_view(ws, [], data, rgb, GUIDED_VIEWS[0].key, None, sp_key)
         del rgb
         q = _view_quality(vr)
-        th = float(ws.pipe.cal.species_threshold)
+        th = float(pipe_for(ws, sp_key).cal.species_threshold)
         if vr.species_logits is None:
             raise ApiError(422, "unusable_photo", "photo rejected before the model: " + "; ".join(q.problems))
         p = softmax(vr.species_logits[None])[0]
@@ -705,14 +780,16 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         import numpy as np
 
         sp = sorted(REID_SUPPORTED)[0]
-        tids, oids, emb = ws.repo.gallery(sp)
+        with model_ready(ws, ws.model) as p:
+            tids, oids, emb = ws.repo.gallery(sp, p.model_key)
         out = []
         for t, o, e in zip(tids, oids, emb):
             v = np.asarray(e, dtype=np.float32)
             v = v / max(float(np.linalg.norm(v)), 1e-12)
             out.append(S.GalleryObservation(tree_id=t, observation_id=o,
                                             embedding_b64=base64.b64encode(v.astype("<f4").tobytes()).decode()))
-        return S.Gallery(model_version=version, embedding_dim=runtime.embedding_dim, species=sp,
+        return S.Gallery(model_version=models[ws.model].version, embedding_dim=models[ws.model].runtime.embedding_dim,
+                         species=sp,
                          tree_ids=sorted(set(tids)), observations=out)
 
     @api.get("/gallery", response_model=S.Gallery, tags=["on-device"])
@@ -728,11 +805,15 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
 
     # --------------------------------------------------------- guided capture
     @api.post("/captures", response_model=S.CaptureCreated, status_code=201, tags=["capture"])
-    def create_capture(ws: Workspace = WS):
-        """Start a guided capture. Photos are held in memory for 30 min until identify."""
+    def create_capture(body: S.CaptureCreate | None = None, ws: Workspace = WS):
+        """Start a guided capture with one re-ID model (body {"model": "gamma"}, else X-Model, else delta).
+        Photos are held in memory for 30 min until identify."""
+        key = check_model(body.model) if body and body.model else ws.model
         cid = sessions.new()
-        sessions.get(cid)["owner"] = ws.key
-        return S.CaptureCreated(capture_id=cid, next_view=_spec(GUIDED_VIEWS[0]), expires_in_s=SESSION_TTL_S)
+        s = sessions.get(cid)
+        s["owner"], s["model"] = ws.key, key
+        return S.CaptureCreated(capture_id=cid, model=key, model_name=models[key].name,
+                                next_view=_spec(GUIDED_VIEWS[0]), expires_in_s=SESSION_TTL_S)
 
     @api.get("/captures/{capture_id}", response_model=S.CaptureState, tags=["capture"])
     def capture_state(capture_id: str, ws: Workspace = WS):
@@ -762,7 +843,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         check_view_key(view_key)
         if len(views) >= MAX_TOTAL_VIEWS:
             raise ApiError(400, "too_many_views", f"at most {MAX_TOTAL_VIEWS} views")
-        vr = add_view(ws, views, data, rgb, view_key, heading_deg)
+        vr = add_view(ws, views, data, rgb, view_key, heading_deg, s.get("model"))
         del rgb
         if vr.accepted:
             s["views"] = [v for v in views if v.view_type != view_key] + [vr]
@@ -784,24 +865,28 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         if s.get("result_out") is not None:
             return s["result_out"]
         views = s["views"]
-        with db_lock:
-            r = ws.pipe.identify(views, commit=False)
+        key = s.get("model") or ws.model
+        with model_ready(ws, key) as pipe, db_lock:
+            r = pipe.identify(views, commit=False)
             if r.status == "recapture":
-                return _result(r, "retake", views, s.get("next"))
+                return model_result(_result(r, "retake", views, s.get("next")), key, pipe)
             if r.status == "uncertain" and not body.force_commit:
                 s["need_identity"] = True
                 nxt = next_view({v.view_type for v in views}, need_identity=True)
                 if nxt is not None:
                     s["next"] = nxt
-                    return _result(r, "capture_another_view", views, nxt)
-            r = ws.pipe.commit(views, r, fix=_fix(body.location))
+                    return model_result(_result(r, "capture_another_view", views, nxt), key, pipe)
+            r = pipe.commit(views, r, fix=_fix(body.location))
             guessed = body.accept_best_guess and accept_best_guess_fn(ws, r)
             findings = record_visit(ws, r.observation_id, body.severity, body.health_notes,
                                     F.clean_sensors(body.sensors.model_dump()) if body.sensors else None,
                                     body.signs)
-        out = _result(r, "done" if guessed or r.status in ("existing", "new", "rejected_species",
-                                                             "unsupported_species") else "review", views)
+        out = model_result(_result(r, "done" if guessed or r.status in ("existing", "new", "rejected_species",
+                                                                          "unsupported_species") else "review",
+                                   views), key, pipe)
         out.findings = findings
+        if accounts is not None and ws.forest is not None and r.observation_id:
+            accounts.after_commit(ws.forest, key)
         s["result_out"] = out
         s["views"] = [ViewResult(v.index, v.view_type, v.quality, faces_blurred=v.faces_blurred) for v in views]
         return out
@@ -828,6 +913,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         signs: str | None = Form(None, description="comma-separated " + S.SIGNS_DOC),
         accept_best_guess: bool = Form(False, description="if uncertain, assign the top candidate"),
         commit: bool = Form(True, description="false = dry run, nothing stored"),
+        model: str | None = Form(None, description="re-ID model: delta (default) or gamma"),
         ws: Workspace = WS):
         """All photos in one request. Always stores the result (uncertain ones for review) unless commit=false."""
         if not MIN_VIEWS <= len(images) <= MAX_TOTAL_VIEWS:
@@ -846,25 +932,28 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         sensors = _form_sensors(soil_moisture_pct=soil_moisture_pct, air_temp_c=air_temp_c,
                                 humidity_pct=humidity_pct, light_lux=light_lux)
         sign_list = _check_signs([x.strip() for x in signs.split(",") if x.strip()] if signs else [])
+        key = check_model(model) if model else ws.model
         views: list[ViewResult] = []
         for img, k, h in zip(images, keys, heads):
             data, rgb = await read_image(img)
-            vr = add_view(ws, views, data, rgb, k, h)
+            vr = add_view(ws, views, data, rgb, k, h, key)
             del rgb
             views.append(vr)
         accepted = [v for v in views if v.accepted]
         loc = _location(lat, lon, accuracy_m)
-        with db_lock:
-            r = ws.pipe.identify(accepted, commit=False)
+        with model_ready(ws, key) as pipe, db_lock:
+            r = pipe.identify(accepted, commit=False)
             if r.status == "recapture":
-                return _result(r, "retake", views)
+                return model_result(_result(r, "retake", views), key, pipe)
             guessed, findings = False, []
             if commit:
-                r = ws.pipe.commit(accepted, r, fix=_fix(loc))
+                r = pipe.commit(accepted, r, fix=_fix(loc))
                 guessed = accept_best_guess and accept_best_guess_fn(ws, r)
                 findings = record_visit(ws, r.observation_id, severity, health_notes, sensors, sign_list)
-        out = _result(r, "review" if r.status == "uncertain" and not guessed else "done", views)
+        out = model_result(_result(r, "review" if r.status == "uncertain" and not guessed else "done", views), key, pipe)
         out.findings = findings
+        if commit and accounts is not None and ws.forest is not None and r.observation_id:
+            accounts.after_commit(ws.forest, key)
         return out
 
     # -------------------------------------------------------------- database
@@ -900,7 +989,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         with db_lock:
             gone = ws.repo.delete_tree(t.tree_id, ("tree_health", "visit_sensors", "visit_signs", "visit_findings",
                                                    "visit_ai_inspection"))
-            ws.pipe.index.invalidate(t.species)
+            ws.invalidate(t.species)
         for k in gone:
             try:
                 Path(ws.pipe.storage.path(k)).unlink(missing_ok=True)
@@ -918,7 +1007,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             raise ApiError(400, "species_mismatch", "trees have different species")
         with db_lock:
             ws.repo.merge_trees(keep.tree_id, drop.tree_id)
-            ws.pipe.index.invalidate(keep.species)
+            ws.invalidate(keep.species)
         return tree_detail(tree_id, ws)
 
     @api.get("/observations", response_model=S.ObservationPage, tags=["observations"])
@@ -1029,7 +1118,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
                 repo.assign_observation(observation_id, tid, "user_confirmed")
             elif o.tree_id != tid:
                 repo.reassign_observation(observation_id, tid)
-            ws.pipe.index.invalidate(o.species)
+            ws.invalidate(o.species)
         return S.AssignResult(observation_id=observation_id, tree_id=tid, created_tree=created)
 
     @api.get("/images/{key}", tags=["observations"], response_class=Response,
@@ -1085,8 +1174,12 @@ def main() -> None:
     ap.add_argument("--no-demo-account", action="store_true", help="do not create the demo account")
     ap.add_argument("--db", default=os.environ.get("HEMLOCK_DB", "runs/api/trees.sqlite"), help="--single only")
     ap.add_argument("--blobs", default=os.environ.get("HEMLOCK_BLOBS", "runs/api/blobs"), help="--single only")
-    ap.add_argument("--model", default=os.environ.get("HEMLOCK_MODEL", str(DEFAULT_MODEL)))
-    ap.add_argument("--calibration", default=os.environ.get("HEMLOCK_CALIBRATION", str(DEFAULT_CALIBRATION)))
+    ap.add_argument("--model", default=os.environ.get("HEMLOCK_MODEL", str(DELTA_MODEL)), help="model delta (ONNX)")
+    ap.add_argument("--calibration", default=os.environ.get("HEMLOCK_CALIBRATION", str(DELTA_CALIBRATION)))
+    ap.add_argument("--gamma-model", default=os.environ.get("HEMLOCK_GAMMA_MODEL", str(GAMMA_MODEL)),
+                    help="model gamma (ONNX); skipped if the file is missing")
+    ap.add_argument("--gamma-calibration", default=os.environ.get("HEMLOCK_GAMMA_CALIBRATION", str(GAMMA_CALIBRATION)))
+    ap.add_argument("--no-gamma", action="store_true", help="run model delta only")
     ap.add_argument("--demo", action="store_true", help="mock model (no weights); results are meaningless")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
@@ -1109,15 +1202,19 @@ def main() -> None:
     else:
         from .demo_seed import DEMO_EMAIL, DEMO_PASSWORD, seed_demo
 
-        runtime, cal, demo = load_model(model, args.calibration)
-        accounts = Accounts(args.data, runtime, cal)
+        reg = load_models(model, args.calibration, None if args.no_gamma else args.gamma_model, args.gamma_calibration)
+        demo = model is None
+        accounts = Accounts(args.data, models=reg)
+        runtime = accounts.runtime
         if not args.no_demo_account:
             seed_demo(accounts)
             mode = f"accounts (demo sign-in: {DEMO_EMAIL} / {DEMO_PASSWORD})"
         else:
             mode = "accounts"
         app = create_api(demo=demo, api_key=key, cors_origins=args.cors.split(","), accounts=accounts)
+    names = ", ".join(f"{k}={m.version}" for k, m in (accounts.models.items() if not args.single else {}.items()))
     print(f"Hemlock Sentinel API: model={'DEMO (mock)' if demo else runtime.version}, mode={mode}\n"
+          f"  re-ID models: {names or 'delta only (--single)'}\n"
           f"  docs: http://localhost:{args.port}/docs   map: http://localhost:{args.port}/map")
     uvicorn.run(app, host=args.host, port=args.port)
 

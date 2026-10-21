@@ -108,10 +108,12 @@ class TreeRepository:
 
     def _refresh_tree(self, c: sqlite3.Connection, tree_id: str, seen_at: float | None = None) -> None:
         rows = c.execute("SELECT aggregated_embedding, timestamp FROM observations WHERE tree_id=?"
-                         " AND aggregated_embedding IS NOT NULL", (tree_id,)).fetchall()
+                         " AND aggregated_embedding IS NOT NULL ORDER BY timestamp", (tree_id,)).fetchall()
         canon = None
         if rows:
-            canon = l2_normalize(np.mean([l2_normalize(from_blob(r[0])) for r in rows], axis=0))
+            # visits stored by different models have embeddings of different sizes: use the latest model's
+            same = [from_blob(r[0]) for r in rows if len(r[0]) == len(rows[-1][0])]
+            canon = l2_normalize(np.mean([l2_normalize(e) for e in same], axis=0))
         last = max([r[1] for r in rows], default=seen_at or time.time())
         n = c.execute("SELECT COUNT(*) FROM observations WHERE tree_id=?", (tree_id,)).fetchone()[0]
         c.execute("UPDATE trees SET canonical_embedding=?, observation_count=?, last_seen_at=? WHERE tree_id=?",
@@ -160,7 +162,7 @@ class TreeRepository:
             keys = [r[0] for r in c.execute(f"SELECT image_key FROM views WHERE observation_id IN ({q}) "
                                             "AND image_key IS NOT NULL", oids)] if oids else []
             have = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            for t in [x for x in extra_tables if x in have] + ["views"]:
+            for t in [x for x in extra_tables if x in have] + ["model_embeddings", "views"]:
                 if oids:
                     c.execute(f"DELETE FROM {t} WHERE observation_id IN ({q})", oids)
             c.execute("DELETE FROM observations WHERE tree_id=?", (tree_id,))
@@ -205,15 +207,64 @@ class TreeRepository:
                                           v["local_features_key"], v["heading_deg"]))
         return o
 
-    def gallery(self, species: str) -> tuple[list[str], list[str], np.ndarray]:
-        """(tree_ids, observation_ids, embeddings) of assigned observations of one species."""
-        rows = self._conn.execute(
-            "SELECT o.tree_id, o.observation_id, o.aggregated_embedding FROM observations o"
-            " JOIN trees t ON t.tree_id = o.tree_id WHERE t.species=? AND t.merged_into IS NULL"
-            " AND o.aggregated_embedding IS NOT NULL ORDER BY o.timestamp", (species,)).fetchall()
+    def gallery(self, species: str, model: str | None = None) -> tuple[list[str], list[str], np.ndarray]:
+        """(tree_ids, observation_ids, embeddings) of assigned observations of one species.
+        ``model``: that model's embeddings (model_embeddings); None: observations.aggregated_embedding."""
+        if model is None:
+            sql = ("SELECT o.tree_id, o.observation_id, o.aggregated_embedding FROM observations o"
+                   " JOIN trees t ON t.tree_id = o.tree_id WHERE t.species=? AND t.merged_into IS NULL"
+                   " AND o.aggregated_embedding IS NOT NULL ORDER BY o.timestamp")
+            args: tuple = (species,)
+        else:
+            sql = ("SELECT o.tree_id, o.observation_id, m.embedding FROM observations o"
+                   " JOIN trees t ON t.tree_id = o.tree_id"
+                   " JOIN model_embeddings m ON m.observation_id = o.observation_id AND m.model=?"
+                   " WHERE t.species=? AND t.merged_into IS NULL ORDER BY o.timestamp")
+            args = (model, species)
+        rows = self.query(sql, args)
         if not rows:
             return [], [], np.zeros((0, 0), np.float32)
         return [r[0] for r in rows], [r[1] for r in rows], np.stack([from_blob(r[2]) for r in rows])
+
+    # ------------------------------------------------------ per-model embeddings
+    def add_model_embedding(self, observation_id: str, model: str, embedding: np.ndarray,
+                            now: float | None = None) -> None:
+        with self.tx() as c:
+            c.execute("INSERT OR REPLACE INTO model_embeddings(observation_id, model, embedding, created_at) "
+                      "VALUES(?,?,?,?)", (observation_id, model, to_blob(l2_normalize(np.asarray(embedding))),
+                                          time.time() if now is None else now))
+
+    def model_embedding(self, observation_id: str, model: str) -> np.ndarray | None:
+        r = self.query("SELECT embedding FROM model_embeddings WHERE observation_id=? AND model=?",
+                       (observation_id, model))
+        return from_blob(r[0][0]) if r else None
+
+    def adopt_legacy_embeddings(self, model: str, dim: int, exclude_version_prefix: str | None = None) -> int:
+        """Databases from before model_embeddings: register each stored aggregate embedding of the right size
+        as ``model``'s (float16 = 2 bytes per value). Returns how many were added."""
+        q = ("INSERT OR IGNORE INTO model_embeddings(observation_id, model, embedding, created_at) "
+             "SELECT observation_id, ?, aggregated_embedding, timestamp FROM observations "
+             "WHERE aggregated_embedding IS NOT NULL AND length(aggregated_embedding)=?")
+        args: list = [model, 2 * dim]
+        if exclude_version_prefix:
+            q += " AND (model_version IS NULL OR model_version NOT LIKE ?)"
+            args.append(exclude_version_prefix + "%")
+        with self.tx() as c:
+            return c.execute(q, args).rowcount
+
+    def missing_model_embeddings(self, model: str, limit: int = 1000) -> list[str]:
+        """Observations assigned to a live tree, with stored photos, that ``model`` has not embedded yet."""
+        rows = self.query(
+            "SELECT o.observation_id FROM observations o JOIN trees t ON t.tree_id=o.tree_id "
+            "WHERE t.merged_into IS NULL AND NOT EXISTS (SELECT 1 FROM model_embeddings m "
+            "WHERE m.observation_id=o.observation_id AND m.model=?) AND EXISTS (SELECT 1 FROM views v "
+            "WHERE v.observation_id=o.observation_id AND v.image_key IS NOT NULL) ORDER BY o.timestamp LIMIT ?",
+            (model, limit))
+        return [r[0] for r in rows]
+
+    def models_for(self, observation_id: str) -> list[str]:
+        return [r[0] for r in self.query("SELECT model FROM model_embeddings WHERE observation_id=? ORDER BY model",
+                                         (observation_id,))]
 
     def gallery_views(self, tree_id: str) -> list[ViewRecord]:
         rows = self._conn.execute(
