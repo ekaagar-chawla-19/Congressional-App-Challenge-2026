@@ -11,6 +11,8 @@ RUN pip install ".[onnx,app,assistant]"
 COPY models ./models
 ENV HEMLOCK_MODEL=/app/models/production/hemlock.onnx \
     HEMLOCK_CALIBRATION=/app/models/production/calibration.json \
+    HEMLOCK_GAMMA_MODEL=/app/models/gamma/gamma.onnx \
+    HEMLOCK_GAMMA_CALIBRATION=/app/models/gamma/calibration.json \
     HEMLOCK_FACE_MODEL=/app/models/third_party/face_detection_yunet_2023mar.onnx
 VOLUME /data
 EXPOSE 8000

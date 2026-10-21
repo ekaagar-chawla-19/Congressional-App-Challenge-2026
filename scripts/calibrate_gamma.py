@@ -128,6 +128,8 @@ def main() -> None:
     ap.add_argument("--target-fmr", type=float, default=0.01)
     ap.add_argument("--out", default="models/gamma/calibration.json")
     ap.add_argument("--skip-duplicate", action="store_true")
+    ap.add_argument("--gap-floor-quantile", type=float, default=0.5,
+                    help="virtual competitor = this quantile of the best other tree's score in a full stand")
     a = ap.parse_args()
     C = Path(a.cache)
     rows = [r for r in csv.DictReader(open(a.manifest)) if r["species"] == "tsuga_canadensis"]
@@ -167,7 +169,7 @@ def main() -> None:
         other = [f["global"] for c, f in cands if c != truth]
         if other:
             rivals.append(max(other))
-    gap_floor = float(np.median(rivals))
+    gap_floor = float(np.quantile(rivals, a.gap_floor_quantile))
     fit = collect(fit_pru, im_fit, s_fit, range(20), gap_floor)
     X = np.array([[f[n] for n in FEATS] for _, cands, _, _ in fit for _, f in cands])
     y = np.array([int(c == truth) for truth, cands, _, _ in fit for c, _ in cands])
