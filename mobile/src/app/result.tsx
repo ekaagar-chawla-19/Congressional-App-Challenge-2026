@@ -214,7 +214,7 @@ const ModelTag = ({ name }: { name: string }) => (
   </View>
 );
 
-// Model gamma has no species head: say so instead of showing a hemlock percentage it never measured.
+// Model Gamma has no species head: say so instead of showing a hemlock percentage it never measured.
 function SpeciesNotChecked({ model }: { model: string }) {
   return (
     <Card style={{ padding: space.lg, gap: space.sm }}>
@@ -226,7 +226,7 @@ function SpeciesNotChecked({ model }: { model: string }) {
         </View>
       </View>
       <T v="caption" c={color.inkSoft}>
-        {`${model} does not check the species: it assumes this tree is an Eastern hemlock. If you are not sure, use Hemlock check on the home screen (it runs Model delta's species check).`}
+        {`${model} does not check the species: it assumes this tree is an Eastern hemlock. If you are not sure, use Hemlock check on the home screen (it runs Model Delta's species check).`}
       </T>
     </Card>
   );

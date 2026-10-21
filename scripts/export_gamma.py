@@ -1,4 +1,4 @@
-"""Export model gamma (the RTX 3060 BarkNet ViT-S/14 448 px checkpoint) to ONNX, weights unchanged.
+"""Export Model Gamma (the RTX 3060 BarkNet ViT-S/14 448 px checkpoint) to ONNX, weights unchanged.
 
 The checkpoint is the GitHub release asset ``vits_448_best.pt`` of release ``barknet-rtx3060``. Its
 sha256 is checked before anything else; the network is rebuilt from the config saved inside it and
@@ -77,7 +77,7 @@ def main() -> None:
     diff = float(np.abs(ref - got).max())
     if diff > 1e-4:
         raise SystemExit(f"ONNX output differs from PyTorch by {diff}")
-    meta = {"model_key": "gamma", "name": "Model gamma", "image_size": int(cfg["train"]["img_size"]),
+    meta = {"model_key": "gamma", "name": "Model Gamma", "image_size": int(cfg["train"]["img_size"]),
             "resize_short_side": int(cfg.get("eval", {}).get("resize", 640)), "crops": "five",
             "embedding_dim": int(cfg["model"]["embed_dim"]), "species_labels": [],
             "version": "gamma-vits448-barknet-rtx3060", "backbone": cfg["model"]["backbone"],

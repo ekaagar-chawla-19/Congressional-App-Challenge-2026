@@ -143,7 +143,7 @@ class HemlockSentinel:
 
     def embed(self, rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
         """One decoded photo -> (embedding, species logits or None). Runtimes with their own preprocessing
-        (model gamma: five crops) implement embed_rgb; the others take to_network_input batches."""
+        (Model Gamma: five crops) implement embed_rgb; the others take to_network_input batches."""
         if hasattr(self.runtime, "embed_rgb"):
             return self.runtime.embed_rgb(rgb)
         emb, logits = self.runtime.run(to_network_input(rgb, self.runtime.input_size)[None])

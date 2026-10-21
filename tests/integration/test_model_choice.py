@@ -79,12 +79,12 @@ def test_models_listed_and_capture_runs_the_chosen_one(env):
     m = c.get(f"{V}/models").json()
     assert m["default"] == "delta" and [x["key"] for x in m["models"]] == ["delta", "gamma"]
     by = {x["key"]: x for x in m["models"]}
-    assert by["delta"]["name"] == "Model delta" and by["delta"]["checks_species"] is True
-    assert by["gamma"]["name"] == "Model gamma" and by["gamma"]["checks_species"] is False
+    assert by["delta"]["name"] == "Model Delta" and by["delta"]["checks_species"] is True
+    assert by["gamma"]["name"] == "Model Gamma" and by["gamma"]["checks_species"] is False
     assert by["gamma"]["embedding_dim"] == 96 and by["delta"]["embedding_dim"] == 128
     assert c.get(f"{V}/health").json()["models"] == ["delta", "gamma"]
     cap, r = guided(c, h, 1, "gamma")
-    assert cap["model"] == "gamma" and cap["model_name"] == "Model gamma"
+    assert cap["model"] == "gamma" and cap["model_name"] == "Model Gamma"
     assert r["model"] == "gamma" and r["status"] == "new" and r["tree_id"] == "H-001"
     cap, r = guided(c, h, 2, None)  # no model given: the default
     assert cap["model"] == "delta" and r["model"] == "delta"
@@ -191,7 +191,7 @@ def test_delete_tree_removes_every_models_fingerprints(env):
 
 def test_database_from_before_model_choice_still_matches(tmp_path):
     """Observations stored with only observations.aggregated_embedding (the old schema) are adopted as
-    model delta's fingerprints, and gamma embeds their photos when first used."""
+    Model Delta's fingerprints, and gamma embeds their photos when first used."""
     acc = make_accounts(tmp_path)
     c = TestClient(create_api(accounts=acc))
     tok = c.post(f"{V}/auth/register", json={"email": "a@b.org", "password": "correct horse", "name": "A"}).json()

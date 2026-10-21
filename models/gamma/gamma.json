@@ -1,6 +1,6 @@
 {
  "model_key": "gamma",
- "name": "Model gamma",
+ "name": "Model Gamma",
  "image_size": 448,
  "resize_short_side": 640,
  "crops": "five",

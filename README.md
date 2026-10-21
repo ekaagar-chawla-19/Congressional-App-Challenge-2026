@@ -113,7 +113,7 @@ cd mobile && npm ci && npx expo start   # terminal 2: scan the QR code with Expo
 ```
 
 Sign in with `demo@hemlock.test` / `hemlock-demo`. Before each scan the app asks which model to use:
-**Model delta** (ours: faster, checks the species) or **Model gamma** (the RTX 3060 448 px checkpoint, unchanged:
+**Model Delta** (ours: faster, checks the species) or **Model Gamma** (the RTX 3060 448 px checkpoint, unchanged:
 best on real phone photos, no species check). Both run for real on the server, and every tree is fingerprinted
 by both, so either model recognises trees registered with the other: [`docs/models.md`](docs/models.md).
 ESP32 readings can be read over Bluetooth (Chrome on Android), pasted or typed, at a scan or later from the tree

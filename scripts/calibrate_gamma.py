@@ -1,6 +1,6 @@
-"""Calibrate the app's decision thresholds for model gamma (weights untouched; post-hoc only).
+"""Calibrate the app's decision thresholds for Model Gamma (weights untouched; post-hoc only).
 
-Model gamma has no calibration for the app's decision logic (fused P(same tree), view checks,
+Model Gamma has no calibration for the app's decision logic (fused P(same tree), view checks,
 duplicate-view checks), so this fits one the same way delta's was fitted, replaying the app's own
 code: EmbeddingIndex retrieval (max over observations), candidate_features, LogisticCalibrator and
 decide().
@@ -227,7 +227,7 @@ def main() -> None:
         "fitted_on": f"BarkNet PRU trees outside the test split ({len(fit_pru)}) + iNaturalist trees with even "
                      f"observation id ({len(im_fit)} multi-photo, {len(s_fit)} one-photo)",
         "n_fit_queries": len(fit), "n_fit_candidate_pairs": int(len(y)),
-        "species_threshold": "not used: model gamma has no species head",
+        "species_threshold": "not used: Model Gamma has no species head",
         "duplicate_views": dup, "held_out_decisions": held}
     cal.save(a.out)
     print(json.dumps({"gap_floor": gap_floor, "match_threshold": t_match, "global_threshold": t_global, "view_match_threshold": t_view,

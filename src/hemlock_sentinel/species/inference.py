@@ -29,7 +29,7 @@ class SpeciesResult:
 
 
 def assumed_hemlock() -> SpeciesResult:
-    """For a model without a species head (model gamma): the user is scanning hemlocks, nothing was measured."""
+    """For a model without a species head (Model Gamma): the user is scanning hemlocks, nothing was measured."""
     return SpeciesResult("tsuga_canadensis", float("nan"), {}, True, checked=False)
 
 

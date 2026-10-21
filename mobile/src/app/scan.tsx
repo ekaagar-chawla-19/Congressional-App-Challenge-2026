@@ -243,7 +243,7 @@ export default function Scan() {
         ) : (
           <View style={s.chip}>
             <Dot c={unit ? color.live : color.lichen} />
-            <T v="caption" c={color.paper} style={{ fontFamily: font.medium }}>{check ? 'Hemlock check · Model delta' : unit ? `Live from ${unit.name}` : 'Bark scan'}</T>
+            <T v="caption" c={color.paper} style={{ fontFamily: font.medium }}>{check ? 'Hemlock check · Model Delta' : unit ? `Live from ${unit.name}` : 'Bark scan'}</T>
           </View>
         )}
         <Pressable style={[s.round, torch && { backgroundColor: color.paper }]} onPress={() => setTorch(!torch)} accessibilityLabel="Toggle light" accessibilityState={{ selected: torch }}>

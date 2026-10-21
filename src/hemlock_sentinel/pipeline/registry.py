@@ -21,7 +21,7 @@ DEFAULT_MODEL = "delta"
 
 TEXT = {
     "delta": {
-        "name": "Model delta",
+        "name": "Model Delta",
         "tagline": "Faster, checks the species first",
         "description": "DINOv2 ViT-S/14 at 322 px, fine-tuned on BarkNet. Checks that the bark is an Eastern "
                        "hemlock before matching. Under half a second per photo on a laptop CPU. On 2,371 real "
@@ -31,7 +31,7 @@ TEXT = {
         "speed": "fast",
     },
     "gamma": {
-        "name": "Model gamma",
+        "name": "Model Gamma",
         "tagline": "Best match accuracy on real photos",
         "description": "DINOv2 ViT-S/14 at 448 px (RTX 3060 BarkNet run), five crops per photo. Does not check "
                        "the species: it assumes the tree is an Eastern hemlock. About 2 to 3 s per photo on a "
@@ -90,10 +90,10 @@ def load_models(delta_model: str | None, delta_cal: str | None, gamma_model: str
     out = {"delta": spec("delta", rt, cal)}
     if gamma_model and Path(gamma_model).exists():
         if not gamma_cal or not Path(gamma_cal).exists():
-            raise SystemExit(f"model gamma needs its calibration: {gamma_cal}")
+            raise SystemExit(f"Model Gamma needs its calibration: {gamma_cal}")
         out["gamma"] = spec("gamma", GammaRuntime(gamma_model), Calibration.load(gamma_cal))
     elif gamma_model:
-        print(f"WARNING: model gamma not loaded: {gamma_model} does not exist. Run `git pull` in the repository "
+        print(f"WARNING: Model Gamma not loaded: {gamma_model} does not exist. Run `git pull` in the repository "
               "(models/gamma/gamma.onnx is 88 MB), start hemlock-api from the repository folder, or pass "
               "--gamma-model and --gamma-calibration.", flush=True)
     return out

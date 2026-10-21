@@ -3,7 +3,7 @@
 The app asks which model to use before every scan (a small sheet, like the model menu in ChatGPT or Claude).
 Both models run for real on the HemlockID server (`hemlock-api`); the phone only chooses.
 
-| | Model delta | Model gamma |
+| | Model Delta | Model Gamma |
 |---|---|---|
 | What it is | Our production model, `models/production/hemlock.onnx` | The RTX 3060 BarkNet checkpoint `vits_448_best.pt`, exported unchanged to `models/gamma/gamma.onnx` |
 | Network | DINOv2 ViT-S/14 at 322 px, 384-d embedding, species head | DINOv2 ViT-S/14 at 448 px, CLS+mean pooling, 256-d embedding, no species head |

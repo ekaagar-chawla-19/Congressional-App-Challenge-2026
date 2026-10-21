@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { useSession, type User } from './session';
 
@@ -150,9 +151,11 @@ export const createSection = (name: string, b: Bbox) =>
 export const deleteSection = (id: number) => request<void>(`/sections/${id}`, { method: 'DELETE' });
 export const landmarks = () => request<{ features: Landmark[] }>('/landmarks').then((r) => r.features);
 
+// Expo's fetch (SDK 57) uploads files that have bytes(): expo-file-system's File. The older React Native
+// { uri, name, type } object fails with "Unsupported FormDataPart implementation".
 async function appendPhoto(form: FormData, field: string, uri: string, name: string) {
   if (Platform.OS === 'web') form.append(field, await (await fetch(uri)).blob(), name);
-  else form.append(field, { uri, name, type: 'image/jpeg' } as unknown as Blob);
+  else form.append(field, new File(uri) as unknown as Blob, name);
 }
 
 // Is this a hemlock? One photo through the species model; nothing is stored.

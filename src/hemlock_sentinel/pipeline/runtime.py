@@ -35,7 +35,7 @@ class OnnxRuntime:
 
 
 class GammaRuntime:
-    """Model gamma: the RTX 3060 BarkNet ViT-S/14 448 px checkpoint, exported unchanged (scripts/export_gamma.py).
+    """Model Gamma: the RTX 3060 BarkNet ViT-S/14 448 px checkpoint, exported unchanged (scripts/export_gamma.py).
 
     It has no species head (species_labels is empty) and needs its own preprocessing, so it implements
     ``embed_rgb`` (one decoded photo -> embedding, None) instead of being fed to_network_input batches:
@@ -123,7 +123,7 @@ class MockRuntime:
 
         self.input_size = input_size
         self.embedding_dim = embedding_dim
-        # species_labels=[] mimics a model without a species head (model gamma)
+        # species_labels=[] mimics a model without a species head (Model Gamma)
         self.species_labels = [] if species_labels == [] else list(species_labels or SPECIES)
         self.version = "mock"
         rng = np.random.default_rng(seed)
