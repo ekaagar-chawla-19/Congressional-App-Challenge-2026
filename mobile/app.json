@@ -43,7 +43,8 @@
         {
           "photosPermission": "HemlockID lets you pick bark photos you already took."
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
