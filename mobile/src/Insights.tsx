@@ -6,7 +6,7 @@ import { CONDITIONS, CONDITION_KEYS } from './conditions';
 import { BookmarkPlus, ChevronRight, Droplets, Flame, Lightbulb, MapPin, Sun, Thermometer, TrendingDown, TrendingUp, type LucideIcon } from './icons';
 import { shortName, useSession } from './session';
 import { color, font, radius, space, status } from './theme';
-import { BackBar, Button, Card, ConfirmDelete, DeleteLink, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, T, notify } from './ui';
+import { BackBar, Button, Card, Clamp, ConfirmDelete, DeleteLink, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, T, notify } from './ui';
 
 export type Scope = { kind: 'forest' } | { kind: 'section'; id: number } | { kind: 'area'; bbox: api.Bbox };
 
@@ -283,7 +283,7 @@ function Sensors({ means, n, trees }: { means: api.Analysis['summary']['sensor_m
         {r(Droplets, 'Humidity', 'humidity_pct', '%')}
         {r(Sun, 'Light', 'light_lux', ' lx')}
       </View>
-      <T v="caption">{`Latest ESP32 reading of ${n} of ${trees} trees.`}</T>
+      <T v="caption">{`Average of each tree's latest ESP32 reading (${n} of ${trees} trees).`}</T>
     </View>
   );
 }
@@ -306,7 +306,7 @@ function Advice({ a }: { a: api.Analysis }) {
           </Card>
         );
       })}
-      <T v="caption" style={{ fontSize: 12 }}>{a.summary.general_advice?.[1]}</T>
+      <Clamp v="caption" lines={2} style={{ fontSize: 12 }}>{a.summary.general_advice?.[1] ?? ''}</Clamp>
     </View>
   );
 }

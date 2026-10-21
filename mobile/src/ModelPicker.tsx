@@ -5,7 +5,7 @@ import type { ModelChoice, ModelKey } from './api';
 import { CircleCheck, ShieldCheck, Sparkles, Timer, TriangleAlert, type LucideIcon } from './icons';
 import { recommended, speedLabel } from './models';
 import { color, font, radius, space } from './theme';
-import { Button, T } from './ui';
+import { Button, Clamp, T } from './ui';
 
 const Small = ({ as: Glyph, c }: { as: LucideIcon; c: string }) => <Glyph size={14} strokeWidth={1.75} color={c} />;
 
@@ -93,7 +93,7 @@ export function ModelPicker({ visible, models, value, error, photos = 0, first, 
                   </Pressable>
                 );
               })}
-              {chosen && <T v="caption" style={{ fontSize: 12, lineHeight: 17 }}>{chosen.description}</T>}
+              {chosen && <Clamp v="caption" lines={2} style={{ fontSize: 12, lineHeight: 17 }}>{chosen.description}</Clamp>}
             </ScrollView>
           )}
 

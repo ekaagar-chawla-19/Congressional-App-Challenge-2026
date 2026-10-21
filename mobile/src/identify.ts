@@ -46,3 +46,17 @@ async function fixInForest(): Promise<api.Location | null> {
 
 const km = (a: number, b: number, c: number, d: number) =>
   Math.hypot((a - c) * 111.32, (b - d) * 111.32 * Math.cos((a * Math.PI) / 180));
+
+// Where the phone is now (for a new forest's center), or null within 8 s.
+export const hereNow = () => Promise.race([
+  (async (): Promise<api.Location | null> => {
+    try {
+      if (!(await Location.requestForegroundPermissionsAsync()).granted) return null;
+      const { latitude: lat, longitude: lon, accuracy } = (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })).coords;
+      return { lat, lon, accuracy_m: accuracy };
+    } catch {
+      return null;
+    }
+  })(),
+  new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+]);

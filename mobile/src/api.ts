@@ -22,7 +22,12 @@ export type Observation = {
   sensors: Sensors | null; signs: string[]; findings: Finding[]; tree_id: string | null; timestamp: string;
   status: string; location: Location | null; views: { view_index: number; view_type: string; image_url: string | null }[];
 };
-export type TreeDetail = TreeSummary & { current_conditions: Finding[]; latest_sensors: Sensors | null; observations: Observation[] };
+export type SensorPoint = { observation_id: string; timestamp: string; sensors: Sensors; vpd_kpa: number | null };
+export type Environment = { summary: string; vpd_kpa: number | null; water_stress: 'low' | 'some' | 'high'; changes: string[] };
+export type TreeDetail = TreeSummary & {
+  current_conditions: Finding[]; latest_sensors: Sensors | null; observations: Observation[];
+  sensor_history?: SensorPoint[]; environment?: Environment | null; since_last_visit?: string[]; next_action?: string | null;
+};
 export type Candidate = { tree_id: string; probability: number | null; global_score: number | null };
 export type SpeciesScore = { label: string; name: string; probability: number };
 export type Species = { label: string; name: string; confidence: number; hemlock_probability: number | null; top: SpeciesScore[] };
@@ -44,7 +49,13 @@ export type IdentifyResult = {
   species: Species | null; probability: number | null; next_view: ViewSpec | null;
   candidates: Candidate[]; best_guess: { tree_id: string; probability: number | null; note: string } | null;
 };
-export type ViewAdded = { view: ViewQuality; accepted_views: number; can_identify: boolean; next_view: ViewSpec | null };
+// AI-guided scanning: after each photo the server re-ranks the trees and says what evidence is still missing.
+export type Guidance = {
+  state: 'start' | 'retake' | 'species_doubt' | 'first_tree' | 'confident' | 'ambiguous' | 'contradicting' | 'likely_new' | 'building';
+  title: string; detail: string; candidates: { tree_id: string; probability: number; global_score: number | null }[];
+  next_view: ViewSpec | null; ready: boolean; needs_more: boolean;
+};
+export type ViewAdded = { view: ViewQuality; accepted_views: number; can_identify: boolean; next_view: ViewSpec | null; guidance?: Guidance | null };
 export type SpeciesCheck = {
   is_hemlock: boolean; verdict: 'hemlock' | 'not_hemlock' | 'unsure'; hemlock_probability: number; threshold: number;
   species: SpeciesScore; top: SpeciesScore[]; quality: ViewQuality; message: string;
@@ -135,6 +146,8 @@ export const login = (server: string, email: string, password: string) =>
 export const logout = () => request<void>('/auth/logout', { method: 'POST', timeout: 3000 });
 
 export const forests = () => request<ForestSummary[]>('/forests');
+export const createForest = (name: string, at: { lat: number; lon: number } | null) =>
+  request<ForestSummary>('/forests', { method: 'POST', json: { name, lat: at?.lat ?? null, lon: at?.lon ?? null } });
 // Deleting needs the forest's exact name as confirmation (the server checks it too).
 export const deleteForest = (id: number, name: string) =>
   request<void>(`/forests/${id}?confirm_name=${encodeURIComponent(name)}`, { method: 'DELETE' });

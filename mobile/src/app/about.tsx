@@ -1,19 +1,21 @@
+import { router } from 'expo-router';
 import { View } from 'react-native';
+import { ChevronRight, Sparkles } from '@/icons';
 import { color, space } from '@/theme';
-import { BackBar, Card, Screen, T } from '@/ui';
+import { BackBar, Card, Clamp, IconBox, Row, Screen, T } from '@/ui';
 
 const SECTIONS = [
   {
     title: 'How identification works',
-    body: 'Bark patterns are as individual as fingerprints. HemlockID turns each photo into a compact signature using a vision model trained on bark photos of about a thousand trees, then compares it with the signatures of every tree you have scanned. Several photos from around the trunk are averaged, which makes the match more reliable. If no tree is close enough, the app suggests registering a new one.',
+    body: 'Bark is as individual as a fingerprint. The model turns each photo into numbers and compares them with every tree you have scanned. No close match means a new tree.',
   },
   {
     title: 'Reading the health check',
-    body: 'Hemlock woolly adelgid shows up as small white woolly masses where needles meet the twig, on the undersides of branches. Needle loss, a thinning crown and twig dieback follow as an infestation grows. Moderate woolly masses, or any severe sign, mark a tree as infested. Lighter signs mark it for watching.',
+    body: 'Woolly adelgid shows as small white woolly masses where needles meet the twig, under the branches. Needle loss, a thinning crown and dieback follow. Moderate wool or any severe sign marks a tree infested.',
   },
   {
     title: 'Your privacy',
-    body: 'Trees, photos and health checks are stored on this phone. Nothing leaves it unless you export your data or turn on sync. Location is only used to place trees on your map.',
+    body: 'Signed in, trees and photos are stored on your HemlockID server. Location only places trees on your map.',
   },
 ];
 
@@ -22,10 +24,13 @@ export default function About() {
     <Screen scroll>
       <BackBar />
       <T v="display">About HemlockID</T>
+      <Card>
+        <Row left={<IconBox icon={Sparkles} />} title="How HemlockID thinks" sub="Fingerprints and matching, in 3 steps" right={<ChevronRight size={20} color={color.lichen} />} onPress={() => router.push('/fingerprint')} last />
+      </Card>
       {SECTIONS.map(({ title, body }) => (
         <Card key={title} style={{ padding: space.lg, gap: space.sm }}>
           <T v="title">{title}</T>
-          <T c={color.inkSoft}>{body}</T>
+          <Clamp>{body}</Clamp>
         </Card>
       ))}
       <View style={{ alignItems: 'center' }}>

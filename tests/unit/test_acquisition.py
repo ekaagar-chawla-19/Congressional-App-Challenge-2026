@@ -78,8 +78,9 @@ def test_next_view_order_and_extra_trunk_views():
     assert next_view({"trunk_north", "trunk_right", "trunk_right2"}).key == "branching"
     nv = next_view({"trunk_north", "trunk_right", "trunk_right2"}, need_identity=True)
     assert nv.key == "trunk_right3" and nv.identity_view
-    allk = {"trunk_north", "trunk_right", "trunk_right2", "trunk_right3", "trunk_north_high"}
+    allk = {"trunk_north", "trunk_right", "trunk_right2", "trunk_right3", "trunk_north_high", "trunk_low_close"}
     assert next_view(allk, need_identity=True) is None
+    assert next_view(allk - {"trunk_low_close"}, need_identity=True).key == "trunk_low_close"
 
 
 def test_face_blur_noop_on_bark(bark):

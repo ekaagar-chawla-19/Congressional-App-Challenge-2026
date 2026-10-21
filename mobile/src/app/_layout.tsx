@@ -17,6 +17,7 @@ export default function RootLayout() {
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.paper } }}>
         <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="fingerprint" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
       </Stack>
     </DbProvider>
   );

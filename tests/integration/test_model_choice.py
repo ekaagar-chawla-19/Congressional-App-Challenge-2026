@@ -175,6 +175,10 @@ def test_esp32_reading_and_checklist_drive_the_diagnosis_with_either_model(env, 
     t = c.get(f"{V}/trees/{tid}", headers=h).json()
     assert t["observation_count"] == 3 and t["latest_sensors"]["soil_moisture_pct"] == 41
     assert len(t["observations"]) == 3
+    # the digital twin: every reading newest first, the fused environment and what changed (dry 9.5% -> wet 41%)
+    assert [x["sensors"]["soil_moisture_pct"] for x in t["sensor_history"]] == [41, 9.5, 41]
+    assert t["environment"]["water_stress"] == "low" and any("wetter" in x for x in t["environment"]["changes"])
+    assert t["since_last_visit"] and "adelgid" in t["next_action"]
 
 
 def test_delete_tree_removes_every_models_fingerprints(env):
@@ -296,3 +300,35 @@ def test_iphone_heic_photos_are_accepted(env, model):
         assert r["view"]["accepted"], r
     r = c.post(f"{V}/captures/{cap['capture_id']}/identify", json={"force_commit": True}, headers=h).json()
     assert r["status"] == "new" and r["model"] == model
+
+
+@pytest.mark.parametrize("model", ["delta", "gamma"])
+def test_ai_guided_scan_updates_after_every_photo(env, model):
+    """The guidance changes with the actual photos: empty forest, then a revisit recognised photo by photo."""
+    c, h, acc, _ = env
+
+    def photo(cid, img):
+        return c.post(f"{V}/captures/{cid}/views", files={"image": ("v.jpg", _jpeg(img), "image/jpeg")}, headers=h).json()
+
+    cid = c.post(f"{V}/captures", json={"model": model}, headers=h).json()["capture_id"]
+    g = photo(cid, tree_view(91, 0))["guidance"]
+    assert g["state"] == "first_tree" and not g["ready"]
+    for v in (1, 2):
+        g = photo(cid, tree_view(91, v))["guidance"]
+    assert g["ready"]
+    tid = c.post(f"{V}/captures/{cid}/identify", json={}, headers=h).json()["tree_id"]
+    acc.wait_background()
+    guided(c, h, 92, model)  # a second tree in the forest
+
+    cid = c.post(f"{V}/captures", json={"model": model}, headers=h).json()["capture_id"]
+    r = photo(cid, tree_view(91, 0, jitter_seed=5))
+    print("after 1 photo:", r["guidance"])
+    assert r["guidance"]["state"] in ("confident", "building") and r["guidance"]["candidates"][0]["tree_id"] == tid
+    assert not r["guidance"]["ready"] and r["guidance"]["next_view"]["key"] == "trunk_right"
+    dark = photo(cid, (tree_view(91, 1) * 0.02).astype("uint8"))  # unusable photo: retake, ranking kept
+    assert dark["guidance"]["state"] == "retake" and not dark["view"]["accepted"]
+    for v in (1, 2):
+        r = photo(cid, tree_view(91, v, jitter_seed=5))
+        print(f"after photo {v + 1}:", r["guidance"])
+    assert r["guidance"]["state"] == "confident" and r["guidance"]["ready"]
+    assert c.post(f"{V}/captures/{cid}/identify", json={}, headers=h).json()["tree_id"] == tid

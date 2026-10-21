@@ -177,12 +177,31 @@ class CaptureCreated(BaseModel):
     expires_in_s: int
 
 
+class GuidanceCandidate(BaseModel):
+    tree_id: str
+    probability: float = Field(description="calibrated P(this tree) with the photos so far")
+    global_score: float | None = None
+
+
+class Guidance(BaseModel):
+    """AI-guided scanning: what the scan still needs after this photo (rule-based policy over the live ranking)."""
+    state: Literal["start", "retake", "species_doubt", "first_tree", "confident", "ambiguous", "contradicting",
+                   "likely_new", "building"]
+    title: str = Field(description="a few words")
+    detail: str = Field(description="one short sentence")
+    candidates: list[GuidanceCandidate] = []
+    next_view: ViewSpecOut | None = None
+    ready: bool = Field(description="enough evidence to identify now")
+    needs_more: bool = Field(description="the policy asks for another trunk photo beyond the minimum")
+
+
 class ViewAdded(BaseModel):
     view: ViewQuality
     accepted_views: int
     progress: float = Field(description="0..1 over the standard 5-view protocol")
     can_identify: bool
     next_view: ViewSpecOut | None
+    guidance: Guidance | None = None
 
 
 class CaptureState(BaseModel):
@@ -351,10 +370,28 @@ class TreePage(BaseModel):
     offset: int
 
 
+class SensorPoint(BaseModel):
+    observation_id: str
+    timestamp: str
+    sensors: Sensors
+    vpd_kpa: float | None = Field(None, description="vapour-pressure deficit from air temperature + humidity")
+
+
+class Environment(BaseModel):
+    summary: str = Field(description="the latest reading fused into one sentence")
+    vpd_kpa: float | None
+    water_stress: Literal["low", "some", "high"]
+    changes: list[str] = Field([], description="versus the previous reading")
+
+
 class TreeDetail(TreeSummary):
     current_conditions: list[Finding] = Field([], description="latest assessed finding per condition")
     latest_sensors: dict | None = None
     observations: list[Observation]
+    sensor_history: list[SensorPoint] = Field([], description="visits with an ESP32 reading, newest first")
+    environment: Environment | None = None
+    since_last_visit: list[str] = Field([], description="what changed between the last two visits")
+    next_action: str | None = None
 
 
 class TreeUpdate(BaseModel):

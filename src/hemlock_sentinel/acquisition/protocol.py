@@ -49,6 +49,8 @@ EXTRA_TRUNK_VIEWS: tuple[ViewSpec, ...] = (
              "Walk the last quarter-turn clockwise (west side). Bark at chest height.", False, True),
     ViewSpec("trunk_north_high", "Extra trunk view",
              "Back on the NORTH side: bark at head height.", False, True),
+    ViewSpec("trunk_low_close", "Lower trunk close-up",
+             "Close-up of the lower trunk bark, 20-30 cm away, filling the frame.", False, True),
 )
 
 # Health views: not used for identity. Insects live on twigs, so only these can show HWA / EHS.

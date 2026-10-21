@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { useApp } from '@/device';
-import { Camera, Check, ChevronDown, Images, Leaf, X, Zap } from '@/icons';
+import { Camera, ChevronDown, Images, Sparkles, X, Zap } from '@/icons';
 import { quickFix } from '@/identify';
 import { ModelPicker } from '@/ModelPicker';
 import { useModels } from '@/models';
@@ -26,28 +26,26 @@ function feedback(v: api.ViewQuality): { text: string; tone: Msg['tone'] } {
     // A black or blank frame also fails the blur check; name the real cause first.
     const order = ['too dark', 'over-exposed', 'no tree', 'same as view', 'blurry'];
     const p = [...v.problems].sort((a, b) => (order.findIndex((o) => a.startsWith(o)) + 99) % 99 - (order.findIndex((o) => b.startsWith(o)) + 99) % 99)[0] ?? '';
-    const text = p.startsWith('blurry') ? "That one's blurry. Hold the phone steady, tap the bark to focus, and take it again."
-      : p.startsWith('too dark') ? 'Too dark to see the bark. Step into better light or turn on the light (top right).'
-      : p.startsWith('over-exposed') ? 'Too bright. Turn away from the sun so the bark is evenly lit.'
-      : p.startsWith('no tree') ? "I can't see bark in that one. Point the camera at the trunk, 30 to 50 cm away."
-      : p.startsWith('same as view') ? "That's the same spot as before. Walk a quarter turn around the trunk first."
-      : `Let's retake that one: ${p}.`;
+    const text = p.startsWith('blurry') ? 'Blurry. Hold steady, tap to focus, retake.'
+      : p.startsWith('too dark') ? 'Too dark. Find light or use the flash.'
+      : p.startsWith('over-exposed') ? 'Too bright. Turn away from the sun.'
+      : p.startsWith('no tree') ? 'No bark in view. Aim at the trunk.'
+      : p.startsWith('same as view') ? 'Same spot as before. Walk a quarter turn.'
+      : `Retake: ${p.split(':')[0]}.`;
     return { text, tone: 'bad' };
   }
   const w = v.warnings.find((x) => x.startsWith('too far') || x.startsWith('almost'));
-  const dist = !w ? 'Perfect distance.' : w.startsWith('too far')
-    ? "Okay, you're close. I need you to get this close to the tree bark: fill the whole frame, about 30 cm away."
-    : 'Good. Next time a little closer, so the bark fills the frame edge to edge.';
+  const dist = !w ? 'Good photo.' : w.startsWith('too far') ? 'Get closer: fill the frame with bark.' : 'Good. A little closer next time.';
   const h = v.hemlock_probability;
-  const sp = h == null ? '' : h >= 0.7 ? ` Looks like hemlock bark (${Math.round(h * 100)}%).`
-    : h >= 0.35 ? ` Not sure this is a hemlock yet (${Math.round(h * 100)}%).`
-    : ` This looks more like ${v.top_species?.name ?? 'another species'} than hemlock.`;
+  const sp = h == null ? '' : h >= 0.7 ? ` Hemlock bark ${Math.round(h * 100)}%.`
+    : h >= 0.35 ? ` Maybe hemlock (${Math.round(h * 100)}%).` : ` Looks like ${v.top_species?.name ?? 'another species'}.`;
   return { text: dist + sp, tone: w || (h != null && h < 0.7) ? 'warn' : 'good' };
 }
 
 export default function Scan() {
   const { mode } = useLocalSearchParams<{ mode?: 'check' }>();
   const check = mode === 'check';
+  const CAP = check ? 10 : MAX + 1; // hemlock check: several trees, one photo each; scan: up to 6 trunk views
   const server = isServer();
   const [permission, request] = useCameraPermissions();
   const unit = useApp((s) => s.unit);
@@ -55,16 +53,17 @@ export default function Scan() {
   const [shots, setShots] = useState<Shot[]>([]);
   const [msgs, setMsgs] = useState<Msg[]>(() => [{
     id: 0,
-    text: check ? 'Hemlock check: take one close, sharp photo of the bark and I will tell you if it is an Eastern hemlock.'
-      : "Let's scan this tree. Stand about 30 to 50 cm from the trunk so the bark fills the frame.",
+    text: check ? 'Photograph the bark of each tree to check.' : 'Fill the frame with bark, 30 to 50 cm away.',
   }]);
   const [torch, setTorch] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<api.SpeciesCheck>();
   const capture = useRef<{ id: string; next: api.ViewSpec | null } | null>(null);
   const loc = useRef<Promise<api.Location | null> | null>(null);
   const count = useRef({ shots: 0, ok: 0 }); // shots can be added several at a time (library), so not from state
-  const say = (text: string, tone?: Msg['tone']) => setMsgs((m) => [...m, { id: m.length, text, tone }]);
+  const say = (text: string, tone?: Msg['tone']) => (setGuide(null), setMsgs((m) => [...m, { id: m.length, text, tone }]));
+  // AI-guided scanning: the server's latest read of the evidence (replaces the chat once photos are checked)
+  const [guide, setGuide] = useState<api.Guidance | null>(null);
+  const [checks, setChecks] = useState<{ uri: string; r: api.SpeciesCheck }[]>([]);
 
   // Before the first photo the user picks the model (delta or gamma) that this scan runs on the server.
   const askModel = !check && server;
@@ -94,11 +93,9 @@ export default function Scan() {
       const c = await api.startCapture(key ?? undefined);
       capture.current = { id: c.capture_id, next: c.next_view };
       setActive({ key: c.model, name: c.model_name });
-      const m = useModels.getState().list?.find((x) => x.key === c.model);
-      const species = !m ? '' : m.checks_species ? ' It checks that each photo is hemlock bark.' : " It doesn't check the species, so make sure this is a hemlock.";
-      say(`Using ${c.model_name}.${species} Photo 1: start on the ${c.next_view.key === 'trunk_north' ? 'north' : 'first'} side of the trunk, bark at chest height. I'll check each photo as you go.`);
+      setGuide({ state: 'start', title: 'Photo 1 of 3', detail: 'North side, bark at chest height.', candidates: [], next_view: c.next_view, ready: false, needs_more: false });
     } catch (e) {
-      say(`${(e as Error).message} Photos will be checked when you tap Identify.`, 'warn');
+      say((e as Error).message, 'warn');
     }
   };
 
@@ -114,8 +111,9 @@ export default function Scan() {
       try {
         const r = await api.speciesCheck(uri);
         set({ state: 'ok', hemlock: r.hemlock_probability, species: r.species.name });
-        setResult(r);
-        say(r.message, r.verdict === 'hemlock' ? 'good' : r.verdict === 'unsure' ? 'warn' : 'bad');
+        setChecks((c) => [...c, { uri, r }]);
+        const label = r.verdict === 'hemlock' ? 'Eastern hemlock' : r.verdict === 'unsure' ? 'Not sure' : `Not a hemlock: ${r.species.name}`;
+        say(`Photo ${i + 1}: ${label} (${Math.round(r.hemlock_probability * 100)}% hemlock).`, r.verdict === 'hemlock' ? 'good' : r.verdict === 'unsure' ? 'warn' : 'bad');
       } catch (e) {
         set({ state: 'rejected' });
         say((e as Error).message.replace('photo rejected before the model: ', "Can't check that photo: "), 'bad');
@@ -132,10 +130,9 @@ export default function Scan() {
       capture.current.next = r.next_view;
       const f = feedback(r.view);
       set({ state: r.view.accepted ? 'ok' : 'rejected', hemlock: r.view.hemlock_probability, species: r.view.top_species?.name });
+      if (r.guidance) return setGuide(r.view.accepted ? r.guidance : { ...r.guidance, detail: f.text });
       if (!r.view.accepted) return say(f.text, f.tone);
-      const n = r.accepted_views;
-      const next = r.next_view && n < MIN ? ` Next: ${r.next_view.instruction}` : '';
-      say(n >= MIN ? `${f.text} You have ${n} pictures. You're done now: tap Identify.` : `${f.text} That's ${n} of ${MIN}.${next}`, f.tone);
+      say(r.accepted_views >= MIN ? `${f.text} Tap Identify.` : `${f.text} ${r.accepted_views} of ${MIN}.`, f.tone);
     } catch (e) {
       set({ state: 'rejected' });
       say((e as Error).message, 'bad');
@@ -143,7 +140,7 @@ export default function Scan() {
   };
 
   const shoot = async () => {
-    if (busy || shots.length >= MAX + 3 || ok >= MAX) return;
+    if (busy || shots.length >= CAP + 3 || ok >= CAP) return;
     setBusy(true);
     try {
       const pic = await camera.current?.takePictureAsync({ quality: 0.8, imageType: 'jpg' });
@@ -156,7 +153,7 @@ export default function Scan() {
   const library = async () => {
     // Compatible: iOS hands over a JPEG copy instead of the HEIC original.
     const r = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsMultipleSelection: !check, selectionLimit: check ? 1 : MAX - ok, quality: 0.8,
+      mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: CAP - ok, quality: 0.8,
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
     if (!r.canceled) for (const a of r.assets) await addShot(a.uri);
@@ -169,16 +166,16 @@ export default function Scan() {
       return router.replace('/result');
     }
     setBusy(true);
-    say(`Comparing this bark with every tree in the forest${active ? ` using ${active.name}` : ''}…`);
+    say(`Comparing with every tree${active ? ` (${active.name})` : ''}…`);
     try {
       const r = await api.identifyCapture(capture.current.id, await (loc.current ?? Promise.resolve(null)));
       if (r.action === 'capture_another_view') {
         capture.current.next = r.next_view;
-        say(`I'm not sure yet which tree this is. Take one more photo${r.next_view ? `: ${r.next_view.instruction}` : ' from another side.'}`, 'warn');
+        setGuide({ state: 'ambiguous', title: 'Need one more view', detail: r.next_view?.title ?? 'Another side of the trunk.', candidates: (r.candidates ?? []).map((c) => ({ tree_id: c.tree_id, probability: c.probability ?? 0, global_score: c.global_score })), next_view: r.next_view, ready: false, needs_more: true });
         return setBusy(false);
       }
       if (r.action === 'retake') {
-        say(`${r.message} Retake the photos marked with a red X.`, 'bad');
+        say('Retake the photos marked with a red X.', 'bad');
         return setBusy(false);
       }
       useApp.getState().setScan({ photos: good, treeId: null, observationId: null, isNew: false, serverResult: r });
@@ -264,9 +261,9 @@ export default function Scan() {
         <View style={s.frame} pointerEvents="none">
           {CORNERS.map((c, i) => <View key={i} style={[s.corner, c]} />)}
         </View>
-        {/* Coach: the latest messages, chat style */}
+        {/* Coach: one short card at the bottom of the viewfinder, never a stack */}
         <View style={s.chat} pointerEvents="none">
-          {msgs.slice(-3).map((m) => (
+          {guide && !check ? <GuideCard g={guide} /> : msgs.slice(-1).map((m) => (
             <View key={m.id} style={[s.bubble, m.tone === 'good' && s.good, m.tone === 'warn' && s.warn, m.tone === 'bad' && s.bad]}>
               <T v="caption" c={color.paper} style={{ fontSize: 14, lineHeight: 19 }}>{m.text}</T>
             </View>
@@ -291,55 +288,86 @@ export default function Scan() {
         </ScrollView>
       )}
 
-      {check && result ? (
-        <View style={s.result}>
-          <View style={s.inline}>
-            <Icon as={result.verdict === 'hemlock' ? Check : Leaf} c={result.verdict === 'hemlock' ? '#8FB08A' : '#E0B15A'} />
-            <T v="title" c={color.paper}>{result.verdict === 'hemlock' ? 'Eastern hemlock' : result.verdict === 'unsure' ? 'Not sure' : 'Not a hemlock'}</T>
-          </View>
-          {result.top.map((t) => (
-            <View key={t.label} style={{ gap: 3 }}>
-              <View style={s.between}>
-                <T v="caption" c={color.nightText}>{t.name}</T>
-                <T v="caption" c={color.paper}>{`${Math.round(t.probability * 100)}%`}</T>
+      {check && checks.length > 0 && (
+        <ScrollView style={s.results} contentContainerStyle={{ gap: space.sm }}>
+          {checks.map(({ uri, r }, i) => {
+            const yes = r.verdict === 'hemlock';
+            return (
+              <View key={uri} style={s.resultRow} accessibilityLabel={`Photo ${i + 1}: ${r.message}`}>
+                <Image source={{ uri }} style={s.resultThumb} />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <View style={s.between}>
+                    <T v="label" c={color.paper}>{yes ? 'Eastern hemlock' : r.verdict === 'unsure' ? 'Not sure' : r.species.name}</T>
+                    <T v="label" c={yes ? '#8FB08A' : '#E0B15A'}>{`${Math.round(r.hemlock_probability * 100)}%`}</T>
+                  </View>
+                  <View style={s.track}><View style={{ width: `${Math.round(r.hemlock_probability * 100)}%`, height: 6, borderRadius: 3, backgroundColor: yes ? '#8FB08A' : '#C9B79C' }} /></View>
+                  <T v="caption" c={color.nightText} style={{ fontSize: 13 }}>{`Photo ${i + 1} · hemlock probability`}</T>
+                </View>
               </View>
-              <View style={s.track}><View style={{ width: `${Math.round(t.probability * 100)}%`, height: 6, borderRadius: 3, backgroundColor: t.label === 'tsuga_canadensis' ? '#8FB08A' : '#C9B79C' }} /></View>
-            </View>
-          ))}
-          <View style={s.split}>
-            <View style={{ flex: 1 }}><Button title="Check another" secondary onPress={() => ((count.current = { shots: 0, ok: 0 }), setShots([]), setResult(undefined), say('Take another photo of the bark.'))} /></View>
-            <View style={{ flex: 1 }}><Button title="Scan this tree" onPress={() => router.replace('/scan')} /></View>
-          </View>
-        </View>
-      ) : (
-        <>
-          <View style={s.progress} accessibilityLabel={`${ok} of ${target} photos accepted`}>
-            {Array.from({ length: check ? 1 : MAX }, (_, i) => <View key={i} style={[s.seg, i < ok && { backgroundColor: i < MIN ? color.paper : color.live }]} />)}
-          </View>
-          <View style={s.controls}>
-            <View style={{ flex: 1, alignItems: 'flex-start' }}>
-              <Pressable style={s.labelled} onPress={library} disabled={busy || ok >= MAX} accessibilityLabel="Choose photos from library">
-                <View style={s.round}><Icon as={Images} c={color.paper} /></View>
-                <T v="caption" c={color.nightText} style={{ fontSize: 11 }}>Library</T>
-              </Pressable>
-            </View>
-            <Pressable style={s.shutter} onPress={shoot} disabled={busy || ok >= MAX || !permission.granted} accessibilityLabel="Take photo">
-              <View style={[s.shutterCore, (busy || ok >= MAX || !permission.granted) && { opacity: 0.4 }]} />
-            </Pressable>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              {!check && ok >= MIN ? (
-                <Pressable style={[s.go, (busy || checking) && { opacity: 0.5 }]} onPress={identify} disabled={busy || checking}>
-                  <T v="label" c={color.spruce}>{busy ? 'Checking' : 'Identify'}</T>
-                </Pressable>
-              ) : (
-                <T v="caption" c={color.nightText}>{check ? '' : `${MIN - ok} to go`}</T>
-              )}
-            </View>
-          </View>
-        </>
+            );
+          })}
+          <T v="caption" c={color.nightText} style={{ fontSize: 13 }}>{"Uses Model Delta's species check. Model Gamma has none."}</T>
+        </ScrollView>
       )}
+      {!check && (
+        <View style={s.progress} accessibilityLabel={`${ok} of ${target} photos accepted`}>
+          {Array.from({ length: MAX }, (_, i) => <View key={i} style={[s.seg, i < ok && { backgroundColor: i < MIN ? color.paper : color.live }]} />)}
+        </View>
+      )}
+      <View style={s.controls}>
+        <View style={{ flex: 1, alignItems: 'flex-start' }}>
+          <Pressable style={s.labelled} onPress={library} disabled={busy || ok >= CAP} accessibilityLabel="Choose photos from library">
+            <View style={s.round}><Icon as={Images} c={color.paper} /></View>
+            <T v="caption" c={color.nightText} style={{ fontSize: 11 }}>Library</T>
+          </Pressable>
+        </View>
+        <Pressable style={s.shutter} onPress={shoot} disabled={busy || ok >= CAP || !permission.granted} accessibilityLabel="Take photo">
+          <View style={[s.shutterCore, (busy || ok >= CAP || !permission.granted) && { opacity: 0.4 }]} />
+        </Pressable>
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          {check ? (
+            checks.length > 0 && (
+              <Pressable style={s.go} onPress={() => router.replace('/scan')}>
+                <T v="label" c={color.spruce}>Scan a tree</T>
+              </Pressable>
+            )
+          ) : ok >= MIN ? (
+            <Pressable style={[s.go, (busy || checking) && { opacity: 0.5 }]} onPress={identify} disabled={busy || checking}>
+              <T v="label" c={color.spruce}>{busy ? 'Checking' : 'Identify'}</T>
+            </Pressable>
+          ) : (
+            <T v="caption" c={color.nightText} style={{ fontSize: 13 }}>{`${MIN - ok} to go`}</T>
+          )}
+        </View>
+      </View>
       {pickerEl}
     </Screen>
+  );
+}
+
+// AI-guided scanning card: what the evidence says now and what photo would help, in two lines.
+function GuideCard({ g }: { g: api.Guidance }) {
+  const tone = g.state === 'retake' || g.state === 'contradicting' || g.state === 'species_doubt' ? s.bad
+    : g.state === 'ambiguous' || g.needs_more ? s.warn : g.state === 'confident' || g.ready ? s.good : null;
+  const bars = ['confident', 'ambiguous', 'building', 'contradicting'].includes(g.state) ? g.candidates.slice(0, 2) : [];
+  return (
+    <View style={[s.card, tone]} accessibilityLiveRegion="polite" accessibilityLabel={`${g.title}. ${g.detail}`}>
+      <View style={s.between}>
+        <T v="label" c={color.paper} style={{ fontSize: 16, flex: 1 }} numberOfLines={1}>{g.title}</T>
+        <View style={s.ai}>
+          <Sparkles size={12} strokeWidth={2} color={color.paper} />
+          <T v="caption" c={color.paper} style={{ fontSize: 11, fontFamily: font.semibold }}>AI-guided</T>
+        </View>
+      </View>
+      <T v="caption" c={color.paper} style={{ fontSize: 14, lineHeight: 19 }} numberOfLines={2}>{g.detail}</T>
+      {bars.map((c) => (
+        <View key={c.tree_id} style={s.candidate}>
+          <T v="caption" c={color.paper} style={{ width: 52, fontSize: 13, fontFamily: font.medium }}>{c.tree_id}</T>
+          <View style={[s.track, { flex: 1 }]}><View style={{ width: `${Math.max(3, Math.round(c.probability * 100))}%`, height: 6, borderRadius: 3, backgroundColor: color.paper }} /></View>
+          <T v="caption" c={color.paper} style={{ width: 40, textAlign: 'right', fontSize: 13 }}>{`${Math.round(c.probability * 100)}%`}</T>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -362,6 +390,12 @@ const s = StyleSheet.create({
   frame: { width: 220, height: 220, marginBottom: 90 },
   corner: { width: C, height: C },
   chat: { position: 'absolute', left: space.md, right: space.md, bottom: space.md, gap: 6 },
+  card: { gap: 6, padding: space.md, borderRadius: 16, backgroundColor: 'rgba(22, 32, 28, 0.88)' },
+  ai: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 22, borderRadius: radius.pill, backgroundColor: 'rgba(245, 242, 236, 0.18)' },
+  candidate: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  results: { maxHeight: 220, flexGrow: 0 },
+  resultRow: { flexDirection: 'row', gap: space.md, alignItems: 'center', padding: space.md, borderRadius: radius.md, backgroundColor: color.nightCard },
+  resultThumb: { width: 48, height: 48, borderRadius: 10 },
   bubble: { alignSelf: 'flex-start', maxWidth: '92%', paddingHorizontal: space.md, paddingVertical: 10, borderRadius: 16, borderBottomLeftRadius: 4, backgroundColor: 'rgba(22, 32, 28, 0.86)' },
   good: { backgroundColor: 'rgba(44, 79, 67, 0.94)' },
   warn: { backgroundColor: 'rgba(122, 84, 20, 0.94)' },
@@ -375,9 +409,6 @@ const s = StyleSheet.create({
   shutter: { width: 80, height: 80, borderRadius: radius.pill, borderWidth: 3, borderColor: color.paper, alignItems: 'center', justifyContent: 'center' },
   shutterCore: { width: 64, height: 64, borderRadius: radius.pill, backgroundColor: color.paper },
   go: { height: 44, paddingHorizontal: 18, borderRadius: radius.pill, backgroundColor: color.paper, justifyContent: 'center' },
-  result: { gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: color.nightCard },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   between: { flexDirection: 'row', justifyContent: 'space-between' },
   track: { height: 6, borderRadius: 3, backgroundColor: color.nightLine },
-  split: { flexDirection: 'row', gap: space.md },
 });

@@ -67,6 +67,22 @@ export function Button({ title, onPress, icon, secondary, disabled }: { title: s
   );
 }
 
+// Long text: the first few lines, with More / Less. Keeps cards to a glance; nothing is hidden for good.
+export function Clamp({ children, lines = 3, v = 'body', c = color.inkSoft, style }: { children: string; lines?: number; v?: keyof typeof type; c?: string; style?: TextProps['style'] }) {
+  const [open, setOpen] = useState(false);
+  const long = children.length > lines * 52; // about 52 characters per line on a phone
+  return (
+    <View style={{ gap: 2 }}>
+      <T v={v} c={c} style={style} numberOfLines={open || !long ? undefined : lines}>{children}</T>
+      {long && (
+        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" hitSlop={8} style={{ alignSelf: 'flex-start' }}>
+          <T v="caption" c={color.spruce} style={{ fontFamily: font.semibold }}>{open ? 'Less' : 'More'}</T>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 export const Card = ({ children, style }: PropsWithChildren<{ style?: ViewStyle }>) => <View style={[s.card, style]}>{children}</View>;
 
 export const Dot = ({ c, size = 8 }: { c: string; size?: number }) => (

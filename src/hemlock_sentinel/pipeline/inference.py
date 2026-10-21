@@ -180,6 +180,45 @@ class HemlockSentinel:
             done += 1
         return done
 
+    # ---------------------------------------------------------------- preview
+    def preview(self, views: list[ViewResult]):
+        """The candidate ranking with the photos taken so far (any number, nothing stored): what AI-guided
+        scanning uses to decide whether it needs another photo. Same retrieval, features and calibrated
+        probabilities as identify()."""
+        from ..reid.fusion import match_probability
+        from .guidance import Preview
+
+        id_views = [v for v in views if v.accepted and _is_identity_view(v.view_type) and v.embedding is not None]
+        pv = Preview(len(id_views), match_threshold=self.cal.match_threshold,
+                     view_match_threshold=self.cal.view_match_threshold)
+        if not id_views:
+            return pv
+        if self.checks_species:
+            sp = classify_observation(np.stack([v.species_logits for v in id_views]), self.cal.species_threshold,
+                                      self.runtime.species_labels, np.array([v.quality.weight for v in id_views]))
+            pv.species_ok = sp.species == "tsuga_canadensis"
+            pv.hemlock_probability = sp.probabilities.get("tsuga_canadensis")
+        embs = np.stack([v.embedding for v in id_views])
+        agg = aggregate_mean(embs, np.array([v.quality.weight for v in id_views]))
+        index = self.index.get("tsuga_canadensis")
+        pv.gallery_trees = index.n_trees
+        if index.n_trees == 0:
+            return pv
+        names = index.tree_names()
+        agg_scores = index.tree_scores(agg)[0]
+        view_scores = index.tree_scores(embs)
+        cands = []
+        for i in np.argsort(-agg_scores)[:3]:
+            f = candidate_features(agg_scores, view_scores, names, names[i], None, None, self.cal.gap_floor)
+            p, _ = match_probability(f, self.cal)
+            cands.append({"tree_id": names[i], "probability": round(float(p), 4), "global_score": round(float(f["global"]), 4)})
+        cands.sort(key=lambda c: -c["probability"])
+        pv.candidates = cands
+        leaders = [names[j] for j in view_scores.argmax(1)]
+        pv.view_leaders = leaders
+        pv.agreement = float(np.mean([t == cands[0]["tree_id"] for t in leaders]))
+        return pv
+
     # --------------------------------------------------------------- identify
     def identify(self, views: list[ViewResult], commit: bool = True, now: float | None = None,
                  fix: GeoFix | None = None) -> ObservationResult:

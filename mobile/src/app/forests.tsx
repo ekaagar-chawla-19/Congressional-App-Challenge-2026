@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
 import { useDb } from '@/db';
 import { useState } from 'react';
-import { ChevronRight, LogOut, Trash, Trees } from '@/icons';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ChevronRight, LogOut, MapPin, Plus, Trash, Trees } from '@/icons';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { logout } from '@/api';
-import { ago, deleteForest, listForests, useQuery, type Forest } from '@/data';
+import { ago, createForest, deleteForest, listForests, useQuery, type Forest } from '@/data';
+import { hereNow } from '@/identify';
 import { shortName, useSession } from '@/session';
 import { color, font, radius, space, status, type Status } from '@/theme';
-import { BackBar, ConfirmDelete, Dot, Empty, Icon, IconBox, Screen, T } from '@/ui';
+import { BackBar, Button, Card, ConfirmDelete, Dot, Empty, Icon, IconBox, Screen, T } from '@/ui';
 
 const ORDER: Status[] = ['infested', 'watch', 'healthy', 'unrated'];
 
@@ -22,6 +23,28 @@ export default function Forests() {
     if (current?.id === doomed!.id) setForest(null); // nothing selected until they pick again
     setDoomed(null);
     setRev((r) => r + 1);
+  };
+
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [here, setHere] = useState(true); // center the new forest where the user stands
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const add = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const f = await createForest(db, name.trim(), here ? await hereNow() : null);
+      setAdding(false);
+      setName('');
+      setForest(f);
+      if (router.canGoBack()) router.back();
+      else router.replace('/');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pick = (f: Forest) => {
@@ -44,7 +67,7 @@ export default function Forests() {
         <T c={color.inkSoft}>Pick the forest you are working in. You can switch any time from the home screen.</T>
       </View>
 
-      {forests && forests.length === 0 && <Empty icon={Trees} title="No forests yet" body="Forests you create on the server appear here." />}
+      {forests && forests.length === 0 && <Empty icon={Trees} title="No forests yet" body="Add the forest you are surveying to get started." />}
 
       <View style={{ gap: space.md }}>
         {forests?.map((f) => {
@@ -86,6 +109,25 @@ export default function Forests() {
         })}
       </View>
 
+      {adding ? (
+        <Card style={s.add}>
+          <T v="title">New forest</T>
+          <TextInput value={name} onChangeText={setName} placeholder="e.g. Cook Forest, north ridge" placeholderTextColor={color.lichen}
+            autoFocus maxLength={120} returnKeyType="done" onSubmitEditing={() => name.trim() && add()} accessibilityLabel="Forest name" style={s.input} />
+          <Pressable onPress={() => setHere(!here)} style={s.here} accessibilityRole="checkbox" accessibilityState={{ checked: here }}>
+            <View style={[s.box, here && s.boxOn]}>{here && <Icon as={MapPin} c={color.paper} />}</View>
+            <T style={{ flex: 1 }}>Center it where I am now</T>
+          </Pressable>
+          {error ? <T v="caption" c={status.infested.text}>{error}</T> : null}
+          <View style={s.split}>
+            <View style={{ flex: 1 }}><Button title={busy ? 'Adding…' : 'Add forest'} onPress={add} disabled={!name.trim() || busy} /></View>
+            <View style={{ flex: 1 }}><Button title="Cancel" secondary onPress={() => (setAdding(false), setError(''))} /></View>
+          </View>
+        </Card>
+      ) : (
+        <Button title="New forest" icon={Plus} secondary onPress={() => setAdding(true)} />
+      )}
+
       <ConfirmDelete visible={!!doomed} what="forest" name={doomed?.name ?? ''} onCancel={() => setDoomed(null)} onConfirm={remove}
         consequences={`All ${doomed?.trees ?? 0} trees in ${doomed ? shortName(doomed.name) : ''}, with every visit, photo, sensor reading and section, will be completely lost.`} />
 
@@ -105,5 +147,11 @@ const s = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   item: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   trash: { position: 'absolute', top: space.lg + 4, right: space.lg + 30, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  add: { padding: space.lg, gap: space.md },
+  input: { minHeight: 52, paddingHorizontal: space.lg, borderRadius: 14, backgroundColor: color.paper, borderWidth: 1, borderColor: color.line, fontFamily: font.regular, fontSize: 15, color: color.ink },
+  here: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 },
+  box: { width: 28, height: 28, borderRadius: 8, borderWidth: 1.5, borderColor: color.line, alignItems: 'center', justifyContent: 'center', transform: [{ scale: 0.9 }] },
+  boxOn: { backgroundColor: color.spruce, borderColor: color.spruce },
+  split: { flexDirection: 'row', gap: space.md },
   signOut: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, padding: space.md },
 });

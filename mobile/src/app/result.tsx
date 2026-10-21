@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { useDb } from '@/db';
-import { Camera, Check, Cpu, Plus, TriangleAlert } from '@/icons';
+import { Camera, Check, ChevronRight, Cpu, Plus, Sparkles, TriangleAlert } from '@/icons';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { fmtDate, listTrees } from '@/data';
 import { useApp } from '@/device';
@@ -63,7 +63,7 @@ export default function Result() {
   if (srv && (srv.status === 'recapture' || srv.status === 'rejected_species' || srv.status === 'unsupported_species')) {
     const notHemlock = srv.status !== 'recapture';
     return (
-      <Screen>
+      <Screen scroll>
         <BackBar title="Scan result" />
         <View style={{ gap: space.sm }}>
           <View style={[s.badge, { backgroundColor: status.watch.tint }]}>
@@ -79,7 +79,6 @@ export default function Result() {
         </View>
         <Photo uri={photos[0]} height={180} />
         {srv.species && <HemlockCheck sp={srv.species} />}
-        <View style={{ flex: 1 }} />
         <Button title="Retake photos" icon={Camera} onPress={() => router.replace('/scan')} />
         <Button title="Back home" secondary onPress={() => router.dismissAll()} />
       </Screen>
@@ -176,6 +175,13 @@ export default function Result() {
         )}
       </View>
 
+      {srv && !res.offline && (
+        <Pressable style={s.explain} onPress={() => router.push('/fingerprint')} accessibilityRole="button">
+          <Sparkles size={16} strokeWidth={1.75} color={color.spruce} />
+          <T v="label" c={color.spruce} style={{ flex: 1 }}>{isMatch ? 'How did it match?' : 'How does matching work?'}</T>
+          <ChevronRight size={18} color={color.spruce} />
+        </Pressable>
+      )}
       {srv?.species && <HemlockCheck sp={srv.species} />}
       {srv?.species_checked === false && <SpeciesNotChecked model={srv.model_name ?? 'This model'} />}
 
@@ -226,7 +232,7 @@ function SpeciesNotChecked({ model }: { model: string }) {
         </View>
       </View>
       <T v="caption" c={color.inkSoft}>
-        {`${model} does not check the species: it assumes this tree is an Eastern hemlock. If you are not sure, use Hemlock check on the home screen (it runs Model Delta's species check).`}
+        {`${model} assumes this is a hemlock. Not sure? Use Hemlock check on the home screen.`}
       </T>
     </Card>
   );
@@ -264,6 +270,7 @@ function HemlockCheck({ sp }: { sp: api.Species }) {
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  explain: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 48, paddingHorizontal: space.lg, borderRadius: radius.md, backgroundColor: color.mossTint },
   badge: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 28, paddingHorizontal: space.md, borderRadius: radius.pill, alignSelf: 'flex-start' },
   between: { flexDirection: 'row', justifyContent: 'space-between' },
   track: { height: 8, borderRadius: radius.pill, backgroundColor: color.line, overflow: 'hidden' },

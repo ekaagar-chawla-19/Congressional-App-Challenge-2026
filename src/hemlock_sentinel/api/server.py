@@ -55,6 +55,8 @@ from ..acquisition.protocol import (
 )
 from ..app.server import SESSION_TTL_S, Sessions, build_pipeline
 from ..database.models import ObservationRecord, TreeRecord
+from ..pipeline.guidance import guide, identity_keys
+from .twin import twin
 from ..pipeline.inference import HemlockSentinel, ObservationResult, ViewResult
 from ..preprocessing import decode_image
 from ..species.inference import softmax
@@ -858,9 +860,20 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             s["next"] = spec_for(view_key)
         n_std = sum(1 for v in s["views"] if v.view_type in {g.key for g in GUIDED_VIEWS})
         n_id = sum(1 for v in s["views"] if spec_for(v.view_type).identity_view)
+        # AI-guided scanning: re-rank with the photos so far and decide what evidence is still missing
+        with model_ready(ws, s.get("model") or ws.model) as pipe:
+            g = guide(pipe.preview(s["views"]), identity_keys(s["views"]),
+                      None if vr.accepted else (vr.quality.problems or ["not usable"])[0])
+        if g.needs_more and g.next_view is not None:
+            s["need_identity"], s["next"] = True, g.next_view
+        elif g.next_view is not None and vr.accepted:
+            s["next"] = g.next_view
+        guidance = S.Guidance(state=g.state, title=g.title, detail=g.detail, ready=g.ready, needs_more=g.needs_more,
+                              candidates=[S.GuidanceCandidate(**c) for c in g.candidates],
+                              next_view=_spec(g.next_view) if g.next_view else None)
         return S.ViewAdded(view=_view_quality(vr), accepted_views=len(s["views"]),
                            progress=round(min(1.0, n_std / MAX_VIEWS), 3), can_identify=n_id >= MIN_VIEWS,
-                           next_view=_spec(s["next"]))
+                           next_view=_spec(s["next"]), guidance=guidance)
 
     @api.post("/captures/{capture_id}/identify", response_model=S.IdentifyResult, tags=["capture"])
     def capture_identify(capture_id: str, body: S.IdentifyRequest | None = None, ws: Workspace = WS):
@@ -979,8 +992,10 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         thumb = next((v.image_key for o in obs for v in o.views if v.image_key), None)
         prof = next((d for d in A.tree_profiles(ws.repo) if d["tree_id"] == tree_id), {})
         cur = sorted(prof.get("conditions", {}).values(), key=lambda f: -f["likelihood"])
-        return S.TreeDetail(**tree_summary(ws, t, prof, thumb).model_dump(), observations=_observations(ws.repo, obs),
-                            current_conditions=[_finding(f) for f in cur], latest_sensors=prof.get("latest_sensors"))
+        out = _observations(ws.repo, obs)
+        tw = twin([o.model_dump() for o in out], cur)
+        return S.TreeDetail(**tree_summary(ws, t, prof, thumb).model_dump(), observations=out,
+                            current_conditions=[_finding(f) for f in cur], latest_sensors=prof.get("latest_sensors"), **tw)
 
     @api.patch("/trees/{tree_id}", response_model=S.TreeSummary, tags=["trees"])
     def update_tree(tree_id: str, body: S.TreeUpdate, ws: Workspace = WS):

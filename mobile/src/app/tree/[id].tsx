@@ -1,7 +1,7 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useDb } from '@/db';
 import { useCallback, useState } from 'react';
-import { Cpu, Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
+import { ArrowRight, Cpu, Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ConditionKey, Finding } from '@/api';
 import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
@@ -59,6 +59,7 @@ export default function TreeDetail() {
       </View>
 
       {data.extras && <ServerHealth {...data.extras} only="causes" />}
+      {data.extras && <ServerHealth {...data.extras} only="twin" />}
 
       {shots.length > 0 && (
         <View style={s.row}>
@@ -115,7 +116,8 @@ export default function TreeDetail() {
 }
 
 // What the server worked out from the observer's checklist, the photos and the ESP32 sensor node.
-function ServerHealth({ conditions, sensors, history, only }: TreeExtras & { only: 'causes' | 'details' }) {
+function ServerHealth({ conditions, sensors, history, readings, environment, changes, next, only }: TreeExtras & { only: 'causes' | 'twin' | 'details' }) {
+  const [all, setAll] = useState(false); // sensor history: the latest 3, or every reading
   const reading = (icon: LucideIcon, label: string, v: number | null | undefined, unit: string) => (
     <View key={label} style={s.reading}>
       <Icon as={icon} c={color.inkSoft} />
@@ -148,6 +150,29 @@ function ServerHealth({ conditions, sensors, history, only }: TreeExtras & { onl
         </View>
     ) : null;
   }
+  if (only === 'twin') {
+    return changes.length > 0 || next ? (
+      <Card style={{ padding: space.lg, gap: space.md }}>
+        {changes.length > 0 && (
+          <View style={{ gap: space.xs }}>
+            <T v="label">Since last visit</T>
+            {changes.map((c) => <T key={c} c={color.inkSoft}>{`• ${c}`}</T>)}
+          </View>
+        )}
+        {next && (
+          <View style={[s.next, changes.length > 0 && s.rule]}>
+            <Icon as={ArrowRight} c={color.spruce} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <T v="caption">Next action</T>
+              <T v="label">{next}</T>
+            </View>
+          </View>
+        )}
+      </Card>
+    ) : null;
+  }
+  const shownReadings = all ? readings : readings.slice(0, 3);
+  const num = (v: number | null | undefined, unit: string) => (v == null ? 'N/A' : `${Math.round(v * 10) / 10}${unit}`);
   return (
     <>
       {history.length >= 2 && (
@@ -189,13 +214,39 @@ function ServerHealth({ conditions, sensors, history, only }: TreeExtras & { onl
           {reading(Sun, 'Light', sensors?.light_lux, ' lx')}
         </View>
         {!sensors && <T v="caption">No ESP32 reading for this tree yet.</T>}
+        {environment && (
+          <Card style={{ padding: space.lg, gap: space.xs }}>
+            <T v="label">{environment.summary}</T>
+            {environment.changes.map((c) => <T key={c} v="caption">{c}</T>)}
+          </Card>
+        )}
       </View>
+      {readings.length > 0 && (
+        <View style={{ gap: space.md }}>
+          <T v="overline">Sensor history</T>
+          <Card>
+            {shownReadings.map((r, i) => (
+              <Row key={r.observation_id} title={fmtDate(Date.parse(r.timestamp))}
+                sub={`Soil ${num(r.sensors.soil_moisture_pct, '%')} · ${num(r.sensors.air_temp_c, ' °C')} · RH ${num(r.sensors.humidity_pct, '%')}${r.vpd_kpa != null ? ` · VPD ${r.vpd_kpa.toFixed(1)} kPa` : ''}`}
+                last={i === shownReadings.length - 1 && readings.length <= 3} />
+            ))}
+            {readings.length > 3 && (
+              <Pressable onPress={() => setAll(!all)} accessibilityRole="button" style={s.more}>
+                <T v="label" c={color.spruce}>{all ? 'Show less' : `See all ${readings.length} readings`}</T>
+              </Pressable>
+            )}
+          </Card>
+        </View>
+      )}
     </>
   );
 }
 
 const s = StyleSheet.create({
   spark: { flexDirection: 'row', alignItems: 'flex-end' },
+  next: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  rule: { paddingTop: space.md, borderTopWidth: 1, borderTopColor: color.lineSoft },
+  more: { padding: space.lg, alignItems: 'center' },
   readings: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   reading: { flexBasis: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.sm, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   level: { height: 28, paddingHorizontal: 10, borderRadius: radius.pill, justifyContent: 'center' },

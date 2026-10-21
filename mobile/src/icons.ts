@@ -1,5 +1,6 @@
 // The app's icon set. Per-icon imports keep the other ~1,600 Lucide icons out of the bundle.
 export type { LucideIcon } from 'lucide-react-native';
+export { default as ArrowRight } from 'lucide-react-native/icons/arrow-right';
 export { default as BatteryMedium } from 'lucide-react-native/icons/battery-medium';
 export { default as BookmarkPlus } from 'lucide-react-native/icons/bookmark-plus';
 export { default as Camera } from 'lucide-react-native/icons/camera';

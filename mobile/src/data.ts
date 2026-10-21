@@ -15,7 +15,12 @@ export type Scan = { id: number; tree_id: string; created_at: number; photos: st
 export type Forest = { id: number; name: string; lat: number | null; lng: number | null; trees: number; counts: Record<Status, number>; last_visit: number | null };
 // Extra detail only the server has: disease assessment and the ESP32 reading of the latest visit.
 // history: per visit (oldest first), the likelihood of each condition assessed on that visit.
-export type TreeExtras = { conditions: api.Finding[]; sensors: api.Sensors | null; history: { at: number; c: Record<string, number> }[] };
+// The digital twin: every ESP32 reading (newest first), the readings fused into one sentence, what changed
+// since the last visit and the next thing to do.
+export type TreeExtras = {
+  conditions: api.Finding[]; sensors: api.Sensors | null; history: { at: number; c: Record<string, number> }[];
+  readings: api.SensorPoint[]; environment: api.Environment | null; changes: string[]; next: string | null;
+};
 
 // Health signs, scored 0 (none) to 3 (severe).
 export const SIGNS = [
@@ -184,6 +189,7 @@ export async function getTree(db: SQLiteDatabase, id: string): Promise<{ tree: T
     })).reverse(),
     extras: {
       conditions: t.current_conditions, sensors: t.latest_sensors,
+      readings: t.sensor_history ?? [], environment: t.environment ?? null, changes: t.since_last_visit ?? [], next: t.next_action ?? null,
       history: t.observations.map((o) => ({
         at: Date.parse(o.timestamp),
         c: Object.fromEntries(o.findings.filter((f) => f.level !== 'unknown').map((f) => [f.condition, f.likelihood])),
@@ -224,6 +230,16 @@ export async function saveScan(db: SQLiteDatabase, o: { treeId?: string; place?:
       treeId, now, JSON.stringify(photos), wool, needles, crown, dieback, overall(o.levels), o.note.trim());
   });
   return treeId!;
+}
+
+// A new, empty forest; at: where the user is standing (optional, centers the map).
+export async function createForest(db: SQLiteDatabase, name: string, at: { lat: number; lon: number } | null) {
+  if (isServer()) {
+    const f = await api.createForest(name, at);
+    return { id: f.forest_id, name: f.name, lat: f.center?.lat ?? null, lng: f.center?.lon ?? null };
+  }
+  const r = await db.runAsync('INSERT INTO forests (name, lat, lng) VALUES (?, ?, ?)', name, at?.lat ?? null, at?.lon ?? null);
+  return { id: r.lastInsertRowId, name, lat: at?.lat ?? null, lng: at?.lon ?? null };
 }
 
 // Deleting cannot be undone; the screens ask the user to type the name first.

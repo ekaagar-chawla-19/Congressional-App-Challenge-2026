@@ -1,6 +1,6 @@
 """Phone-size walkthrough (python mobile/e2e/model_picker_walkthrough.py, Playwright) of the model picker against the real hemlock-api (both real models loaded):
-pick gamma -> scan -> result says gamma + species not checked -> health check with a pasted ESP32 reading ->
-diagnosis -> add another ESP32 reading from the tree page -> rescan with delta (switch mid-scan) -> same tree."""
+pick gamma -> AI-guided scan -> result says gamma + species not checked -> explainer -> health check with a pasted ESP32 reading ->
+diagnosis -> add another ESP32 reading from the tree page -> rescan with delta (switch mid-scan) -> same tree -> add a forest."""
 import json
 import re
 import sys
@@ -51,7 +51,11 @@ def choose_model(page, name):
 
 def scan(page, files, name):
     pick(page, files)
-    vis(page, "done now").wait_for(timeout=120_000)
+    # the AI-guided card says what the evidence needs; with 3 good photos it says to identify (or asks for one more)
+    page.get_by_text(re.compile("Tap Identify|One more view|Close-up next|save it for review")).locator("visible=true").first \
+        .wait_for(timeout=120_000)
+    notes.append(f"{name} guidance: " + " | ".join(l for l in page.inner_text("body").split("\n") if l.strip())[:220])
+    shot(page, f"guide_{name}")
     vis(page, "Identify", exact=True).click()
     page.get_by_text("Hemlock check").locator("visible=true").first.wait_for(timeout=180_000)
 
@@ -81,8 +85,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Scan with Model Gamma").locator("visible=true").first.click()
     page.wait_for_timeout(3000)
     shot(page, "03_camera_gamma")
-    vis(page, "Using Model Gamma").wait_for(timeout=30_000)
-    assert label(page, "Model: Model Gamma. Change model").is_visible()
+    label(page, "Model: Model Gamma. Change model").wait_for(timeout=30_000)
 
     # 2. Scan with gamma
     scan(page, ["visit1_0.jpg", "visit1_1.jpg", "visit1_2.jpg"], "gamma")
@@ -91,6 +94,18 @@ with sync_playwright() as p:
     assert "Model Gamma" in body and "Not checked" in body, body[:400]
     page.mouse.wheel(0, 700)
     shot(page, "05_result_gamma_lower")
+    # the explainer: three story steps, tap to advance, segmented bar
+    vis(page, "How did it match?").or_(vis(page, "How does matching work?")).first.click()
+    vis(page, "Bark becomes a fingerprint").wait_for(timeout=30_000)
+    shot(page, "05a_explainer_1")
+    label(page, "Next step").click()
+    vis(page, "The same ridges line up").wait_for()
+    shot(page, "05b_explainer_2")
+    vis(page, "Next", exact=True).click()
+    vis(page, "Match, new tree, or one more photo").wait_for()
+    shot(page, "05c_explainer_3")
+    vis(page, "Done", exact=True).click()
+    page.wait_for_timeout(1000)
     first = vis(page, "Register new tree").or_(page.get_by_role("button", name=re.compile("^Yes, this is"))).first
     first.click()
 
@@ -124,6 +139,13 @@ with sync_playwright() as p:
     shot(page, "09_updated_diagnosis")
     vis(page, "Back to the tree").click()
     page.get_by_text("Possible causes").locator("visible=true").first.wait_for(timeout=30_000)
+    # the digital twin: what changed, the next action, the fused environment and the sensor history
+    vis(page, "Next action").wait_for(timeout=30_000)
+    shot(page, "09a_tree_twin")
+    vis(page, "Sensor history").scroll_into_view_if_needed()
+    shot(page, "09b_sensor_history")
+    body = page.inner_text("body")
+    assert "Low water stress" in body and "wetter by" in body and "VPD" in body, body[:1500]
 
     # 5. Rescan with delta; switch models after one photo (the scan restarts)
     vis(page, "Scan this tree again").scroll_into_view_if_needed()
@@ -131,7 +153,7 @@ with sync_playwright() as p:
     vis(page, "Choose a model").wait_for(timeout=30_000)
     shot(page, "10_picker_remembers_gamma")
     choose_model(page, "Model Gamma")
-    vis(page, "Using Model Gamma").wait_for(timeout=30_000)
+    label(page, "Model: Model Gamma. Change model").wait_for(timeout=30_000)
     pick(page, ["visit2_0.jpg"])
     page.wait_for_timeout(6000)
     label(page, "Model: Model Gamma. Change model").click()
@@ -139,7 +161,7 @@ with sync_playwright() as p:
     vis(page, "starts this scan again").wait_for()
     shot(page, "11_switch_warning")
     page.get_by_role("button", name="Scan with Model Delta").locator("visible=true").first.click()
-    vis(page, "Using Model Delta").wait_for(timeout=30_000)
+    label(page, "Model: Model Delta. Change model").wait_for(timeout=30_000)
     shot(page, "12_camera_delta")
     scan(page, ["visit2_0.jpg", "visit2_1.jpg", "visit2_2.jpg"], "delta")
     shot(page, "13_result_delta")
@@ -148,6 +170,20 @@ with sync_playwright() as p:
     notes.append("delta result: " + " | ".join(body.split("\n")[:8]))
     page.mouse.wheel(0, 700)
     shot(page, "14_result_delta_lower")
+
+    # 6. Add a forest
+    page.goto(APP + "/forests")
+    vis(page, "New forest").wait_for(timeout=60_000)
+    vis(page, "New forest").click()
+    label(page, "Forest name").fill("Walkthrough Woods")
+    page.get_by_role("checkbox").locator("visible=true").first.click()  # no location in the browser
+    shot(page, "15_new_forest")
+    vis(page, "Add forest").click()
+    page.wait_for_timeout(3000)
+    shot(page, "16_after_new_forest")
+    page.goto(APP + "/forests")
+    vis(page, "Walkthrough Woods").wait_for(timeout=30_000)
+    shot(page, "17_forest_list")
 
     b.close()
 
