@@ -77,6 +77,12 @@ Two fixes came from testing with the real model:
   limit comes from all 639 neighbouring photo pairs (99.7th percentile, 0.970), not a 30-pair sample (which
   rejected 1 genuine photo in 27).
 
+## Upgrading an existing data folder
+
+Checked with yesterday's code: a data folder made before this change (demo account + a tree registered by delta)
+starts with today's server; at start-up every stored visit gets a gamma fingerprint from its stored photos and
+every demo placeholder a gamma placeholder (187 of 187), and gamma then recognises the stored tree.
+
 ## Limitations
 
 * Gamma has no species check. Use **Hemlock check** (delta's species head) when unsure; note that delta's
@@ -84,6 +90,12 @@ Two fixes came from testing with the real model:
 * Gamma is 10x slower per photo on a CPU (five 448 px crops); a 3-photo scan adds about 7 s of server time.
 * The first gamma scan in a forest with many trees registered before gamma was added waits for their
   fingerprints if the start-up catch-up has not finished (about 2.5 s per stored photo).
+* **Revisits with a different phone are rarely confirmed automatically.** On the 3 BarkNet hemlocks photographed
+  by two phones, gamma ranks the right tree first but its similarity drops to about 0.57, below what different
+  look-alike hemlocks in one stand score, so at the 1% false-match target it answers "new tree" (0 of 120 cross-phone
+  revisits confirmed, 0 wrong); lowering the gap floor does not change this (checked at the 10th, 25th and 50th
+  percentile). Delta behaves the same way. The right tree is still listed first under **Other matches**, where
+  one tap assigns it. Fixing this needs field photos of the same trees from different phones and days.
 * Same-day photos only: no model has been tested on revisits months apart.
 * Phone-side Bluetooth reading of the ESP32 needs Web Bluetooth (Chrome on Android or a desktop). On iPhone
   Safari or Expo Go, paste the node's JSON line or type the numbers; both feed the same diagnosis.
