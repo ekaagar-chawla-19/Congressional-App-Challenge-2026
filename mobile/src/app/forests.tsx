@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { logout } from '@/api';
 import { ago, createForest, deleteForest, listForests, useQuery, type Forest } from '@/data';
 import { hereNow } from '@/identify';
+import { LoadError } from '@/LoadError';
 import { shortName, useSession } from '@/session';
 import { color, font, radius, space, status, type Status } from '@/theme';
 import { BackBar, Button, Card, ConfirmDelete, Dot, Empty, Icon, IconBox, Screen, T } from '@/ui';
@@ -67,6 +68,7 @@ export default function Forests() {
         <T c={color.inkSoft}>Pick the forest you are working in. You can switch any time from the home screen.</T>
       </View>
 
+      <LoadError />
       {forests && forests.length === 0 && <Empty icon={Trees} title="No forests yet" body="Add the forest you are surveying to get started." />}
 
       <View style={{ gap: space.md }}>

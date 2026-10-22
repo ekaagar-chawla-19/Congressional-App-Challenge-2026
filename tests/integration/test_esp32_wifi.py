@@ -66,6 +66,23 @@ def test_firmware_reading_json_parses(tmp_path):
     assert r["partial"]["sensors"]["air_temp_c"] is None and r["partial"]["sensors"]["light_lux"] == 0.0
 
 
+@pytest.mark.skipif(shutil.which("g++") is None, reason="needs a C++ compiler")
+def test_firmware_battery_curve(tmp_path):
+    """power.h: a 1-cell Li-ion's voltage -> %, monotonic, 0 at the cut-off and 100 when full."""
+    (tmp_path / "b.cpp").write_text('#include <cstdio>\n#include "power.h"\nint main() {\n'
+                                    '  for (int mv = 3000; mv <= 4400; mv += 10) printf("%d %.2f\\n", mv, batteryPct(mv / 1000.0f));\n'
+                                    '  printf("nan %d\\n", isnan(batteryPct(NAN)) ? 1 : 0);\n}\n')
+    exe = tmp_path / "b"
+    subprocess.run(["g++", "-std=c++17", "-I", str(FIRMWARE), str(tmp_path / "b.cpp"), "-o", str(exe)], check=True, capture_output=True)
+    lines = subprocess.run([str(exe)], check=True, capture_output=True, text=True).stdout.split("\n")
+    pct = {int(a): float(b) for a, b in (l.split() for l in lines if l and not l.startswith("nan"))}
+    assert pct[3000] == pct[3300] == 0 and pct[4200] == pct[4400] == 100
+    assert 35 <= pct[3750] <= 45 and 85 <= pct[4050] <= 90
+    values = [pct[k] for k in sorted(pct)]
+    assert values == sorted(values)
+    assert "nan 1" in lines
+
+
 # ------------------------------------------------------------------ 2. same routes
 def test_firmware_and_simulator_serve_the_same_routes():
     ino = (FIRMWARE / "esp32_wifi_node.ino").read_text()
@@ -85,7 +102,7 @@ def test_firmware_and_simulator_serve_the_same_routes():
 def test_client_reads_simulated_node(node):
     c = WifiNode(node.url)
     st = c.status()
-    assert st["v"] == 1 and st["device"] == "HS-ESP32-SIM0" and st["simulated"] is True and st["battery_pct"] is None
+    assert st["v"] == 1 and st["device"] == "HS-ESP32-SIM0" and st["simulated"] is True and st["battery_pct"] is None and st["battery_v"] is None
     first, second = c.measure(), c.measure()
     assert second["raw"]["seq"] == first["raw"]["seq"] + 1
     assert set(first["sensors"]) == {"soil_moisture_pct", "air_temp_c", "humidity_pct", "light_lux"}

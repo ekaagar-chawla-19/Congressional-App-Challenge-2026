@@ -10,7 +10,8 @@
 // API (JSON; CORS open so a web page can call it too). Contract shared with
 // src/hemlock_sentinel/esp32/wifi.py (laptop client + simulated node) and mobile/src/esp32.ts.
 //   GET  /api/v1/status          {"v":1,"device","firmware","uptime_s","simulated","clients",
-//                                 "battery_pct":null,"latest_seq","log_count","log_every_s"}
+//                                 "battery_pct","battery_v","latest_seq","log_count","log_every_s"}
+//                                (battery_pct / battery_v: null without a battery divider, see power.h)
 //   GET  /api/v1/reading         latest reading (see reading_json.h), measured every READ_EVERY_MS
 //   POST /api/v1/measure         measure now and return that reading (takes up to ~2.5 s)
 //   GET  /api/v1/readings?since=N  logged readings with seq > N, oldest first, at most 50:
@@ -22,17 +23,18 @@
 // Demo tip: the computer running hemlock-api can join this network too (it gets 192.168.4.x). Then the
 // phone reaches both the node and the backend without switching Wi-Fi.
 //
-// Board: "ESP32 Dev Module", default partition scheme. Libraries and wiring: see sensors.h.
+// Board: "ESP32 Dev Module", default partition scheme. Libraries and wiring: see sensors.h. Battery: power.h.
 
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WebServer.h>
 #include <WiFi.h>
 
+#include "power.h"
 #include "sensors.h"
 
 // ------------------------------------------------------------------ config
-#define FIRMWARE_VERSION "wifi-1.0.0"
+#define FIRMWARE_VERSION "wifi-1.1.0"
 #define AP_PASS "hemlock-sentinel"   // at least 8 characters
 #define AP_CHANNEL 6
 #define AP_MAX_CLIENTS 4
@@ -49,9 +51,11 @@ bool haveLatest = false;
 unsigned long nextSeq = 1, lastRead = 0, lastLog = 0;
 Reading logBuf[LOG_SIZE];
 int logHead = 0, logCount = 0;  // ring buffer: logHead = next write slot
+float battV = NAN;              // refreshed with each reading
 
 Reading takeReading() {
   Reading r = sensorsRead();
+  battV = batteryVolts();
   r.seq = nextSeq++;
   r.uptime_s = millis() / 1000;
   latest = r;
@@ -84,7 +88,8 @@ void handleStatus() {
   j += ",\"uptime_s\":" + String(millis() / 1000);
   j += ",\"simulated\":" + String(sensorsSimulated() ? "true" : "false");
   j += ",\"clients\":" + String(WiFi.softAPgetStationNum());
-  j += ",\"battery_pct\":null";
+  j += ",\"battery_pct\":" + jsonNum(batteryPct(battV), 0);
+  j += ",\"battery_v\":" + jsonNum(battV, 2);
   j += ",\"latest_seq\":" + String(haveLatest ? latest.seq : 0UL);
   j += ",\"log_count\":" + String(logCount);
   j += ",\"log_every_s\":" + String(LOG_EVERY_MS / 1000) + "}";
@@ -141,6 +146,7 @@ void handleNotFound() {
 // ------------------------------------------------------------------ main
 void setup() {
   Serial.begin(115200);
+  powerBegin();
   sensorsBegin();
 
   char id[8];
@@ -149,7 +155,6 @@ void setup() {
 
   WiFi.mode(WIFI_AP);
   WiFi.softAP(deviceName.c_str(), AP_PASS, AP_CHANNEL, 0, AP_MAX_CLIENTS);  // 192.168.4.1
-  WiFi.setSleep(false);  // answer requests quickly
   if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
 
   server.enableCORS(true);
@@ -172,5 +177,6 @@ void loop() {
     if (Serial.read() == 'r') takeReading();
   if (millis() - lastRead >= READ_EVERY_MS) takeReading();
   if (millis() - lastLog >= LOG_EVERY_MS) logReading(latest);
+  powerLoop(battV);
   delay(2);
 }

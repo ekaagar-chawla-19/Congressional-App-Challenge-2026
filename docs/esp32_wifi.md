@@ -57,13 +57,59 @@ Libraries: "DHT sensor library" (Adafruit) + "Adafruit Unified Sensor". Calibrat
 `light_raw`, `soil_raw`). Pins and calibration are at the top of `sensors.h`. Set `SIMULATE_SENSORS 1`
 there to test the link on a bare board.
 
+## Run it on a battery
+
+The unit draws roughly 80-100 mA while its Wi-Fi is on (estimate for an ESP32 dev board at 80 MHz with the
+three kit sensors; not measured on our board). Firmware `wifi-1.1.0` saves power on its own (`power.h`):
+
+* The CPU runs at 80 MHz instead of 240.
+* **After 30 minutes with no phone joined to its Wi-Fi, it switches itself off** (deep sleep). Press **EN**
+  (RST) on the board to turn it back on. Its network is back in about 2 s. Set `IDLE_SLEEP_MIN` to change this,
+  or `0` to never sleep.
+* The blue LED blinks briefly every 3 s while it is on, and every second when the battery is low.
+* With a battery divider fitted (option 2), it reports the battery level and switches off below 3.3 V, so the
+  cell is not run flat. The app shows the level on the Live sensors card and the device page, and warns
+  below 20 %.
+
+### Option 1: a USB power bank (no wiring)
+
+Plug any power bank into the ESP32's USB port with the same cable you use for the Mac.
+
+| Power bank | About how long it runs with the Wi-Fi on |
+|---|---|
+| 5,000 mAh | 1 to 1.5 days |
+| 10,000 mAh | 2 to 3 days |
+
+Battery level shows as "Not measured", because the ESP32 can't see inside the bank. One catch: many power
+banks turn themselves off when the draw is very small. The awake unit draws enough, but once the unit
+sleeps, the bank may switch off too. Then press the bank's button (or replug the cable) instead of EN. A
+bank with an "always on" or "low current" mode avoids this.
+
+### Option 2: a rechargeable cell inside the unit (battery level in the app)
+
+Parts: one 18650 Li-ion cell (or a 1-cell LiPo, 1000 mAh or more), an **"18650 battery shield"** board with
+a USB-A 5 V output and a charge port (many kit sellers sell it for the ESP32), and two 100 kΩ resistors.
+
+1. Put the cell in the battery shield and plug the shield's **USB-A output into the ESP32's USB port**.
+   The shield charges the cell from its own USB port and boosts it to 5 V for the board.
+2. Battery level, optional: battery **+** → 100 kΩ → **GPIO36 (VP)** → 100 kΩ → **GND**. The divider halves
+   4.2 V to 2.1 V, which is safe for the pin, and draws only 0.02 mA. On the shield, take battery + from the
+   cell holder's + end.
+3. In `power.h` set `#define BATTERY_PIN 36` and flash.
+
+A 2,500 mAh 18650 runs about a day with the Wi-Fi on, and weeks if the unit mostly sleeps between visits.
+
+**Never connect a battery straight to the ESP32's 3V3 pin.** A full cell is 4.2 V and the chip's limit is
+3.6 V. Also never feed the shield's 5V pin from the battery: the sensors run on 3.3 V (see the wiring above).
+Don't use 9 V batteries: they're small and run down within hours.
+
 ## API
 
 All JSON, CORS open. Errors: `{"error":{"code":"…","message":"…"}}` with a 4xx status.
 
 | Request | Answer |
 |---|---|
-| `GET /api/v1/status` | `{"v":1,"device","firmware","uptime_s","simulated","clients","battery_pct":null,"latest_seq","log_count","log_every_s"}` |
+| `GET /api/v1/status` | `{"v":1,"device","firmware","uptime_s","simulated","clients","battery_pct","battery_v","latest_seq","log_count","log_every_s"}` (battery: `null` without a divider) |
 | `GET /api/v1/reading` | latest reading |
 | `POST /api/v1/measure` | measures now and returns that reading (up to ~2.5 s with a DHT11) |
 | `GET /api/v1/readings?since=N` | `{"readings":[…],"latest_seq","uptime_s","more"}`: logged readings with `seq > N`, oldest first, 50 per page. Repeat with the last `seq` while `more` is true |
@@ -115,7 +161,7 @@ hemlock-esp32 visit H-012 --wifi --forest 1 --email … --password …
 
 ## Tested
 
-* On a real ESP32 (HS-ESP32-1C49, core 3.3.7): compiles (73 % flash), flashes, and boots as an access
+* On a real ESP32 (HS-ESP32-1C49, core 3.3.7): `wifi-1.1.0` compiles (75 % flash), flashes, and boots as an access
   point at 192.168.4.1. Readings over USB go through `hemlock-esp32 read --serial`.
 * `tests/integration/test_esp32_wifi.py`: the firmware's reading JSON compiled on a computer and parsed;
   firmware and simulator routes match; Python client and CLI (paging, `since`, 400/404, unreachable);

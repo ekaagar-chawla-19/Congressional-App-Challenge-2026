@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import type { ConditionKey, Finding } from '@/api';
 import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
 import { deleteTree, fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
+import { LoadError } from '@/LoadError';
 import { SensorTiles, sensorLine } from '@/SensorPanel';
 import { hasAny, useConnected } from '@/sensors';
 import { color, font, radius, space, status, type Status } from '@/theme';
@@ -28,7 +29,7 @@ export default function TreeDetail() {
   const data = useQuery((db) => getTree(db, id), `${id}:${rev}`);
   const [confirm, setConfirm] = useState(false);
   const connected = useConnected();
-  if (!data?.tree) return <Screen>{data ? <BackBar title="Tree not found" /> : null}</Screen>;
+  if (!data?.tree) return <Screen><BackBar title={data ? 'Tree not found' : id} /><LoadError /></Screen>;
 
   const { tree, scans } = data;
   const latest = scans[0];

@@ -39,7 +39,7 @@ export default function Device() {
       }
       await Sharing.shareAsync(uri, { mimeType: 'text/csv', dialogTitle: 'Export scans' });
     } catch (e) {
-      notify('Export failed', String(e));
+      notify('Export failed', (e as Error).message ?? String(e));
     }
   };
   const fact = (icon: LucideIcon, label: string, value: string) => (
@@ -71,7 +71,7 @@ export default function Device() {
             <T v="label" c={color.spruce} onPress={() => router.push('/pair')} style={{ paddingVertical: space.md }}>Change</T>
           </View>
           <View style={s.facts}>
-            {fact(BatteryMedium, 'Battery', unit.battery == null ? 'N/A' : `${unit.battery}%`)}
+            {fact(BatteryMedium, 'Battery', unit.battery == null ? 'Not measured' : `${unit.battery}%`)}
             {fact(Wifi, 'Link', 'Wi-Fi')}
             {fact(HardDrive, 'Log', unit.storage)}
             {fact(RefreshCw, 'Firmware', unit.firmware)}
@@ -93,7 +93,7 @@ export default function Device() {
       <View style={{ gap: space.md }}>
         <T v="overline">Account</T>
         <Card>
-          <Row left={<IconBox icon={mode === 'server' ? Server : Cpu} />} title={user?.name ?? ''} sub={mode === 'server' ? `${user?.email} · ${server.replace(/^https?:\/\//, '')}` : `${user?.email} · on this phone only`} />
+          <Row left={<IconBox icon={mode === 'server' ? Server : Cpu} />} title={user?.name ?? ''} sub={mode === 'server' ? `${user?.email} · ${server.replace(/^https?:\/\//, '')}` : 'Everything is stored on this phone'} />
           <Row left={<IconBox icon={Trees} />} title="Forest" sub={shortName(forest?.name ?? '')} onPress={() => router.push('/forests')} />
           <Row left={<IconBox icon={LogOut} />} title="Sign out" onPress={signOut} last />
         </Card>

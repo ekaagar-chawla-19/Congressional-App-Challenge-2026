@@ -10,7 +10,7 @@ export default function InsightsTab() {
     return (
       <Screen tabbed>
         <T v="display">Insights</T>
-        <Empty icon={ChartColumn} title="Needs the server" body="Forest analysis, sections and disease trends come from the HemlockID server. Sign in to see them; the offline demo only stores scans." />
+        <Empty icon={ChartColumn} title="Needs the server" body="Forest-wide analysis, sections and disease trends come from the HemlockID server. In phone-only mode, each tree's page has its own diagnosis, sensor history and next steps, and the map shows health and sensor layers." />
       </Screen>
     );
   }

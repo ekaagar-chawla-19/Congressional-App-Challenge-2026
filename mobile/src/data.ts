@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { useDb } from './db';
 import { useCallback, useState } from 'react';
+import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as api from './api';
 import { PAIRED } from './device';
@@ -416,17 +417,32 @@ export async function exportCsv(db: SQLiteDatabase) {
 
 // Runs a query whenever the screen gains focus, so lists reflect new scans.
 // Also reruns when the forest or account changes. A failed server call keeps the previous data.
+/** The last load that failed (e.g. no server while on the sensor unit's Wi-Fi); `retry` reloads every screen's data. */
+export const useLoadError = create<{ error: string | null; attempt: number; retry(): void }>((set) => ({
+  error: null,
+  attempt: 0,
+  retry: () => set((s) => ({ error: null, attempt: s.attempt + 1 })),
+}));
+
 export function useQuery<T>(fn: (db: SQLiteDatabase) => Promise<T>, key = '') {
   const db = useDb();
   const scope = useSession((s) => `${s.mode}:${s.token}:${s.forest?.id}`);
+  const attempt = useLoadError((s) => s.attempt);
   const [data, setData] = useState<T>();
   useFocusEffect(
     useCallback(() => {
       let live = true;
-      fn(db).then((d) => live && setData(d), (e: Error) => console.warn(e.message));
+      fn(db).then(
+        (d) => {
+          if (!live) return;
+          setData(d);
+          if (useLoadError.getState().error) useLoadError.setState({ error: null });
+        },
+        (e: Error) => live && useLoadError.setState({ error: e.message }),
+      );
       return () => void (live = false);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [db, key, scope]),
+    }, [db, key, scope, attempt]),
   );
   return data;
 }

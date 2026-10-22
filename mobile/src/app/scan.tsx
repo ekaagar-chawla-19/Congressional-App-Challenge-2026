@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { useApp } from '@/device';
 import { Camera, ChevronDown, Images, Sparkles, X, Zap } from '@/icons';
@@ -50,7 +50,14 @@ export default function Scan() {
   const check = mode === 'check';
   const CAP = check ? 10 : MAX + 1; // hemlock check: several trees, one photo each; scan: up to 6 trunk views
   const server = isServer();
-  const [permission, request] = useCameraPermissions();
+  const [permission, request, recheck] = useCameraPermissions();
+  const open = useRef(true); // a library import stops when the scan is closed
+  useEffect(() => () => void (open.current = false), []);
+  // Turned on in Settings: pick that up when the user comes back to the app.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && recheck());
+    return () => sub.remove();
+  }, [recheck]);
   const unit = useApp((s) => s.unit);
   const connected = useConnected();
   const live = useSensors((st) => st.live);
@@ -117,7 +124,7 @@ export default function Scan() {
     if (check) {
       say('Checking the species…');
       try {
-        const r = await api.speciesCheck(uri);
+        const r = server ? await api.speciesCheck(uri) : await engine.speciesCheck(uri);
         set({ state: 'ok', hemlock: r.hemlock_probability, species: r.species.name });
         setChecks((c) => [...c, { uri, r }]);
         const label = r.verdict === 'hemlock' ? 'Eastern hemlock' : r.verdict === 'unsure' ? 'Not sure' : `Not a hemlock: ${r.species.name}`;
@@ -184,7 +191,12 @@ export default function Scan() {
     if (r.canceled) return;
     setBusy(true); // no camera shot in between: each photo's view position comes from the photos before it
     try {
-      for (const a of r.assets) await addShot(a.uri);
+      for (const [k, a] of r.assets.entries()) {
+        if (!open.current) return;
+        if (r.assets.length > 1 && (server || onPhone || check)) say(`Checking photo ${k + 1} of ${r.assets.length}…`);
+        await new Promise((go) => requestAnimationFrame(go)); // let the screen update between photos
+        await addShot(a.uri);
+      }
     } finally {
       setBusy(false);
     }
@@ -239,7 +251,9 @@ export default function Scan() {
     return (
       <Screen>
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Empty icon={Camera} title="Turn on the camera" body="HemlockID takes the bark photos right here in the app and coaches you through each one." />
+          <Empty icon={Camera} title="Turn on the camera"
+            body={permission.canAskAgain ? 'HemlockID takes the bark photos right here in the app and coaches you through each one.'
+              : 'Camera access is off for HemlockID. Turn it on in Settings > HemlockID > Camera, then come back. Or use bark photos you already took.'} />
         </View>
         {askModel && (
           <Pressable style={s.modelRow} onPress={() => setPicker('switch')} accessibilityRole="button"
@@ -252,7 +266,7 @@ export default function Scan() {
           </Pressable>
         )}
         {askModel && msgs.length > 1 && <T v="caption" c={color.inkSoft}>{msgs[msgs.length - 1].text}</T>}
-        <Button title="Allow camera" icon={Camera} onPress={request} />
+        <Button title={permission.canAskAgain ? 'Allow camera' : 'Open Settings'} icon={Camera} onPress={permission.canAskAgain ? request : () => Linking.openSettings()} />
         <Button title="Use photos from the library" icon={Images} secondary onPress={library} />
         <Button title="Not now" secondary onPress={() => router.back()} />
         {pickerEl}

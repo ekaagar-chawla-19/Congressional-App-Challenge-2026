@@ -1,8 +1,9 @@
 import { AppState } from 'react-native';
 import { create } from 'zustand';
 import type { Sensors } from './api';
-import { autoConnect, useApp } from './device';
-import { NodeUnreachable, nodeUrl, parseEsp32Reading, readOverWifi, READINGS } from './esp32';
+import { autoConnect, PAIRED, useApp } from './device';
+import Storage from './kv';
+import { NodeUnreachable, nodeStatus, nodeUrl, parseEsp32Reading, readOverWifi, READINGS } from './esp32';
 
 // The live link to the ESP32 sensor unit. The rest of the app never talks to the unit directly: it reads
 // `useSensors` and shows sensor sections only while a unit is connected (or a reading was taken), and only
@@ -21,6 +22,8 @@ export const useSensors = create<State>(() => ({ live: null, online: false, meas
 const POLL_ONLINE_MS = 5000;
 const POLL_OFFLINE_MS = 10_000;
 const FRESH_MS = 60_000;
+const STATUS_EVERY_MS = 60_000; // battery level refresh
+export const LOW_BATTERY = 20; // %
 
 /** Is a sensor unit connected right now? */
 export const useConnected = () => {
@@ -47,10 +50,23 @@ async function getReading(): Promise<Live> {
   }
 }
 
+// The unit's battery changes slowly: re-read its status once a minute while connected.
+let lastStatus = 0;
+async function refreshBattery() {
+  if (Date.now() - lastStatus < STATUS_EVERY_MS) return;
+  lastStatus = Date.now();
+  const st = await nodeStatus().catch(() => null);
+  const unit = useApp.getState().unit;
+  if (st && unit?.id === st.device && unit.battery !== st.battery_pct) useApp.setState({ unit: { ...unit, battery: st.battery_pct } });
+}
+
 let misses = 0;
 async function tick() {
   const app = useApp.getState();
   if (!autoConnect() && !app.unit) return void useSensors.setState({ online: false }); // disconnected by the user
+  // Never paired a unit: don't touch the local network (iOS would ask for access with no unit in sight).
+  // The pair screen finds the first unit; from then on it connects by itself.
+  if (!app.unit && !Storage.getItemSync(PAIRED)) return;
   try {
     const live = await getReading();
     misses = 0;
@@ -58,7 +74,10 @@ async function tick() {
     if (!autoConnect() && !useApp.getState().unit) return void useSensors.setState({ online: false });
     useSensors.setState({ live, online: true });
     // A unit answering on this network is connected, also after the app restarts or Wi-Fi comes back.
-    if (app.unit?.id !== live.device && !app.connecting) await app.connect(live.device).catch(() => {});
+    if (app.unit?.id !== live.device && !app.connecting) {
+      await app.connect(live.device).catch(() => {});
+      lastStatus = Date.now(); // connect just read the status
+    } else await refreshBattery();
   } catch {
     if (++misses >= 2 && useSensors.getState().online) {
       useSensors.setState({ online: false });

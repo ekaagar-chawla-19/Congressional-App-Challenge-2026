@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "HemlockID reads soil, air and light sensors from your HemlockID sensor unit over its Wi-Fi.",
+        "NSLocalNetworkUsageDescription": "HemlockID reads soil, air and light from your sensor unit over its Wi-Fi, and connects to a HemlockID server on your network if you use one.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }

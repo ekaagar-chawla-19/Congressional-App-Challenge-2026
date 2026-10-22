@@ -5,6 +5,7 @@ HemlockID has two modes, chosen at sign-in:
 | | Signed in to a server | **On this phone only** |
 |---|---|---|
 | Tree identification (Model Delta) | on the computer (`hemlock-api`) | **on the phone** (ONNX Runtime), in the app build; Expo Go: pick the tree by hand |
+| Hemlock check (is this tree a hemlock?) | on the computer | **on the phone**, same verdict rule as `POST /species-check`; hidden in Expo Go |
 | Database | the server's, per forest | the phone's SQLite (`hemlockid.db`) |
 | Diagnosis (HWA, scale, drought) | `api/diseases.py` | **`mobile/src/diagnosis.ts`**, the same rules, checked to give identical answers |
 | Digital twin (environment, "since last visit", next action) | `api/twin.py` | `mobile/src/diagnosis.ts` |

@@ -55,7 +55,7 @@ export default function Pair() {
         <Row
           left={<IconBox icon={Wifi} />}
           title={unit ? 'Unit paired' : searching ? 'Looking for the unit' : none ? 'No unit found' : 'Unit found'}
-          sub={error || (unit ? 'You can now read its sensors at each tree.' : none ? "Not on the unit's Wi-Fi yet, or it is off." : `At ${address.replace(/^https?:\/\//, '')}`)}
+          sub={error || (unit ? 'You can now read its sensors at each tree.' : none ? "Not on the unit's Wi-Fi yet, or it is off. Already on it? Check Settings > HemlockID > Local Network is on." : `At ${address.replace(/^https?:\/\//, '')}`)}
           right={searching ? <ActivityIndicator color={color.spruce} /> : null}
           last={!found?.length}
         />
@@ -95,7 +95,13 @@ export default function Pair() {
       {unit ? (
         <Button title="Continue" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
       ) : (
-        <Button title={searching ? 'Searching…' : 'Search again'} secondary onPress={search} disabled={searching} />
+        <>
+          <Button title={searching ? 'Searching…' : 'Search again'} secondary onPress={search} disabled={searching} />
+          <T v="label" c={color.spruce} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
+            style={{ textAlign: 'center', padding: space.sm }}>
+            {router.canGoBack() ? 'Not now' : 'Skip for now: use the phone camera only'}
+          </T>
+        </>
       )}
     </Screen>
   );

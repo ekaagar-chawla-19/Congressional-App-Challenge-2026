@@ -3,13 +3,15 @@ import { MapIcon, Search, TreePine } from '@/icons';
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ago, listTrees, useQuery } from '@/data';
+import { LoadError } from '@/LoadError';
 import { color, font, radius, space, type Status } from '@/theme';
 import { Badge, Card, Empty, Icon, Row, Screen, T } from '@/ui';
 
 const FILTERS: { label: string; key?: Status }[] = [{ label: 'All' }, { label: 'Healthy', key: 'healthy' }, { label: 'Watch', key: 'watch' }, { label: 'Infested', key: 'infested' }];
 
 export default function Trees() {
-  const trees = useQuery(listTrees) ?? [];
+  const loaded = useQuery(listTrees);
+  const trees = loaded ?? [];
   // The filter lives in the URL so Home's stat tiles can deep-link into it.
   const { filter } = useLocalSearchParams<{ filter?: Status }>();
   const [q, setQ] = useState('');
@@ -43,6 +45,7 @@ export default function Trees() {
         </View>
       </View>
 
+      <LoadError />
       <Card style={{ flexShrink: 1 }}>
         <FlatList
           data={shown}
@@ -50,7 +53,7 @@ export default function Trees() {
           renderItem={({ item: t, index }) => (
             <Row title={<T v="id">{t.id}</T>} sub={`${t.place} · ${ago(t.last_scan)}`} right={t.status && <Badge s={t.status} />} onPress={() => router.push(`/tree/${t.id}`)} last={index === shown.length - 1} />
           )}
-          ListEmptyComponent={<Empty icon={TreePine} title={trees.length ? 'No matches' : 'No trees yet'} body={trees.length ? 'Try another search or filter.' : 'Trees appear here after your first scan.'} />}
+          ListEmptyComponent={!loaded ? null : <Empty icon={TreePine} title={trees.length ? 'No matches' : 'No trees yet'} body={trees.length ? 'Try another search or filter.' : 'Trees appear here after your first scan.'} />}
         />
       </Card>
     </Screen>

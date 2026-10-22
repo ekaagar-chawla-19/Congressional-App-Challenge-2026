@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as api from './api';
 import { CONDITIONS, CONDITION_KEYS } from './conditions';
-import { BookmarkPlus, ChevronRight, Droplets, Flame, Lightbulb, MapPin, Sun, Thermometer, TrendingDown, TrendingUp, type LucideIcon } from './icons';
+import { BookmarkPlus, Droplets, Flame, Lightbulb, MapPin, Sun, Thermometer, TrendingDown, TrendingUp, TriangleAlert, type LucideIcon } from './icons';
 import { shortName, useSession } from './session';
 import { color, font, radius, space, status } from './theme';
 import { BackBar, Button, Card, Clamp, ConfirmDelete, DeleteLink, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, T, notify } from './ui';
@@ -38,7 +38,16 @@ export default function Insights({ scope, tabbed }: { scope: Scope; tabbed?: boo
     </>
   );
 
-  if (error) return <Screen scroll tabbed={tabbed}>{head}<Empty icon={ChevronRight} title="Could not load" body={error} /></Screen>;
+  if (error) {
+    return (
+      <Screen scroll tabbed={tabbed}>
+        {head}
+        <Empty icon={TriangleAlert} title="Could not load" body={error}>
+          <View style={{ alignSelf: 'stretch', marginTop: space.sm }}><Button title="Try again" onPress={() => (setError(undefined), load())} /></View>
+        </Empty>
+      </Screen>
+    );
+  }
   if (!a) return <Screen tabbed={tabbed}>{head}<ActivityIndicator color={color.spruce} style={{ marginTop: space.xxl }} /></Screen>;
 
   const sm = a.summary;

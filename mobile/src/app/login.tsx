@@ -3,7 +3,7 @@ import { localDbAvailable, useDb } from '@/db';
 import Storage from '@/kv';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { defaultServer, login, type ApiError } from '@/api';
+import { defaultServer, hasDefaultServer, login, type ApiError } from '@/api';
 import { seedDemo } from '@/data';
 import * as engine from '@/engine';
 import { Eye, EyeOff, Lock, Mail, Server, TreePine, type LucideIcon } from '@/icons';
@@ -20,7 +20,9 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [server, setServer] = useState(() => Storage.getItemSync('server') || defaultServer());
-  const [editServer, setEditServer] = useState(false);
+  // A fresh install of the app build has no server address to guess: ask for it.
+  const [editServer, setEditServer] = useState(() => !Storage.getItemSync('server') && !hasDefaultServer());
+  const [starting, setStarting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ msg: string; offline?: boolean }>();
 
@@ -41,10 +43,18 @@ export default function Login() {
     }
   };
 
-  const offlineDemo = async () => {
-    await seedDemo(db);
-    signIn({ mode: 'local', server: '', token: null, user: { name: 'Demo Field Team', email: DEMO.email } });
-    router.replace('/forests');
+  const phoneOnly = async () => {
+    if (starting) return;
+    setStarting(true);
+    setError(undefined);
+    try {
+      await seedDemo(db);
+      signIn({ mode: 'local', server: '', token: null, user: { name: 'Field Team', email: 'on this phone' } });
+      router.replace('/forests');
+    } catch (e) {
+      setError({ msg: `Could not set up phone-only mode: ${(e as Error).message}` });
+      setStarting(false);
+    }
   };
 
   const field = (icon: LucideIcon, props: React.ComponentProps<typeof TextInput>, right?: React.ReactNode) => (
@@ -92,10 +102,10 @@ export default function Login() {
             <T v="caption">or</T>
             <View style={s.rule} />
           </View>
-          <Button title="Use on this phone only" secondary onPress={offlineDemo} disabled={!localDbAvailable} />
+          <Button title={starting ? 'Setting up…' : 'Use on this phone only'} secondary onPress={phoneOnly} disabled={!localDbAvailable || starting} />
           <T v="caption" style={{ textAlign: 'center' }}>
             {!localDbAvailable ? 'Phone-only mode needs the app (Expo Go) or this page opened as localhost. Here, sign in with the demo account above.'
-              : error?.offline ? 'The server is not running, so sign-in is not possible. Phone-only mode keeps everything on this phone, with sample forests to start.'
+              : error?.offline ? 'No server to sign in to? Phone-only mode keeps everything on this phone, with sample forests to start.'
               : `Everything stays on this phone, with sample forests to start. No computer needed${engine.available() ? ': trees are identified on the phone' : ''}.`}
           </T>
         </View>

@@ -22,6 +22,7 @@ export default function Health() {
   const [note, setNote] = useState('');
   const [place, setPlace] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState<'pending' | 'off' | 'done'>('pending');
   const [saving, setSaving] = useState(false);
   const st = status[overall(levels, checks)];
   const set = (patch: Partial<Checks>) => setChecks((c) => ({ ...c, ...patch }));
@@ -30,10 +31,11 @@ export default function Health() {
   useEffect(() => {
     if (treeId) return;
     (async () => {
-      if (!(await Location.requestForegroundPermissionsAsync()).granted) return;
+      if (!(await Location.requestForegroundPermissionsAsync()).granted) return setLocating('off');
       const { coords: c } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       setCoords({ lat: c.latitude, lng: c.longitude });
-    })().catch(() => {});
+      setLocating('done');
+    })().catch(() => setLocating('off'));
   }, [treeId]);
 
   const save = async () => {
@@ -47,7 +49,7 @@ export default function Health() {
       router.dismissAll();
       router.push(`/tree/${id}`);
     } catch (e) {
-      notify('Could not save scan', String(e));
+      notify('Could not save scan', (e as Error).message ?? String(e));
       setSaving(false);
     }
   };
@@ -83,7 +85,7 @@ export default function Health() {
         <View style={{ gap: space.sm }}>
           <T v="label">Place name</T>
           <TextInput value={place} onChangeText={setPlace} placeholder="For example, Ridge Trail" placeholderTextColor={color.inkSoft} style={s.input} />
-          <T v="caption">{coords ? 'Location saved' : 'Getting location'}</T>
+          <T v="caption">{coords ? 'Location saved' : locating === 'off' ? "No location (location is off for HemlockID): the tree won't appear on the map." : 'Getting location…'}</T>
         </View>
       )}
 

@@ -2,8 +2,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { Sensors } from './api';
+import { useApp } from './device';
 import { Cpu, Droplet, Droplets, RefreshCw, Sun, Thermometer, type LucideIcon } from './icons';
-import { interpret, measureNow, present, useConnected, useSensors, type Live, type Note } from './sensors';
+import { interpret, LOW_BATTERY, measureNow, present, useConnected, useSensors, type Live, type Note } from './sensors';
 import { color, radius, space, status } from './theme';
 import { Button, Card, Dot, Icon, T } from './ui';
 
@@ -76,6 +77,7 @@ export function LiveSensorCard() {
   const connected = useConnected();
   const live = useSensors((s) => s.live);
   const measuring = useSensors((s) => s.measuring);
+  const battery = useApp((s) => s.unit?.battery ?? null);
   if (!connected || !live) return null;
   return (
     <Card style={s.card}>
@@ -83,7 +85,7 @@ export function LiveSensorCard() {
         <Icon as={Cpu} c={color.spruce} />
         <View style={{ flex: 1 }}>
           <T v="title">Live sensors</T>
-          <T v="caption">{`${live.device} · ${ago(live.at)}`}</T>
+          <T v="caption">{`${live.device} · ${ago(live.at)}${battery == null ? '' : ` · battery ${battery}%`}`}</T>
         </View>
         <T v="label" c={color.spruce} onPress={measuring ? undefined : () => measureNow().catch(() => {})} style={{ padding: space.sm }}>
           {measuring ? 'Reading…' : 'Measure'}
@@ -91,6 +93,12 @@ export function LiveSensorCard() {
       </View>
       <SensorTiles sensors={live.sensors} />
       <Notes sensors={live.sensors} />
+      {battery != null && battery < LOW_BATTERY && (
+        <View style={s.note}>
+          <Dot c={TONE.warn} />
+          <T v="caption" c={color.ink} style={{ flex: 1 }}>{`Unit battery low (${battery}%): charge it soon. When it runs out, the unit switches itself off to protect the battery.`}</T>
+        </View>
+      )}
     </Card>
   );
 }

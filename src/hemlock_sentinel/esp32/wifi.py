@@ -173,7 +173,7 @@ class SimulatedNode:
 
     def status(self) -> dict:
         return {"v": 1, "device": self.device, "firmware": "sim-1.0.0", "uptime_s": self._uptime(),
-                "simulated": True, "clients": 1, "battery_pct": None,
+                "simulated": True, "clients": 1, "battery_pct": None, "battery_v": None,
                 "latest_seq": self._latest["seq"] if self._latest else 0, "log_count": len(self._log),
                 "log_every_s": int(self.log_every_s)}
 

@@ -107,6 +107,13 @@ export function defaultServer() {
   return `http://${host || 'localhost'}:8000`;
 }
 
+/** Running on a computer only during development: a Release build with no address set has no server. */
+export const hasDefaultServer = () => !!process.env.EXPO_PUBLIC_API_URL || !!Constants.expoConfig?.hostUri || Platform.OS === 'web';
+
+const hostOf = (url: string) => url.replace(/^https?:\/\//, '') || 'no address set';
+// The usual cause in the field: the phone is still on the sensor unit's Wi-Fi, which has no internet.
+const OFFLINE_HINT = "If the phone is on the sensor unit's Wi-Fi, switch back to your usual Wi-Fi or mobile data, then try again.";
+
 type Opts = { method?: string; json?: unknown; form?: FormData; server?: string; timeout?: number };
 
 async function request<T>(path: string, o: Opts = {}): Promise<T> {
@@ -127,9 +134,10 @@ async function request<T>(path: string, o: Opts = {}): Promise<T> {
     });
   } catch (e) {
     if (ctl.signal.aborted) {
-      throw new ApiError(0, 'timeout', `The HemlockID server at ${o.server ?? server} took too long to answer (${Math.round((o.timeout ?? 15_000) / 1000)} s). Check the hemlock-api window on the computer.`);
+      throw new ApiError(0, 'timeout', `The server took too long to answer. ${OFFLINE_HINT}`);
     }
-    throw new ApiError(0, 'offline', `Can't reach the HemlockID server at ${o.server ?? server}${path}: ${(e as Error)?.message ?? 'network error'}. Is hemlock-api running, and is this phone on the same Wi-Fi?`);
+    console.warn(`${o.server ?? server}${path}: ${(e as Error)?.message}`);
+    throw new ApiError(0, 'offline', `Can't reach the server (${hostOf(o.server ?? server)}). ${OFFLINE_HINT}`);
   } finally {
     clearTimeout(timer);
   }

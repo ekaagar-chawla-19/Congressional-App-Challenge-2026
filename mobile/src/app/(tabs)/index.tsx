@@ -3,21 +3,26 @@ import { ChartColumn, ChevronDown, ChevronRight, CloudUpload, Leaf, ScanLine, Tr
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ago, dueForRevisit, listTrees, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
+import * as engine from '@/engine';
+import { LoadError } from '@/LoadError';
 import { LiveSensorCard } from '@/SensorPanel';
-import { shortName, useSession } from '@/session';
+import { isServer, shortName, useSession } from '@/session';
 import { color, radius, space, status, type Status } from '@/theme';
 import { Card, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, StatusIcon, T } from '@/ui';
 
 const today = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function Home() {
-  const trees = useQuery(listTrees) ?? [];
+  const loadedTrees = useQuery(listTrees);
+  const trees = loadedTrees ?? [];
   const pending = useQuery(pendingCount) ?? 0;
   const unit = useApp((s) => s.unit);
   const forest = useSession((s) => s.forest);
   const user = useSession((s) => s.user);
   const initials = (user?.name ?? '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const due = dueForRevisit(trees).slice(0, 2);
+  // Hemlock check needs a species model: the server's, or the one in the app build.
+  const canCheck = isServer() || engine.available();
   const open = (id: string) => router.push(`/tree/${id}`);
   const stat = (label: string, n: number, key?: Status) => (
     <Pressable key={label} style={s.stat} onPress={() => router.navigate(key ? `/trees?filter=${key}` : '/trees')}>
@@ -56,16 +61,19 @@ export default function Home() {
         <Icon as={ChevronRight} c={color.paper} />
       </Pressable>
 
+      <LoadError />
       <LiveSensorCard />
 
       <View style={s.quick}>
-        <Pressable style={s.quickBtn} onPress={() => router.push('/scan?mode=check')} accessibilityRole="button">
-          <IconBox icon={Leaf} />
-          <View style={{ flex: 1 }}>
-            <T v="label" style={{ fontSize: 14 }}>Hemlock check</T>
-            <T v="caption" style={{ fontSize: 12 }}>Is this tree a hemlock?</T>
-          </View>
-        </Pressable>
+        {canCheck && (
+          <Pressable style={s.quickBtn} onPress={() => router.push('/scan?mode=check')} accessibilityRole="button">
+            <IconBox icon={Leaf} />
+            <View style={{ flex: 1 }}>
+              <T v="label" style={{ fontSize: 14 }}>Hemlock check</T>
+              <T v="caption" style={{ fontSize: 12 }}>Is this tree a hemlock?</T>
+            </View>
+          </Pressable>
+        )}
         <Pressable style={s.quickBtn} onPress={() => router.navigate('/insights')} accessibilityRole="button">
           <IconBox icon={ChartColumn} />
           <View style={{ flex: 1 }}>
@@ -81,7 +89,7 @@ export default function Home() {
         {stat('Infested', trees.filter((t) => t.status === 'infested').length, 'infested')}
       </View>
 
-      {trees.length === 0 ? (
+      {!loadedTrees ? null : trees.length === 0 ? (
         <Empty icon={TreePine} title="No trees yet" body="Scan your first hemlock to start tracking its health." />
       ) : (
         <>

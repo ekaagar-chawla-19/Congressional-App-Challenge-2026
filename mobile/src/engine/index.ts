@@ -3,6 +3,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import * as jpeg from 'jpeg-js';
 import { NativeModules } from 'react-native';
+import type { SpeciesCheck } from '../api';
 import calibration from '../../assets/models/calibration.json';
 import meta from '../../assets/models/hemlock.json';
 import reference from '../../assets/check/reference.json';
@@ -66,6 +67,30 @@ export function hemlockProbability(v: ViewResult): number | null {
   const l = Array.from(v.speciesLogits), mx = Math.max(...l);
   const ex = l.map((x) => Math.exp(x - mx)), sum = ex.reduce((a, b) => a + b, 0);
   return ex[meta.species_labels.indexOf('tsuga_canadensis')] / sum;
+}
+
+// Same names as the server (species/labels.py COMMON_NAMES).
+const COMMON_NAMES: Record<string, string> = {
+  tsuga_canadensis: 'Eastern hemlock', pinus_strobus: 'Eastern white pine', pinus_resinosa: 'Red pine', pinus_rigida: 'Pitch pine',
+  fagus_grandifolia: 'American beech', acer_rubrum: 'Red maple', acer_platanoides: 'Norway maple', populus_grandidentata: 'Bigtooth aspen',
+};
+
+/** "Is this a hemlock?" for one photo, on the phone: the same verdict as the server's POST /species-check. */
+export async function speciesCheck(uri: string): Promise<SpeciesCheck> {
+  const v = await checkPhoto(uri, 0, []);
+  if (!v.speciesLogits) throw new Error(`Can't check that photo: ${v.problems.join('; ')}`);
+  const l = Array.from(v.speciesLogits), mx = Math.max(...l);
+  const ex = l.map((x) => Math.exp(x - mx)), sum = ex.reduce((a, b) => a + b, 0);
+  const top = meta.species_labels.map((label, i) => ({ label, name: COMMON_NAMES[label] ?? label, probability: ex[i] / sum }))
+    .sort((a, b) => b.probability - a.probability).slice(0, 3);
+  const hp = ex[meta.species_labels.indexOf('tsuga_canadensis')] / sum;
+  const th = (calibration as unknown as Calibration).species_threshold;
+  const verdict = top[0].label === 'tsuga_canadensis' && hp >= th ? 'hemlock' : hp < 0.2 ? 'not_hemlock' : 'unsure';
+  return {
+    is_hemlock: verdict === 'hemlock', verdict, hemlock_probability: hp, threshold: th, species: top[0], top,
+    quality: { index: 0, view_type: v.viewKey, accepted: v.accepted, problems: v.problems, warnings: v.warnings, metrics: v.metrics, hemlock_probability: hp, top_species: top[0] },
+    message: '',
+  };
 }
 
 /** The forest's trees as the model sees them: every stored fingerprint from this model version. */

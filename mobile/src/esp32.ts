@@ -27,7 +27,7 @@ export function setNodeUrl(url: string) {
 
 export type NodeStatus = {
   v: 1; device: string; firmware: string; uptime_s: number; simulated: boolean; clients: number;
-  battery_pct: number | null; latest_seq: number; log_count: number; log_every_s: number;
+  battery_pct: number | null; battery_v: number | null; latest_seq: number; log_count: number; log_every_s: number;
 };
 
 export class NodeUnreachable extends Error {}

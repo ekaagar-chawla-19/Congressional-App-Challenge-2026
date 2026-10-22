@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useDb } from '@/db';
 import { Camera, Check, ChevronRight, Cpu, Plus, Sparkles, TriangleAlert } from '@/icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import * as api from '@/api';
 import { fmtDate, listTrees } from '@/data';
@@ -25,6 +25,7 @@ export default function Result() {
   const [picked, setPicked] = useState(false); // offline: the user chose the tree by hand
   const [browsing, setBrowsing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const leaving = useRef(false); // a double tap must not open the health check twice
 
   const run = useCallback(
     () => listTrees(db).then((trees) => identify(photos, trees, done, db)).then(setRes, (e: Error) => setError(e.message)),
@@ -41,7 +42,7 @@ export default function Result() {
           <Empty icon={TriangleAlert} title="Could not identify" body={error} />
         </View>
         <Button title="Try again" onPress={retry} />
-        <Button title="Back to photos" secondary onPress={() => router.replace('/scan')} />
+        <Button title="Retake photos" secondary onPress={() => router.replace('/scan')} />
       </Screen>
     );
   }
@@ -100,6 +101,8 @@ export default function Result() {
   const guess = uncertain && pick === 0;
 
   const next = async (treeId: string | null) => {
+    if (leaving.current) return;
+    leaving.current = true;
     let id = treeId;
     const oid = srv?.observation_id ?? null;
     if (srv && oid) {
@@ -111,12 +114,14 @@ export default function Result() {
           id = (await api.assign(oid, treeId ?? 'new')).tree_id;
         } catch (e) {
           setBusy(false);
+          leaving.current = false;
           return notify('Could not save', (e as Error).message);
         }
       }
     }
     useApp.getState().setScan({ treeId: id, observationId: oid, isNew: treeId === null });
     router.push('/health');
+    setTimeout(() => (leaving.current = false), 800); // usable again after coming back
   };
 
   const badge = guess
