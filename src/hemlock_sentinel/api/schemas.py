@@ -361,6 +361,8 @@ class TreeSummary(BaseModel):
     notes: str | None
     thumbnail_url: str | None
     conditions: dict[str, Finding] = Field({}, description="latest assessed finding per condition")
+    latest_sensors: dict | None = Field(None, description="the ESP32 reading of the latest visit that had one "
+                                        "(soil_moisture_pct, air_temp_c, humidity_pct, light_lux, timestamp)")
 
 
 class TreePage(BaseModel):
@@ -386,7 +388,6 @@ class Environment(BaseModel):
 
 class TreeDetail(TreeSummary):
     current_conditions: list[Finding] = Field([], description="latest assessed finding per condition")
-    latest_sensors: dict | None = None
     observations: list[Observation]
     sensor_history: list[SensorPoint] = Field([], description="visits with an ESP32 reading, newest first")
     environment: Environment | None = None

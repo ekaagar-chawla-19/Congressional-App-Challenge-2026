@@ -1,4 +1,4 @@
-"""Laptop side of the ESP32 sensor node: read it over Bluetooth LE or USB and send to hemlock-api.
+"""Laptop side of the ESP32 sensor node: read it over Wi-Fi, Bluetooth LE or USB and send to hemlock-api.
 
 The phone app reads the ESP32 itself (Bluetooth button on the survey screen); this
 command is for laptops, testing and USB-connected nodes.
@@ -6,6 +6,9 @@ command is for laptops, testing and USB-connected nodes.
     hemlock-esp32 scan                                   # find nodes (HS-ESP32-xxxx)
     hemlock-esp32 read                                   # nearest node over BLE
     hemlock-esp32 read --serial /dev/cu.usbserial-0001   # over USB (macOS name; COM3 on Windows)
+    hemlock-esp32 read --wifi                            # Wi-Fi node (join HS-ESP32-xxxx first)
+    hemlock-esp32 log --wifi                             # every reading the Wi-Fi node has logged
+    hemlock-esp32 simulate                               # a fake Wi-Fi node on this computer (:8090)
     hemlock-esp32 visit H-012 --forest 1 --email demo@hemlock.test --password hemlock-demo
     hemlock-esp32 identify p1.jpg p2.jpg p3.jpg --forest 1 --email ... --password ... [--lat .. --lon ..]
 
@@ -22,6 +25,7 @@ import time
 from pathlib import Path
 
 from .api_client import ApiCallError, ApiClient
+from . import wifi
 from .reading import COMMAND_UUID, NAME_PREFIX, READING_UUID, SERVICE_UUID, BadReading, parse_reading
 
 MEASURE_WAIT_S = 6.0  # longest wait for a fresh reading (the DHT11 may need a ~2 s retry)
@@ -112,6 +116,8 @@ async def read_ble(address: str | None = None, timeout: float = 10.0) -> dict:
 
 
 def read_node(args) -> dict:
+    if getattr(args, "wifi", None):
+        return wifi.WifiNode(args.wifi).measure()
     return read_serial(args.serial) if args.serial else asyncio.run(read_ble(args.address))
 
 
@@ -132,10 +138,18 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("scan", help="list nearby ESP32 sensor nodes")
+    sim = sub.add_parser("simulate", help="serve the Wi-Fi node's API from this computer (no board needed)")
+    sim.add_argument("--port", type=int, default=8090)
+    sim.add_argument("--log-every", type=float, default=60.0, help="seconds between logged readings")
+    lg = sub.add_parser("log", help="print every reading the Wi-Fi node has logged")
+    lg.add_argument("--wifi", nargs="?", const=wifi.DEFAULT_URL, default=wifi.DEFAULT_URL, metavar="URL")
+    lg.add_argument("--since", type=int, default=0)
     for name in ("read", "visit", "identify"):
         p = sub.add_parser(name)
         p.add_argument("--address", help="BLE address (default: nearest node)")
         p.add_argument("--serial", metavar="PORT", help="read over USB instead, e.g. /dev/cu.usbserial-0001 or COM3")
+        p.add_argument("--wifi", nargs="?", const=wifi.DEFAULT_URL, metavar="URL",
+                       help=f"read the Wi-Fi node instead (default {wifi.DEFAULT_URL})")
         if name != "read":
             p.add_argument("--api", default="http://localhost:8000")
             p.add_argument("--email", required=True)
@@ -152,6 +166,25 @@ def main(argv: list[str] | None = None) -> None:
             p.add_argument("--no-sensors", action="store_true", help="photos only")
     args = ap.parse_args(argv)
 
+    if args.cmd == "simulate":
+        node = wifi.SimulatedNode(port=args.port, log_every_s=args.log_every).start()
+        print(f"simulated node {node.device} on http://0.0.0.0:{node.port} (pair the app with "
+              f"http://<this computer's IP>:{node.port}); Ctrl+C to stop")
+        try:
+            while True:
+                time.sleep(10)
+                node.measure()  # like the firmware's READ_EVERY_MS
+        except KeyboardInterrupt:
+            node.stop()
+        return
+    if args.cmd == "log":
+        try:
+            for r in wifi.WifiNode(args.wifi).readings(args.since):
+                print(f"#{r['raw']['seq']} t+{r['raw']['uptime_s']}s ", end="")
+                _show(r)
+        except wifi.NodeError as e:
+            sys.exit(f"ERROR {e}")
+        return
     if args.cmd == "scan":
         nodes = asyncio.run(scan())
         for addr, name, rssi in nodes:
@@ -162,7 +195,10 @@ def main(argv: list[str] | None = None) -> None:
 
     reading = None
     if not getattr(args, "no_sensors", False):
-        reading = read_node(args)
+        try:
+            reading = read_node(args)
+        except wifi.NodeError as e:
+            sys.exit(f"ERROR {e}")
         _show(reading)
     if args.cmd == "read":
         return

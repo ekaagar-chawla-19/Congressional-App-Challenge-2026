@@ -8,6 +8,8 @@ import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 import { logout } from '@/api';
 import { exportCsv, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
+import * as engine from '@/engine';
+import { LiveSensorCard } from '@/SensorPanel';
 import { shortName, useSession } from '@/session';
 import { color, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, T, notify } from '@/ui';
@@ -69,12 +71,15 @@ export default function Device() {
             <T v="label" c={color.spruce} onPress={() => router.push('/pair')} style={{ paddingVertical: space.md }}>Change</T>
           </View>
           <View style={s.facts}>
-            {fact(BatteryMedium, 'Battery', `${unit.battery}%`)}
-            {fact(Wifi, 'Signal', unit.signal)}
-            {fact(HardDrive, 'Storage', unit.storage)}
+            {fact(BatteryMedium, 'Battery', unit.battery == null ? 'N/A' : `${unit.battery}%`)}
+            {fact(Wifi, 'Link', 'Wi-Fi')}
+            {fact(HardDrive, 'Log', unit.storage)}
             {fact(RefreshCw, 'Firmware', unit.firmware)}
           </View>
         </Card>
+      ) : null}
+      {unit ? (
+        <LiveSensorCard />
       ) : (
         <Card>
           <Empty icon={Cpu} title="No unit paired" body="You can still scan with the phone camera. Pair a unit for field captures.">
@@ -88,7 +93,7 @@ export default function Device() {
       <View style={{ gap: space.md }}>
         <T v="overline">Account</T>
         <Card>
-          <Row left={<IconBox icon={mode === 'server' ? Server : Cpu} />} title={user?.name ?? ''} sub={mode === 'server' ? `${user?.email} · ${server.replace(/^https?:\/\//, '')}` : `${user?.email} · offline demo`} />
+          <Row left={<IconBox icon={mode === 'server' ? Server : Cpu} />} title={user?.name ?? ''} sub={mode === 'server' ? `${user?.email} · ${server.replace(/^https?:\/\//, '')}` : `${user?.email} · on this phone only`} />
           <Row left={<IconBox icon={Trees} />} title="Forest" sub={shortName(forest?.name ?? '')} onPress={() => router.push('/forests')} />
           <Row left={<IconBox icon={LogOut} />} title="Sign out" onPress={signOut} last />
         </Card>
@@ -99,6 +104,7 @@ export default function Device() {
         <Card>
           {mode === 'local' && <Row left={<IconBox icon={CloudUpload} />} title="Sync when online" sub={pending ? `${pending} waiting` : 'All scans synced'} right={<Switch value={sync} onValueChange={toggleSync} trackColor={{ true: color.spruce, false: color.line }} thumbColor={color.card} />} />}
           <Row left={<IconBox icon={Download} />} title="Export data" sub="CSV for forestry teams" onPress={share} />
+          {engine.available() && <Row left={<IconBox icon={Cpu} />} title="On-device model" sub="Check that trees are recognised on this phone" onPress={() => router.push('/modelcheck')} />}
           <Row left={<IconBox icon={Sparkles} />} title="How HemlockID thinks" sub="Fingerprints and matching, in 3 steps" onPress={() => router.push('/fingerprint')} />
           <Row left={<IconBox icon={Info} />} title="About HemlockID" sub="Health checks and privacy" onPress={() => router.push('/about')} last />
         </Card>

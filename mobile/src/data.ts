@@ -5,15 +5,19 @@ import { useDb } from './db';
 import { useCallback, useState } from 'react';
 import { Platform } from 'react-native';
 import * as api from './api';
+import { PAIRED } from './device';
+import Storage from './kv';
+import { assess, currentConditions, environment, nextAction, sensorHistory, sinceLastVisit, type Visit } from './diagnosis';
+import type { Live } from './sensors';
 import { isServer, useSession } from './session';
 import type { Status } from './theme';
 
 export type Tree = { id: string; place: string; lat: number | null; lng: number | null; created_at: number };
-// conditions: likelihood 0-1 per condition (server only).
-export type TreeRow = Tree & { status: Status | null; last_scan: number | null; photo: string | null; conditions?: Record<string, number> };
-export type Scan = { id: number; tree_id: string; created_at: number; photos: string; status: Status; note: string; synced: number } & Levels;
+// conditions: likelihood 0-1 per condition. sensors: the latest sensor reading (null: none ever taken).
+export type TreeRow = Tree & { status: Status | null; last_scan: number | null; photo: string | null; conditions?: Record<string, number>; sensors?: api.Sensors | null };
+export type Scan = { id: number; tree_id: string; created_at: number; photos: string; status: Status; note: string; synced: number; signs?: string; severity?: number | null } & Levels;
 export type Forest = { id: number; name: string; lat: number | null; lng: number | null; trees: number; counts: Record<Status, number>; last_visit: number | null };
-// Extra detail only the server has: disease assessment and the ESP32 reading of the latest visit.
+// Disease assessment and sensor readings: from the server, or worked out on the phone (diagnosis.ts) offline.
 // history: per visit (oldest first), the likelihood of each condition assessed on that visit.
 // The digital twin: every ESP32 reading (newest first), the readings fused into one sentence, what changed
 // since the last visit and the next thing to do.
@@ -75,6 +79,30 @@ export async function migrate(db: SQLiteDatabase) {
       await db.runAsync('UPDATE trees SET forest_id = 1');
     }
   }
+  if (v < 3) {
+    // v3 (phone-only mode): the checklist as the server's sign keys + severity, so the phone can diagnose;
+    // sensor readings (with a scan, or on their own); tree fingerprints for the on-device model.
+    await db.execAsync(`
+      ALTER TABLE scans ADD COLUMN signs TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE scans ADD COLUMN severity INTEGER;
+      CREATE TABLE IF NOT EXISTS readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, tree_id TEXT NOT NULL REFERENCES trees(id), scan_id INTEGER REFERENCES scans(id),
+        created_at INTEGER NOT NULL, soil_moisture_pct REAL, air_temp_c REAL, humidity_pct REAL, light_lux REAL, device TEXT);
+      CREATE INDEX IF NOT EXISTS readings_tree ON readings(tree_id, created_at);
+      CREATE TABLE IF NOT EXISTS fingerprints (
+        tree_id TEXT NOT NULL REFERENCES trees(id), scan_id INTEGER REFERENCES scans(id), view_index INTEGER NOT NULL,
+        model TEXT NOT NULL, embedding_b64 TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS fingerprints_model ON fingerprints(model, tree_id);`);
+    // Scans from before v3 only have the four graded signs: derive the checklist from them (as the demo seed
+    // does), so their trees keep a diagnosis.
+    const old = await db.getAllAsync<Levels & { id: number }>('SELECT id, wool, needles, crown, dieback FROM scans');
+    for (const sc of old) {
+      const l = { wool: sc.wool ?? 0, needles: sc.needles ?? 0, crown: sc.crown ?? 0, dieback: sc.dieback ?? 0 };
+      const { signs, severity } = toServer(l, { ...NO_CHECKS, twigsChecked: true });
+      await db.runAsync('UPDATE scans SET signs = ?, severity = ? WHERE id = ?', JSON.stringify([...new Set(signs)]), severity, sc.id);
+    }
+    await db.execAsync('PRAGMA user_version = 3;');
+  }
 }
 
 // Sample forests for the offline demo: hemlock stands along North Georgia streams.
@@ -109,9 +137,17 @@ export async function seedDemo(db: SQLiteDatabase) {
           const at = Math.min(first + v * (90 + rnd() * 100) * DAY, now - (2 + rnd() * 40) * DAY);
           const base = spread - (visits - 1 - v) * 0.7;
           const l: Levels = { wool: lvl(base), needles: lvl(base - 0.5), crown: lvl(base - 1), dieback: lvl(base - 1.5) };
-          await db.runAsync(
-            'INSERT INTO scans (tree_id, created_at, photos, wool, needles, crown, dieback, status, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)',
-            id, at, '[]', l.wool, l.needles, l.crown, l.dieback, overall(l));
+          const { signs, severity } = toServer(l, { ...NO_CHECKS, twigsChecked: true });
+          const { lastInsertRowId: sid } = await db.runAsync(
+            'INSERT INTO scans (tree_id, created_at, photos, wool, needles, crown, dieback, status, synced, signs, severity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
+            id, at, '[]', l.wool, l.needles, l.crown, l.dieback, overall(l), JSON.stringify(signs), severity);
+          if (rnd() < 0.75) {
+            const month = new Date(at).getUTCMonth();
+            const warm = month >= 4 && month <= 8;
+            await db.runAsync('INSERT INTO readings (tree_id, scan_id, created_at, soil_moisture_pct, air_temp_c, humidity_pct, light_lux, device) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              id, sid, at, Math.round((38 - base * 7 + (rnd() - 0.5) * 12) * 10) / 10, Math.round(((warm ? 24 : 9) + (rnd() - 0.5) * 8) * 10) / 10,
+              Math.round(55 + (rnd() - 0.5) * 40), Math.round(400 + rnd() * 9000), 'demo');
+          }
         }
       }
     }
@@ -150,6 +186,33 @@ export async function listForests(db: SQLiteDatabase): Promise<Forest[]> {
   }));
 }
 
+// ------------------------------------------------------------------ phone-only health
+// The visits of some trees, oldest first, as the diagnosis sees them: each scan with its checklist and reading,
+// plus readings taken on their own. findings: diagnosis.assess, exactly as the server would store them.
+const READING_COLS = 'soil_moisture_pct, air_temp_c, humidity_pct, light_lux';
+type ReadingRow = { id: number; tree_id: string; scan_id: number | null; created_at: number } & api.Sensors;
+const sensorsOf = (r: ReadingRow | undefined): api.Sensors | null =>
+  r && [r.soil_moisture_pct, r.air_temp_c, r.humidity_pct, r.light_lux].some((v) => v != null)
+    ? { soil_moisture_pct: r.soil_moisture_pct, air_temp_c: r.air_temp_c, humidity_pct: r.humidity_pct, light_lux: r.light_lux } : null;
+
+async function localVisits(db: SQLiteDatabase, where: string, arg: string | number): Promise<Map<string, Visit[]>> {
+  const scans = await db.getAllAsync<Scan>(`SELECT s.* FROM scans s JOIN trees t ON t.id = s.tree_id WHERE ${where}`, arg);
+  const readings = await db.getAllAsync<ReadingRow>(`SELECT r.id, r.tree_id, r.scan_id, r.created_at, ${READING_COLS} FROM readings r JOIN trees t ON t.id = r.tree_id WHERE ${where}`, arg);
+  const byScan = new Map(readings.filter((r) => r.scan_id != null).map((r) => [r.scan_id!, r]));
+  const out = new Map<string, Visit[]>();
+  const push = (tree: string, v: Omit<Visit, 'findings'>, hasImages: boolean) => {
+    const findings = assess(v.signs, v.sensors, v.severity, v.at, hasImages);
+    out.set(tree, [...(out.get(tree) ?? []), { ...v, findings }]);
+  };
+  for (const sc of scans) {
+    const signs = JSON.parse(sc.signs ?? '[]') as string[];
+    push(sc.tree_id, { id: `s${sc.id}`, at: sc.created_at, severity: sc.severity ?? null, signs, sensors: sensorsOf(byScan.get(sc.id)) }, sc.photos !== '[]');
+  }
+  for (const r of readings) if (r.scan_id == null) push(r.tree_id, { id: `r${r.id}`, at: r.created_at, severity: null, signs: [], sensors: sensorsOf(r) }, false);
+  for (const v of out.values()) v.sort((a, b) => a.at - b.at);
+  return out;
+}
+
 // Each tree with its latest scan.
 const LIST_SQL = `
     SELECT t.*, s.status, s.created_at AS last_scan, json_extract(s.photos, '$[0]') AS photo
@@ -157,11 +220,21 @@ const LIST_SQL = `
     WHERE t.forest_id = ? ORDER BY s.created_at DESC`;
 
 export async function listTrees(db: SQLiteDatabase): Promise<TreeRow[]> {
-  if (!isServer()) return db.getAllAsync<TreeRow>(LIST_SQL, forestId());
+  if (!isServer()) {
+    const rows = await db.getAllAsync<TreeRow>(LIST_SQL, forestId());
+    const visits = await localVisits(db, 't.forest_id = ?', forestId());
+    return rows.map((r) => {
+      const v = visits.get(r.id) ?? [];
+      const hist = sensorHistory(v);
+      return { ...r, sensors: hist[0]?.sensors ?? null,
+        conditions: Object.fromEntries(currentConditions(v).map((f) => [f.condition, f.likelihood])) };
+    });
+  }
   return (await api.trees()).map((t) => ({
     id: t.tree_id, place: conditionLabel(t), lat: t.location?.lat ?? null, lng: t.location?.lon ?? null, created_at: Date.parse(t.created_at),
     status: statusOf(t.severity), last_scan: Date.parse(t.last_seen_at), photo: api.absolute(t.thumbnail_url),
     conditions: Object.fromEntries(Object.entries(t.conditions ?? {}).map(([k, f]) => [k, f.likelihood])),
+    sensors: t.latest_sensors ?? null,
   }));
 }
 
@@ -174,9 +247,22 @@ const levelsOf = (o: api.Observation): Levels => {
 
 export async function getTree(db: SQLiteDatabase, id: string): Promise<{ tree: Tree | null; scans: Scan[]; extras?: TreeExtras }> {
   if (!isServer()) {
+    const visits = (await localVisits(db, 't.id = ?', id)).get(id) ?? [];
+    const conditions = currentConditions(visits);
+    const readings = sensorHistory(visits);
+    const env = environment(readings);
+    // suggest a sensor reading only to people who have a unit (demo readings don't count)
+    const hasUnit = Storage.getItemSync(PAIRED) != null;
     return {
       tree: await db.getFirstAsync<Tree>('SELECT * FROM trees WHERE id = ?', id),
       scans: await db.getAllAsync<Scan>('SELECT * FROM scans WHERE tree_id = ? ORDER BY created_at DESC', id),
+      extras: {
+        conditions, sensors: readings[0]?.sensors ?? null, readings, environment: env, changes: sinceLastVisit(visits),
+        next: visits.length ? nextAction(visits, conditions, env, hasUnit) : null,
+        history: visits.filter((v) => v.findings.some((f) => f.level !== 'unknown')).map((v) => ({
+          at: v.at, c: Object.fromEntries(v.findings.filter((f) => f.level !== 'unknown').map((f) => [f.condition, f.likelihood])),
+        })),
+      },
     };
   }
   const t = await api.tree(id).catch((e: api.ApiError) => (e.status === 404 ? null : Promise.reject(e)));
@@ -188,7 +274,7 @@ export async function getTree(db: SQLiteDatabase, id: string): Promise<{ tree: T
       photos: JSON.stringify(o.views.map((v) => api.absolute(v.image_url)).filter(Boolean)), ...levelsOf(o),
     })).reverse(),
     extras: {
-      conditions: t.current_conditions, sensors: t.latest_sensors,
+      conditions: t.current_conditions, sensors: t.latest_sensors ?? null,
       readings: t.sensor_history ?? [], environment: t.environment ?? null, changes: t.since_last_visit ?? [], next: t.next_action ?? null,
       history: t.observations.map((o) => ({
         at: Date.parse(o.timestamp),
@@ -207,7 +293,17 @@ export const dueForRevisit = (trees: TreeRow[]) =>
     .filter((t) => t.last_scan && Date.now() - t.last_scan > REVISIT_DAYS * DAY)
     .sort((a, b) => rank[b.status!] - rank[a.status!] || a.last_scan! - b.last_scan!);
 
-export async function saveScan(db: SQLiteDatabase, o: { treeId?: string; place?: string; coords?: { lat: number; lng: number } | null; photos: string[]; levels: Levels; note: string }) {
+const insertReading = (db: SQLiteDatabase, treeId: string, scanId: number | null, r: Live) =>
+  db.runAsync(`INSERT INTO readings (tree_id, scan_id, created_at, ${READING_COLS}, device) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    treeId, scanId, r.at, r.sensors.soil_moisture_pct, r.sensors.air_temp_c, r.sensors.humidity_pct, r.sensors.light_lux, r.device);
+
+/** A reading on its own (no photos), on the phone. */
+export const addLocalReading = (db: SQLiteDatabase, treeId: string, r: Live) => insertReading(db, treeId, null, r);
+
+export async function saveScan(db: SQLiteDatabase, o: {
+  treeId?: string; place?: string; coords?: { lat: number; lng: number } | null; photos: string[]; levels: Levels; note: string;
+  checks?: Checks; sensors?: Live | null; fingerprints?: { model: string; embeddings: string[] } | null;
+}) {
   const now = Date.now();
   // Camera photos live in the cache, which the OS may clear; keep our own copies. (Web photos are data URLs.)
   const photos = Platform.OS === 'web' ? o.photos : await Promise.all(
@@ -225,9 +321,13 @@ export async function saveScan(db: SQLiteDatabase, o: { treeId?: string; place?:
       await db.runAsync('INSERT INTO trees VALUES (?, ?, ?, ?, ?, ?)', treeId, o.place || 'Unnamed spot', o.coords?.lat ?? null, o.coords?.lng ?? null, now, forestId());
     }
     const { wool, needles, crown, dieback } = o.levels;
-    await db.runAsync(
-      'INSERT INTO scans (tree_id, created_at, photos, wool, needles, crown, dieback, status, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      treeId, now, JSON.stringify(photos), wool, needles, crown, dieback, overall(o.levels), o.note.trim());
+    const { signs, severity } = toServer(o.levels, o.checks);
+    const { lastInsertRowId: scanId } = await db.runAsync(
+      'INSERT INTO scans (tree_id, created_at, photos, wool, needles, crown, dieback, status, note, signs, severity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      treeId, now, JSON.stringify(photos), wool, needles, crown, dieback, overall(o.levels, o.checks), o.note.trim(), JSON.stringify([...new Set(signs)]), severity);
+    if (o.sensors) await insertReading(db, treeId!, scanId, o.sensors);
+    for (const [i, e] of (o.fingerprints?.embeddings ?? []).entries())
+      await db.runAsync('INSERT INTO fingerprints VALUES (?, ?, ?, ?, ?)', treeId, scanId, i, o.fingerprints!.model, e);
   });
   return treeId!;
 }
@@ -246,7 +346,7 @@ export async function createForest(db: SQLiteDatabase, name: string, at: { lat: 
 export async function deleteForest(db: SQLiteDatabase, f: { id: number; name: string }) {
   if (isServer()) return api.deleteForest(f.id, f.name);
   await db.withTransactionAsync(async () => {
-    await db.runAsync('DELETE FROM scans WHERE tree_id IN (SELECT id FROM trees WHERE forest_id = ?)', f.id);
+    for (const t of ['readings', 'fingerprints', 'scans']) await db.runAsync(`DELETE FROM ${t} WHERE tree_id IN (SELECT id FROM trees WHERE forest_id = ?)`, f.id);
     await db.runAsync('DELETE FROM trees WHERE forest_id = ?', f.id);
     await db.runAsync('DELETE FROM forests WHERE id = ?', f.id);
   });
@@ -255,7 +355,7 @@ export async function deleteForest(db: SQLiteDatabase, f: { id: number; name: st
 export async function deleteTree(db: SQLiteDatabase, id: string) {
   if (isServer()) return api.deleteTree(id);
   await db.withTransactionAsync(async () => {
-    await db.runAsync('DELETE FROM scans WHERE tree_id = ?', id);
+    for (const t of ['readings', 'fingerprints', 'scans']) await db.runAsync(`DELETE FROM ${t} WHERE tree_id = ?`, id);
     await db.runAsync('DELETE FROM trees WHERE id = ?', id);
   });
 }
@@ -283,12 +383,14 @@ export function toServer(l: Levels, c: Checks = NO_CHECKS) {
 
 // Server mode: the visit was stored when the photos were identified; add the health check and any
 // ESP32 readings to it. The server then works out the likely causes (diseases.assess).
+// sentWithPhotos: a reading already went to the server with the photos (so dropping it must remove it there).
 export async function saveServerVisit(observationId: string, levels: Levels, note: string, c: Checks = NO_CHECKS,
-  sensors: api.Sensors | null = null) {
+  sensors: api.Sensors | null = null, sentWithPhotos = false) {
   const { signs, severity } = toServer(levels, c);
   await api.setSigns(observationId, [...new Set(signs)]);
   await api.setHealth(observationId, severity, note.trim());
   if (sensors && Object.values(sensors).some((v) => v != null)) await api.setSensors(observationId, sensors);
+  else if (sentWithPhotos) await api.clearSensors(observationId); // the user chose not to keep that reading
 }
 
 export async function exportCsv(db: SQLiteDatabase) {
@@ -300,8 +402,9 @@ export async function exportCsv(db: SQLiteDatabase) {
     csv = [['tree_id', 'condition', 'lat', 'lng', 'last_visit', 'status'].join(','),
       ...rows.map((r) => cols.map((c) => cell(c === 'last_scan' ? new Date(r[c]!).toISOString() : r[c])).join(','))].join('\n');
   } else {
-    const rows = await db.getAllAsync<Scan & Tree>('SELECT scans.*, place, lat, lng FROM scans JOIN trees ON trees.id = scans.tree_id WHERE trees.forest_id = ? ORDER BY scans.created_at', forestId());
-    const cols = ['tree_id', 'place', 'lat', 'lng', 'created_at', 'wool', 'needles', 'crown', 'dieback', 'status', 'note'] as const;
+    const rows = await db.getAllAsync<Scan & Tree & api.Sensors>(`SELECT scans.*, place, lat, lng, ${READING_COLS.split(', ').map((c) => `r.${c}`).join(', ')}
+      FROM scans JOIN trees ON trees.id = scans.tree_id LEFT JOIN readings r ON r.scan_id = scans.id WHERE trees.forest_id = ? ORDER BY scans.created_at`, forestId());
+    const cols = ['tree_id', 'place', 'lat', 'lng', 'created_at', 'wool', 'needles', 'crown', 'dieback', 'status', 'note', 'soil_moisture_pct', 'air_temp_c', 'humidity_pct', 'light_lux'] as const;
     csv = [cols.join(','), ...rows.map((r) => cols.map((c) => cell(c === 'created_at' ? new Date(r[c]).toISOString() : r[c])).join(','))].join('\n');
   }
   const name = `hemlockid-${new Date().toISOString().slice(0, 10)}.csv`;

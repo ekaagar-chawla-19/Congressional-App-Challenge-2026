@@ -4,15 +4,17 @@ import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as api from '@/api';
-import { CONDITIONS, likelihoodColor, type Layer } from '@/conditions';
+import { CONDITIONS, isSensorLayer, likelihoodColor, NO_READING, SENSOR_LAYERS, type Layer, type SensorLayer } from '@/conditions';
 import { ago, listTrees, useQuery } from '@/data';
 import MapCanvas from '@/MapCanvas';
+import { sensorLine } from '@/SensorPanel';
 import { isServer, useSession } from '@/session';
 import { color, font, radius, space, status } from '@/theme';
 import { Badge, Dot, Empty, Icon, Screen, T } from '@/ui';
 
-// Short labels so all four layers fit across a phone screen.
+// Short labels so the layers fit across a phone screen (it scrolls sideways when sensor layers are added).
 const LAYERS: { key: Layer; label: string }[] = [{ key: 'health', label: 'Health' }, { key: 'hwa', label: 'Adelgid' }, { key: 'ehs', label: 'Scale' }, { key: 'drought_stress', label: 'Drought' }];
+const SENSOR_KEYS = Object.keys(SENSOR_LAYERS) as SensorLayer[];
 
 // Landmarks, sections and disease hotspots come from the server; the offline demo shows trees only.
 const extras = async () => {
@@ -27,9 +29,14 @@ export default function TreeMap() {
   const more = useQuery(extras);
   const server = useSession((s) => s.mode === 'server');
   const { sel, layer: layerParam } = useLocalSearchParams<{ sel?: string; layer?: Layer }>();
-  const [layer, setLayer] = useState<Layer>(layerParam ?? 'health');
+  const [chosen, setLayer] = useState<Layer>(layerParam ?? 'health');
   const [showSections, setShowSections] = useState(true);
   const picked = trees.find((t) => t.id === sel);
+  // A sensor layer for each sensor that at least one tree has a reading for; none without sensor data.
+  const layers = [...LAYERS, ...SENSOR_KEYS.filter((k) => trees.some((t) => t.sensors?.[SENSOR_LAYERS[k].key] != null))
+    .map((k) => ({ key: k as Layer, label: SENSOR_LAYERS[k].label }))];
+  // a sensor layer whose data is gone (e.g. after switching forests) falls back to Health
+  const layer: Layer = layers.some((l) => l.key === chosen) ? chosen : 'health';
   const viewBox = useRef<api.Bbox | null>(null);
   const onView = useCallback((b: api.Bbox) => void (viewBox.current = b), []);
 
@@ -48,21 +55,22 @@ export default function TreeMap() {
   };
   const legend: [string, string][] = layer === 'health'
     ? (['healthy', 'watch', 'infested', 'unrated'] as const).map((k) => [status[k].dot, status[k].label])
+    : isSensorLayer(layer) ? [...SENSOR_LAYERS[layer].bands.map((b): [string, string] => [b.color, b.label]), [NO_READING, 'No reading']]
     : [[likelihoodColor(layer, 0.8), 'Likely'], [likelihoodColor(layer, 0.45), 'Possible'], [likelihoodColor(layer, 0.1), 'Unlikely']];
 
   return (
     <View style={{ flex: 1 }}>
       <MapCanvas trees={trees} landmarks={more?.landmarks ?? []} sections={more?.sections ?? []} showSections={showSections}
-        hotspots={layer === 'health' ? [] : more?.hotspots[layer] ?? []} layer={layer} selected={picked?.id}
+        hotspots={layer === 'health' || isSensorLayer(layer) ? [] : more?.hotspots[layer] ?? []} layer={layer} selected={picked?.id}
         onSelect={(id) => router.setParams({ sel: id })} onView={onView} />
 
       <View style={[s.top, { top: top + space.sm }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
-          {LAYERS.map((l) => {
+          {layers.map((l) => {
             const on = l.key === layer;
             return (
               <Pressable key={l.key} onPress={() => setLayer(l.key)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={[s.chip, on && s.chipOn]}>
-                {l.key !== 'health' && <Dot c={CONDITIONS[l.key].color} />}
+                {l.key !== 'health' && !isSensorLayer(l.key) && <Dot c={CONDITIONS[l.key].color} />}
                 <T v="caption" c={on ? color.paper : color.ink} style={{ fontFamily: font.semibold }}>{l.label}</T>
               </Pressable>
             );
@@ -75,7 +83,7 @@ export default function TreeMap() {
               <T v="caption" c={color.ink} style={{ fontSize: 11, fontFamily: font.medium }}>{label}</T>
             </View>
           ))}
-          {layer !== 'health' && (more?.hotspots[layer]?.length ?? 0) > 0 && (
+          {layer !== 'health' && !isSensorLayer(layer) && (more?.hotspots[layer]?.length ?? 0) > 0 && (
             <View style={s.legendItem}>
               <View style={{ width: 12, height: 10, borderWidth: 2, borderColor: CONDITIONS[layer].color, borderRadius: 2 }} />
               <T v="caption" c={color.ink} style={{ fontSize: 11, fontFamily: font.medium }}>Hotspot</T>
@@ -105,6 +113,7 @@ export default function TreeMap() {
                 {picked.status && <Badge s={picked.status} />}
               </View>
               <T v="caption">{`${picked.place} · scanned ${ago(picked.last_scan).toLowerCase()}`}</T>
+              {isSensorLayer(layer) && <T v="caption" c={color.ink}>{sensorLine(picked.sensors) || 'No sensor reading yet'}</T>}
             </View>
             <View style={s.go}>
               <Icon as={ChevronRight} c={color.paper} />

@@ -27,7 +27,7 @@ export default function Result() {
   const [busy, setBusy] = useState(false);
 
   const run = useCallback(
-    () => listTrees(db).then((trees) => identify(photos, trees, done)).then(setRes, (e: Error) => setError(e.message)),
+    () => listTrees(db).then((trees) => identify(photos, trees, done, db)).then(setRes, (e: Error) => setError(e.message)),
     [db, photos, done],
   );
   useEffect(() => void run(), [run]);
@@ -144,7 +144,7 @@ export default function Result() {
             : isMatch
               ? `${chosen.tree.place} · registered ${fmtDate(chosen.tree.created_at)}`
               : res.offline
-                ? 'The offline demo cannot run the tree-recognition model (it runs on the server). Register this as a new tree, or pick the tree yourself.'
+                ? 'Expo Go cannot run the tree-recognition model. Install the HemlockID app build to identify trees on this phone, or sign in to a server. For now, register a new tree or pick it yourself.'
                 : 'None of your trees looks like this one. Register it to start its history.'}
         </T>
 

@@ -418,7 +418,8 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
                              main_condition=status.get("main_condition"), severity=status.get("severity"), location=_location(status.get("lat"), status.get("lon")),
                              created_at=_iso(t.created_at), last_seen_at=_iso(t.last_seen_at),
                              observation_count=t.observation_count, notes=t.notes, thumbnail_url=_image_url(thumb),
-                             conditions={c: _finding(f) for c, f in status.get("conditions", {}).items()})
+                             conditions={c: _finding(f) for c, f in status.get("conditions", {}).items()},
+                             latest_sensors=status.get("latest_sensors"))
 
     def refresh_findings(ws: Workspace, oid: str) -> list[dict]:
         o = ws.repo.get_observation(oid)
@@ -931,7 +932,9 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         humidity_pct: float | None = Form(None), light_lux: float | None = Form(None),
         signs: str | None = Form(None, description="comma-separated " + S.SIGNS_DOC),
         accept_best_guess: bool = Form(False, description="if uncertain, assign the top candidate"),
-        commit: bool = Form(True, description="false = dry run, nothing stored"),
+        # A string, not bool: newer FastAPI treats an omitted bool form field like an unticked checkbox (False),
+        # which silently turned every one-shot identify into a dry run. Omitted = store.
+        commit: str | None = Form(None, description="false = dry run, nothing stored (default: store)"),
         model: str | None = Form(None, description="re-ID model: delta (default) or gamma"),
         ws: Workspace = WS):
         """All photos in one request. Always stores the result (uncertain ones for review) unless commit=false."""
@@ -948,6 +951,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
             check_view_key(k)
         if (lat is None) != (lon is None):
             raise ApiError(400, "bad_location", "send both lat and lon")
+        commit = (commit or "true").strip().lower() not in ("false", "0", "no", "off")
         sensors = _form_sensors(soil_moisture_pct=soil_moisture_pct, air_temp_c=air_temp_c,
                                 humidity_pct=humidity_pct, light_lux=light_lux)
         sign_list = _check_signs([x.strip() for x in signs.split(",") if x.strip()] if signs else [])
@@ -995,7 +999,7 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         out = _observations(ws.repo, obs)
         tw = twin([o.model_dump() for o in out], cur)
         return S.TreeDetail(**tree_summary(ws, t, prof, thumb).model_dump(), observations=out,
-                            current_conditions=[_finding(f) for f in cur], latest_sensors=prof.get("latest_sensors"), **tw)
+                            current_conditions=[_finding(f) for f in cur], **tw)
 
     @api.patch("/trees/{tree_id}", response_model=S.TreeSummary, tags=["trees"])
     def update_tree(tree_id: str, body: S.TreeUpdate, ws: Workspace = WS):
@@ -1073,6 +1077,14 @@ def create_api(pipeline: HemlockSentinel | None = None, demo: bool = False, api_
         if not sensors:
             raise ApiError(400, "no_readings", "send at least one reading")
         F.set_sensors(ws.repo, observation_id, sensors)
+        refresh_findings(ws, observation_id)
+        return get_observation(observation_id, ws)
+
+    @api.delete("/observations/{observation_id}/sensors", response_model=S.Observation, tags=["health"])
+    def clear_observation_sensors(observation_id: str, ws: Workspace = WS):
+        """Remove a visit's sensor reading (e.g. the probe was not in the soil) and re-run its diagnosis."""
+        find_observation(ws, observation_id)
+        F.clear_sensors(ws.repo, observation_id)
         refresh_findings(ws, observation_id)
         return get_observation(observation_id, ws)
 

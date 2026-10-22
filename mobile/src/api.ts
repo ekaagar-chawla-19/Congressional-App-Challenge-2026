@@ -16,6 +16,7 @@ export type TreeSummary = {
   tree_id: string; species: string; name: string; main_condition: string | null; severity: number | null;
   location: Location | null; created_at: string; last_seen_at: string; observation_count: number;
   notes: string | null; thumbnail_url: string | null; conditions?: Record<string, Finding>;
+  latest_sensors?: Sensors | null; // the latest visit that had a sensor reading
 };
 export type Observation = {
   observation_id: string; severity: number | null; health_notes: string | null; has_photos: boolean;
@@ -25,7 +26,7 @@ export type Observation = {
 export type SensorPoint = { observation_id: string; timestamp: string; sensors: Sensors; vpd_kpa: number | null };
 export type Environment = { summary: string; vpd_kpa: number | null; water_stress: 'low' | 'some' | 'high'; changes: string[] };
 export type TreeDetail = TreeSummary & {
-  current_conditions: Finding[]; latest_sensors: Sensors | null; observations: Observation[];
+  current_conditions: Finding[]; observations: Observation[];
   sensor_history?: SensorPoint[]; environment?: Environment | null; since_last_visit?: string[]; next_action?: string | null;
 };
 export type Candidate = { tree_id: string; probability: number | null; global_score: number | null };
@@ -191,13 +192,15 @@ export async function addView(captureId: string, uri: string, viewKey?: string) 
   if (viewKey) form.append('view_key', viewKey);
   return request<ViewAdded>(`/captures/${captureId}/views`, { form, timeout: 60_000 });
 }
-export const identifyCapture = (captureId: string, loc: Location | null, forceCommit = false) =>
-  request<IdentifyResult>(`/captures/${captureId}/identify`, { json: { location: loc, force_commit: forceCommit }, timeout: 180_000 });
+// sensors: the unit's reading taken with the photos (null without a unit); it goes into this visit's diagnosis.
+export const identifyCapture = (captureId: string, loc: Location | null, forceCommit = false, sensors: Sensors | null = null) =>
+  request<IdentifyResult>(`/captures/${captureId}/identify`, { json: { location: loc, force_commit: forceCommit, sensors }, timeout: 180_000 });
 
 // Sends 3-5 bark photos; the server runs the model, stores the visit and answers which tree it is.
-export async function identify(photos: string[], loc: Location | null, model?: ModelKey) {
+export async function identify(photos: string[], loc: Location | null, model?: ModelKey, sensors: Sensors | null = null) {
   const form = new FormData();
   if (model) form.append('model', model);
+  for (const [k, v] of Object.entries(sensors ?? {})) if (v != null) form.append(k, String(v));
   for (const [i, uri] of photos.entries()) await appendPhoto(form, 'images', uri, `view${i}.jpg`);
   if (loc) {
     form.append('lat', String(loc.lat));
@@ -213,6 +216,9 @@ export const setSigns = (observationId: string, signs: string[]) =>
   request<Observation>(`/observations/${observationId}/signs`, { method: 'PUT', json: { signs } });
 export const setSensors = (observationId: string, sensors: Sensors) =>
   request<Observation>(`/observations/${observationId}/sensors`, { method: 'PUT', json: sensors });
+// "Don't save it": the reading sent with the photos is removed again and the visit re-diagnosed without it.
+export const clearSensors = (observationId: string) =>
+  request<Observation>(`/observations/${observationId}/sensors`, { method: 'DELETE' });
 // A visit without photos at a known tree: an ESP32 reading (and/or signs, notes). The server re-runs the diagnosis.
 export const addVisit = (treeId: string, body: { sensors?: Sensors | null; signs?: string[]; health_notes?: string | null; location?: Location | null }) =>
   request<Observation>(`/trees/${encodeURIComponent(treeId)}/visits`, { json: body });

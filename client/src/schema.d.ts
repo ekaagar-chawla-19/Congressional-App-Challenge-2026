@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Models
+         * @description The re-ID models the app can choose between before a scan (no sign-in needed).
+         */
+        get: operations["list_models_api_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health-guide": {
         parameters: {
             query?: never;
@@ -467,7 +487,8 @@ export interface paths {
         put?: never;
         /**
          * Create Capture
-         * @description Start a guided capture. Photos are held in memory for 30 min until identify.
+         * @description Start a guided capture with one re-ID model (body {"model": "gamma"}, else X-Model, else delta).
+         *     Photos are held in memory for 30 min until identify.
          */
         post: operations["create_capture_api_v1_captures_post"];
         delete?: never;
@@ -856,7 +877,7 @@ export interface components {
         Body_identify_oneshot_api_v1_identify_post: {
             /**
              * Images
-             * @description 3-9 photos in protocol order
+             * @description 3-10 photos in protocol order
              */
             images: string[];
             /**
@@ -907,6 +928,11 @@ export interface components {
              * @default true
              */
             commit: boolean;
+            /**
+             * Model
+             * @description re-ID model: delta (default) or gamma
+             */
+            model?: string | null;
         };
         /** Body_species_check_api_v1_species_check_post */
         Body_species_check_api_v1_species_check_post: {
@@ -941,10 +967,25 @@ export interface components {
              */
             global_score?: number | null;
         };
+        /** CaptureCreate */
+        CaptureCreate: {
+            /**
+             * Model
+             * @description re-ID model for this capture: delta (default) or gamma
+             */
+            model?: string | null;
+        };
         /** CaptureCreated */
         CaptureCreated: {
             /** Capture Id */
             capture_id: string;
+            /**
+             * Model
+             * @description the re-ID model this capture runs
+             */
+            model: string;
+            /** Model Name */
+            model_name: string;
             next_view: components["schemas"]["ViewSpecOut"];
             /** Expires In S */
             expires_in_s: number;
@@ -1005,6 +1046,27 @@ export interface components {
              * @description 1-based view numbers
              */
             contradicting_views: number[];
+        };
+        /** Environment */
+        Environment: {
+            /**
+             * Summary
+             * @description the latest reading fused into one sentence
+             */
+            summary: string;
+            /** Vpd Kpa */
+            vpd_kpa: number | null;
+            /**
+             * Water Stress
+             * @enum {string}
+             */
+            water_stress: "low" | "some" | "high";
+            /**
+             * Changes
+             * @description versus the previous reading
+             * @default []
+             */
+            changes: string[];
         };
         /** ErrorBody */
         ErrorBody: {
@@ -1115,6 +1177,55 @@ export interface components {
              */
             embedding_b64: string;
         };
+        /**
+         * Guidance
+         * @description AI-guided scanning: what the scan still needs after this photo (rule-based policy over the live ranking).
+         */
+        Guidance: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "start" | "retake" | "species_doubt" | "first_tree" | "confident" | "ambiguous" | "contradicting" | "likely_new" | "building";
+            /**
+             * Title
+             * @description a few words
+             */
+            title: string;
+            /**
+             * Detail
+             * @description one short sentence
+             */
+            detail: string;
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: components["schemas"]["GuidanceCandidate"][];
+            next_view?: components["schemas"]["ViewSpecOut"] | null;
+            /**
+             * Ready
+             * @description enough evidence to identify now
+             */
+            ready: boolean;
+            /**
+             * Needs More
+             * @description the policy asks for another trunk photo beyond the minimum
+             */
+            needs_more: boolean;
+        };
+        /** GuidanceCandidate */
+        GuidanceCandidate: {
+            /** Tree Id */
+            tree_id: string;
+            /**
+             * Probability
+             * @description calibrated P(this tree) with the photos so far
+             */
+            probability: number;
+            /** Global Score */
+            global_score?: number | null;
+        };
         /** Health */
         Health: {
             /**
@@ -1131,6 +1242,12 @@ export interface components {
              * @description false = face detector missing; photos are stored unscreened
              */
             face_blur: boolean;
+            /**
+             * Models
+             * @description re-ID models this server runs (GET /api/v1/models for details)
+             * @default []
+             */
+            models: string[];
         };
         /** HealthUpdate */
         HealthUpdate: {
@@ -1179,6 +1296,19 @@ export interface components {
              * @enum {string}
              */
             status: "existing" | "new" | "uncertain" | "rejected_species" | "unsupported_species" | "recapture";
+            /**
+             * Model
+             * @description re-ID model that produced this result (delta | gamma)
+             */
+            model?: string | null;
+            /** Model Name */
+            model_name?: string | null;
+            /**
+             * Species Checked
+             * @description false = this model has no species check; `species` is null and the tree is assumed to be an Eastern hemlock
+             * @default true
+             */
+            species_checked: boolean;
             /**
              * Action
              * @description what the app should do next
@@ -1281,6 +1411,42 @@ export interface components {
              */
             duplicate_tree_id: string;
         };
+        /** ModelChoice */
+        ModelChoice: {
+            /**
+             * Key
+             * @description send this as `model`: delta | gamma
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /** Tagline */
+            tagline: string;
+            /** Description */
+            description: string;
+            /** Version */
+            version: string;
+            /**
+             * Checks Species
+             * @description false = the model cannot tell species apart; it assumes a hemlock
+             */
+            checks_species: boolean;
+            /** Embedding Dim */
+            embedding_dim: number;
+            /** Image Size */
+            image_size: number;
+            /**
+             * Real Photo Top1
+             * @description share of real phone photos (2,371 iNaturalist hemlocks) where the right tree was ranked first
+             */
+            real_photo_top1?: number | null;
+            /** Speed */
+            speed?: string | null;
+            /** Default */
+            default: boolean;
+            /** Demo */
+            demo: boolean;
+        };
         /**
          * ModelFiles
          * @description For running the model on the phone (onnxruntime-web / onnxruntime-react-native).
@@ -1316,6 +1482,13 @@ export interface components {
             /** Reid Supported Species */
             reid_supported_species: string[];
             calibration: components["schemas"]["CalibrationInfo"];
+        };
+        /** ModelList */
+        ModelList: {
+            /** Default */
+            default: string;
+            /** Models */
+            models: components["schemas"]["ModelChoice"][];
         };
         /** Observation */
         Observation: {
@@ -1446,6 +1619,19 @@ export interface components {
             /** North */
             north: number;
         };
+        /** SensorPoint */
+        SensorPoint: {
+            /** Observation Id */
+            observation_id: string;
+            /** Timestamp */
+            timestamp: string;
+            sensors: components["schemas"]["Sensors"];
+            /**
+             * Vpd Kpa
+             * @description vapour-pressure deficit from air temperature + humidity
+             */
+            vpd_kpa?: number | null;
+        };
         /**
          * Sensors
          * @description ESP32 sensor-node readings for one visit (any may be missing).
@@ -1561,17 +1747,35 @@ export interface components {
                 [key: string]: components["schemas"]["Finding"];
             };
             /**
+             * Latest Sensors
+             * @description the ESP32 reading of the latest visit that had one (soil_moisture_pct, air_temp_c, humidity_pct, light_lux, timestamp)
+             */
+            latest_sensors?: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Current Conditions
              * @description latest assessed finding per condition
              * @default []
              */
             current_conditions: components["schemas"]["Finding"][];
-            /** Latest Sensors */
-            latest_sensors?: {
-                [key: string]: unknown;
-            } | null;
             /** Observations */
             observations: components["schemas"]["Observation"][];
+            /**
+             * Sensor History
+             * @description visits with an ESP32 reading, newest first
+             * @default []
+             */
+            sensor_history: components["schemas"]["SensorPoint"][];
+            environment?: components["schemas"]["Environment"] | null;
+            /**
+             * Since Last Visit
+             * @description what changed between the last two visits
+             * @default []
+             */
+            since_last_visit: string[];
+            /** Next Action */
+            next_action?: string | null;
         };
         /** TreePage */
         TreePage: {
@@ -1618,6 +1822,13 @@ export interface components {
             conditions: {
                 [key: string]: components["schemas"]["Finding"];
             };
+            /**
+             * Latest Sensors
+             * @description the ESP32 reading of the latest visit that had one (soil_moisture_pct, air_temp_c, humidity_pct, light_lux, timestamp)
+             */
+            latest_sensors?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** TreeUpdate */
         TreeUpdate: {
@@ -1646,6 +1857,7 @@ export interface components {
             /** Can Identify */
             can_identify: boolean;
             next_view: components["schemas"]["ViewSpecOut"] | null;
+            guidance?: components["schemas"]["Guidance"] | null;
         };
         /** ViewOut */
         ViewOut: {
@@ -1746,6 +1958,26 @@ export interface operations {
             };
         };
     };
+    list_models_api_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelList"];
+                };
+            };
+        };
+    };
     health_guide_api_v1_health_guide_get: {
         parameters: {
             query?: never;
@@ -1768,7 +2000,10 @@ export interface operations {
     };
     model_info_api_v1_model_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description delta (default) or gamma */
+                model?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2919,6 +3154,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2996,6 +3233,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3073,6 +3312,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3150,6 +3391,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3233,6 +3476,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 section_id: number;
@@ -3312,6 +3557,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 section_id: number;
@@ -3389,6 +3636,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3470,6 +3719,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3547,6 +3798,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -3624,11 +3877,17 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CaptureCreate"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             201: {
@@ -3701,6 +3960,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 capture_id: string;
@@ -3780,6 +4041,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 capture_id: string;
@@ -3857,6 +4120,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 capture_id: string;
@@ -3940,6 +4205,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 capture_id: string;
@@ -4023,6 +4290,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4108,6 +4377,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4185,6 +4456,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 tree_id: string;
@@ -4264,6 +4537,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 tree_id: string;
@@ -4341,6 +4616,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 tree_id: string;
@@ -4424,6 +4701,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 tree_id: string;
@@ -4513,6 +4792,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4590,6 +4871,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 observation_id: string;
@@ -4669,6 +4952,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 observation_id: string;
@@ -4752,6 +5037,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 observation_id: string;
@@ -4835,6 +5122,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 observation_id: string;
@@ -4918,6 +5207,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 observation_id: string;
@@ -4997,6 +5288,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 tree_id: string;
@@ -5080,6 +5373,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 observation_id: string;
@@ -5163,6 +5458,8 @@ export interface operations {
             header?: {
                 /** @description forest to work in (accounts mode) */
                 "x-forest-id"?: string | null;
+                /** @description re-ID model: delta (default) or gamma */
+                "x-model"?: string | null;
             };
             path: {
                 key: string;

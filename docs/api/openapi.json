@@ -28,6 +28,28 @@
         }
       }
     },
+    "/api/v1/models": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "List Models",
+        "description": "The re-ID models the app can choose between before a scan (no sign-in needed).",
+        "operationId": "list_models_api_v1_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health-guide": {
       "get": {
         "tags": [
@@ -55,6 +77,26 @@
         ],
         "summary": "Model Info",
         "operationId": "model_info_api_v1_model_get",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "delta (default) or gamma",
+              "title": "Model"
+            },
+            "description": "delta (default) or gamma"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -67,64 +109,64 @@
             }
           },
           "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Bad Request"
           },
           "401": {
-            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unauthorized"
           },
           "404": {
-            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Not Found"
           },
           "409": {
-            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Conflict"
           },
           "413": {
-            "description": "Request Entity Too Large",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Request Entity Too Large"
           },
           "422": {
-            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Unprocessable Entity"
           }
         }
       }
@@ -1583,6 +1625,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -1688,6 +1748,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -1793,6 +1871,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -1902,6 +1998,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -2040,6 +2154,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -2153,6 +2285,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -2253,6 +2403,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -2370,6 +2538,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -2477,6 +2663,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -2559,7 +2763,7 @@
           "capture"
         ],
         "summary": "Create Capture",
-        "description": "Start a guided capture. Photos are held in memory for 30 min until identify.",
+        "description": "Start a guided capture with one re-ID model (body {\"model\": \"gamma\"}, else X-Model, else delta).\nPhotos are held in memory for 30 min until identify.",
         "operationId": "create_capture_api_v1_captures_post",
         "security": [
           {
@@ -2584,8 +2788,43 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CaptureCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Successful Response",
@@ -2699,6 +2938,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -2812,6 +3069,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -2921,6 +3196,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -3047,6 +3340,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -3171,6 +3482,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -3326,6 +3655,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -3442,6 +3789,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -3555,6 +3920,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -3679,6 +4062,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -3788,6 +4189,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -3959,6 +4378,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -4074,6 +4511,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -4190,6 +4645,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -4316,6 +4789,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -4442,6 +4933,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -4568,6 +5077,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -4684,6 +5211,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -4810,6 +5355,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "requestBody": {
@@ -4935,6 +5498,24 @@
               "title": "X-Forest-Id"
             },
             "description": "forest to work in (accounts mode)"
+          },
+          {
+            "name": "x-model",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "re-ID model: delta (default) or gamma",
+              "title": "X-Model"
+            },
+            "description": "re-ID model: delta (default) or gamma"
           }
         ],
         "responses": {
@@ -5159,7 +5740,7 @@
             },
             "type": "array",
             "title": "Images",
-            "description": "3-9 photos in protocol order"
+            "description": "3-10 photos in protocol order"
           },
           "view_keys": {
             "anyOf": [
@@ -5316,6 +5897,18 @@
             "title": "Commit",
             "description": "false = dry run, nothing stored",
             "default": true
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "re-ID model: delta (default) or gamma"
           }
         },
         "type": "object",
@@ -5411,11 +6004,38 @@
         ],
         "title": "Candidate"
       },
+      "CaptureCreate": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "re-ID model for this capture: delta (default) or gamma"
+          }
+        },
+        "type": "object",
+        "title": "CaptureCreate"
+      },
       "CaptureCreated": {
         "properties": {
           "capture_id": {
             "type": "string",
             "title": "Capture Id"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "the re-ID model this capture runs"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
           },
           "next_view": {
             "$ref": "#/components/schemas/ViewSpecOut"
@@ -5428,6 +6048,8 @@
         "type": "object",
         "required": [
           "capture_id",
+          "model",
+          "model_name",
           "next_view",
           "expires_in_s"
         ],
@@ -5616,6 +6238,51 @@
           "contradicting_views"
         ],
         "title": "Consistency"
+      },
+      "Environment": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "the latest reading fused into one sentence"
+          },
+          "vpd_kpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vpd Kpa"
+          },
+          "water_stress": {
+            "type": "string",
+            "enum": [
+              "low",
+              "some",
+              "high"
+            ],
+            "title": "Water Stress"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changes",
+            "description": "versus the previous reading",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "summary",
+          "vpd_kpa",
+          "water_stress"
+        ],
+        "title": "Environment"
       },
       "ErrorBody": {
         "properties": {
@@ -5905,6 +6572,103 @@
         ],
         "title": "GalleryObservation"
       },
+      "Guidance": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "start",
+              "retake",
+              "species_doubt",
+              "first_tree",
+              "confident",
+              "ambiguous",
+              "contradicting",
+              "likely_new",
+              "building"
+            ],
+            "title": "State"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "a few words"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "one short sentence"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/GuidanceCandidate"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "default": []
+          },
+          "next_view": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ViewSpecOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "description": "enough evidence to identify now"
+          },
+          "needs_more": {
+            "type": "boolean",
+            "title": "Needs More",
+            "description": "the policy asks for another trunk photo beyond the minimum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "title",
+          "detail",
+          "ready",
+          "needs_more"
+        ],
+        "title": "Guidance",
+        "description": "AI-guided scanning: what the scan still needs after this photo (rule-based policy over the live ranking)."
+      },
+      "GuidanceCandidate": {
+        "properties": {
+          "tree_id": {
+            "type": "string",
+            "title": "Tree Id"
+          },
+          "probability": {
+            "type": "number",
+            "title": "Probability",
+            "description": "calibrated P(this tree) with the photos so far"
+          },
+          "global_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Global Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tree_id",
+          "probability"
+        ],
+        "title": "GuidanceCandidate"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -5924,6 +6688,15 @@
             "type": "boolean",
             "title": "Face Blur",
             "description": "false = face detector missing; photos are stored unscreened"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "re-ID models this server runs (GET /api/v1/models for details)",
+            "default": []
           }
         },
         "type": "object",
@@ -6061,6 +6834,35 @@
               "recapture"
             ],
             "title": "Status"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "re-ID model that produced this result (delta | gamma)"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "species_checked": {
+            "type": "boolean",
+            "title": "Species Checked",
+            "description": "false = this model has no species check; `species` is null and the tree is assumed to be an Eastern hemlock",
+            "default": true
           },
           "action": {
             "type": "string",
@@ -6308,6 +7110,89 @@
         ],
         "title": "MergeRequest"
       },
+      "ModelChoice": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "send this as `model`: delta | gamma"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "tagline": {
+            "type": "string",
+            "title": "Tagline"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "checks_species": {
+            "type": "boolean",
+            "title": "Checks Species",
+            "description": "false = the model cannot tell species apart; it assumes a hemlock"
+          },
+          "embedding_dim": {
+            "type": "integer",
+            "title": "Embedding Dim"
+          },
+          "image_size": {
+            "type": "integer",
+            "title": "Image Size"
+          },
+          "real_photo_top1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Photo Top1",
+            "description": "share of real phone photos (2,371 iNaturalist hemlocks) where the right tree was ranked first"
+          },
+          "speed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed"
+          },
+          "default": {
+            "type": "boolean",
+            "title": "Default"
+          },
+          "demo": {
+            "type": "boolean",
+            "title": "Demo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "tagline",
+          "description",
+          "version",
+          "checks_species",
+          "embedding_dim",
+          "image_size",
+          "default",
+          "demo"
+        ],
+        "title": "ModelChoice"
+      },
       "ModelFiles": {
         "properties": {
           "onnx_url": {
@@ -6412,6 +7297,27 @@
           "calibration"
         ],
         "title": "ModelInfo"
+      },
+      "ModelList": {
+        "properties": {
+          "default": {
+            "type": "string",
+            "title": "Default"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelChoice"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "default",
+          "models"
+        ],
+        "title": "ModelList"
       },
       "Observation": {
         "properties": {
@@ -6828,6 +7734,40 @@
         ],
         "title": "SectionCreate"
       },
+      "SensorPoint": {
+        "properties": {
+          "observation_id": {
+            "type": "string",
+            "title": "Observation Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "sensors": {
+            "$ref": "#/components/schemas/Sensors"
+          },
+          "vpd_kpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vpd Kpa",
+            "description": "vapour-pressure deficit from air temperature + humidity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "observation_id",
+          "timestamp",
+          "sensors"
+        ],
+        "title": "SensorPoint"
+      },
       "Sensors": {
         "properties": {
           "soil_moisture_pct": {
@@ -7129,15 +8069,6 @@
             "description": "latest assessed finding per condition",
             "default": {}
           },
-          "current_conditions": {
-            "items": {
-              "$ref": "#/components/schemas/Finding"
-            },
-            "type": "array",
-            "title": "Current Conditions",
-            "description": "latest assessed finding per condition",
-            "default": []
-          },
           "latest_sensors": {
             "anyOf": [
               {
@@ -7148,7 +8079,17 @@
                 "type": "null"
               }
             ],
-            "title": "Latest Sensors"
+            "title": "Latest Sensors",
+            "description": "the ESP32 reading of the latest visit that had one (soil_moisture_pct, air_temp_c, humidity_pct, light_lux, timestamp)"
+          },
+          "current_conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "array",
+            "title": "Current Conditions",
+            "description": "latest assessed finding per condition",
+            "default": []
           },
           "observations": {
             "items": {
@@ -7156,6 +8097,45 @@
             },
             "type": "array",
             "title": "Observations"
+          },
+          "sensor_history": {
+            "items": {
+              "$ref": "#/components/schemas/SensorPoint"
+            },
+            "type": "array",
+            "title": "Sensor History",
+            "description": "visits with an ESP32 reading, newest first",
+            "default": []
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Environment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "since_last_visit": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Since Last Visit",
+            "description": "what changed between the last two visits",
+            "default": []
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
           }
         },
         "type": "object",
@@ -7292,6 +8272,19 @@
             "title": "Conditions",
             "description": "latest assessed finding per condition",
             "default": {}
+          },
+          "latest_sensors": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Sensors",
+            "description": "the ESP32 reading of the latest visit that had one (soil_moisture_pct, air_temp_c, humidity_pct, light_lux, timestamp)"
           }
         },
         "type": "object",
@@ -7370,6 +8363,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ViewSpecOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guidance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Guidance"
               },
               {
                 "type": "null"

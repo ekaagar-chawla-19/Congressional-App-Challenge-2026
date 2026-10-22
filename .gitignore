@@ -12,3 +12,8 @@ data/
 !models/gamma/*.onnx
 .venv/
 _site/
+
+# test fixtures (the data/ rule above is for datasets)
+!tests/data/
+# arduino-cli build output
+firmware/*/build/

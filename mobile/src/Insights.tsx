@@ -265,6 +265,10 @@ function WorstTrees({ a }: { a: api.Analysis }) {
 }
 
 function Sensors({ means, n, trees }: { means: api.Analysis['summary']['sensor_means']; n: number; trees: number }) {
+  // Hidden for forests without sensor data: the sensor unit is optional.
+  const shown = ([['soil_moisture_pct', Droplets, 'Soil moisture', '%'], ['air_temp_c', Thermometer, 'Air temperature', ' °C'],
+    ['humidity_pct', Droplets, 'Humidity', '%'], ['light_lux', Sun, 'Light', ' lx']] as const).filter(([k]) => means[k]);
+  if (!n || !shown.length) return null;
   const r = (icon: LucideIcon, label: string, k: string, unit: string) => (
     <View key={k} style={s.reading}>
       <Icon as={icon} c={color.inkSoft} />
@@ -278,12 +282,9 @@ function Sensors({ means, n, trees }: { means: api.Analysis['summary']['sensor_m
     <View style={{ gap: space.md }}>
       <SectionHead title="Sensor averages" />
       <View style={s.readings}>
-        {r(Droplets, 'Soil moisture', 'soil_moisture_pct', '%')}
-        {r(Thermometer, 'Air temperature', 'air_temp_c', ' °C')}
-        {r(Droplets, 'Humidity', 'humidity_pct', '%')}
-        {r(Sun, 'Light', 'light_lux', ' lx')}
+        {shown.map(([k, icon, label, unit]) => r(icon, label, k, unit))}
       </View>
-      <T v="caption">{`Average of each tree's latest ESP32 reading (${n} of ${trees} trees).`}</T>
+      <T v="caption">{`Average of each tree's latest sensor reading (${n} of ${trees} trees).`}</T>
     </View>
   );
 }

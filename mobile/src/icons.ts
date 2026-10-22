@@ -55,3 +55,4 @@ export { default as TriangleAlert } from 'lucide-react-native/icons/triangle-ale
 export { default as Wifi } from 'lucide-react-native/icons/wifi';
 export { default as X } from 'lucide-react-native/icons/x';
 export { default as Zap } from 'lucide-react-native/icons/zap';
+export { default as Droplet } from 'lucide-react-native/icons/droplet';

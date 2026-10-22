@@ -3,6 +3,7 @@ import { ChartColumn, ChevronDown, ChevronRight, CloudUpload, Leaf, ScanLine, Tr
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ago, dueForRevisit, listTrees, pendingCount, useQuery } from '@/data';
 import { useApp } from '@/device';
+import { LiveSensorCard } from '@/SensorPanel';
 import { shortName, useSession } from '@/session';
 import { color, radius, space, status, type Status } from '@/theme';
 import { Card, Dot, Empty, Icon, IconBox, Row, Screen, SectionHead, StatusIcon, T } from '@/ui';
@@ -40,7 +41,7 @@ export default function Home() {
         </Pressable>
         {/* Account, sensor unit and settings; the dot shows whether a unit is connected. */}
         <Pressable style={s.avatar} onPress={() => router.push('/device')} accessibilityRole="button"
-          accessibilityLabel={`Account and settings${unit ? `, unit connected, battery ${unit.battery} percent` : ''}`}>
+          accessibilityLabel={`Account and settings${unit ? `, unit connected${unit.battery == null ? '' : `, battery ${unit.battery} percent`}` : ''}`}>
           <T v="label" c={color.paper} style={{ fontSize: 15 }}>{initials}</T>
           <View style={[s.unitDot, { backgroundColor: unit ? color.live : color.lichen }]} />
         </Pressable>
@@ -50,10 +51,12 @@ export default function Home() {
         <IconBox icon={ScanLine} bg={color.spruceSoft} fg={color.paper} />
         <View style={{ flex: 1, gap: space.xs }}>
           <T v="title" c={color.paper} style={{ fontSize: 19 }}>Scan a tree</T>
-          <T v="caption" c={color.lineSoft}>{unit ? 'Unit is ready. About 1 minute.' : 'Using the phone camera.'}</T>
+          <T v="caption" c={color.lineSoft}>{unit ? 'Photos plus live sensor readings. About 1 minute.' : 'Using the phone camera.'}</T>
         </View>
         <Icon as={ChevronRight} c={color.paper} />
       </Pressable>
+
+      <LiveSensorCard />
 
       <View style={s.quick}>
         <Pressable style={s.quickBtn} onPress={() => router.push('/scan?mode=check')} accessibilityRole="button">

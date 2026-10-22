@@ -1,35 +1,41 @@
 import Storage from './kv';
 import { create } from 'zustand';
 import type { IdentifyResult } from './api';
+import type { ViewResult } from './engine/ondevice';
+import type { Live } from './sensors';
+import { nodeStatus, type NodeStatus } from './esp32';
 
 export type Unit = { id: string; name: string; signal: 'Strong' | 'Weak' };
-export type UnitStatus = Unit & { battery: number; storage: string; firmware: string };
+export type UnitStatus = Unit & { battery: number | null; storage: string; firmware: string };
 
-// Transport-agnostic contract for the field unit. The hardware and its link (BLE or Wi-Fi)
-// are not decided yet, so the app talks to this interface and `link` is a mock for now.
+// Transport-agnostic contract for the field unit. `link` is the ESP32 Wi-Fi node
+// (firmware/esp32_wifi_node): the phone joins the unit's own Wi-Fi, then finds it at its address.
 export interface DeviceLink {
   discover(): Promise<Unit[]>;
   connect(id: string): Promise<UnitStatus>;
   disconnect(): Promise<void>;
 }
 
-const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const MOCK_UNITS: Unit[] = [
-  { id: 'A4F2', name: 'Unit A4F2', signal: 'Strong' },
-  { id: '7C10', name: 'Unit 7C10', signal: 'Weak' },
-];
+const asUnit = (st: NodeStatus): Unit => ({ id: st.device, name: st.device, signal: 'Strong' });
 export const link: DeviceLink = {
-  discover: () => wait(1200).then(() => MOCK_UNITS),
+  // One unit per Wi-Fi network: the one answering at the node address, if any.
+  discover: () => nodeStatus().then((st) => [asUnit(st)], () => []),
   async connect(id) {
-    await wait(800);
-    const unit = MOCK_UNITS.find((u) => u.id === id);
-    if (!unit) throw new Error(`Unit ${id} is not in range`);
-    return { ...unit, battery: 82, storage: '3.1 of 16 GB', firmware: 'Up to date' };
+    const st = await nodeStatus();
+    if (st.device !== id) throw new Error(`${id} is not in range. Join its Wi-Fi network first.`);
+    return {
+      ...asUnit(st),
+      battery: st.battery_pct,
+      storage: `${st.log_count} readings logged`,
+      firmware: st.simulated ? `${st.firmware} · simulated sensors` : st.firmware,
+    };
   },
-  disconnect: () => wait(200),
+  disconnect: async () => {},
 };
 
-const PAIRED = 'pairedUnit';
+export const PAIRED = 'pairedUnit'; // the last unit paired with this phone
+const AUTO = 'unitAuto'; // 'off' after the user disconnects: the app stops connecting to the unit by itself
+export const autoConnect = () => Storage.getItemSync(AUTO) !== 'off';
 
 type App = {
   unit: UnitStatus | null;
@@ -44,7 +50,13 @@ type App = {
   isNew: boolean;
   // Set when the guided capture already asked the server which tree this is.
   serverResult: IdentifyResult | null;
-  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew' | 'serverResult'>>): void;
+  // The sensor unit's reading taken with the photos (null: no unit connected; the scan is camera-only).
+  sensors: Live | null;
+  // Phone-only mode: the photos' fingerprints from the on-device model, stored with a new or matched tree.
+  fingerprints: { model: string; embeddings: string[] } | null;
+  // Phone-only mode: each photo as checked by the on-device model while scanning (null: not checked on the phone).
+  views: ViewResult[] | null;
+  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew' | 'serverResult' | 'sensors' | 'fingerprints' | 'views'>>): void;
 };
 
 export const useApp = create<App>((set) => ({
@@ -55,6 +67,7 @@ export const useApp = create<App>((set) => ({
     try {
       set({ unit: await link.connect(id) });
       Storage.setItemSync(PAIRED, id);
+      Storage.removeItemSync(AUTO);
     } finally {
       set({ connecting: null });
     }
@@ -62,6 +75,7 @@ export const useApp = create<App>((set) => ({
   async disconnect() {
     await link.disconnect();
     Storage.removeItemSync(PAIRED);
+    Storage.setItemSync(AUTO, 'off');
     set({ unit: null });
   },
   photos: [],
@@ -69,9 +83,10 @@ export const useApp = create<App>((set) => ({
   observationId: null,
   isNew: false,
   serverResult: null,
+  sensors: null,
+  fingerprints: null,
+  views: null,
   setScan: (s) => set(s),
 }));
 
-// Reconnect to the last paired unit on launch.
-const paired = Storage.getItemSync(PAIRED);
-if (paired) useApp.getState().connect(paired).catch(() => {});
+// Reconnecting is done by the live link (sensors.ts): any unit answering on this Wi-Fi is connected.

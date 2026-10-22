@@ -68,6 +68,11 @@ def set_sensors(repo: TreeRepository, oid: str, sensors: dict, source: str = "es
                   (oid, *[sensors.get(k) for k in SENSOR_FIELDS], source, time.time()))
 
 
+def clear_sensors(repo: TreeRepository, oid: str) -> None:
+    with repo.tx() as c:
+        c.execute("DELETE FROM visit_sensors WHERE observation_id = ?", (oid,))
+
+
 def set_signs(repo: TreeRepository, oid: str, signs: list[str]) -> None:
     with repo.tx() as c:
         c.execute("INSERT OR REPLACE INTO visit_signs(observation_id, signs_json) VALUES(?,?)",

@@ -10,6 +10,9 @@ import { Camera, ChevronDown, Images, Sparkles, X, Zap } from '@/icons';
 import { quickFix } from '@/identify';
 import { ModelPicker } from '@/ModelPicker';
 import { useModels } from '@/models';
+import * as engine from '@/engine';
+import { SensorTiles } from '@/SensorPanel';
+import { readingForVisit, useConnected, useSensors } from '@/sensors';
 import { isServer } from '@/session';
 import { color, font, radius, space } from '@/theme';
 import { Button, Dot, Empty, Icon, Screen, T } from '@/ui';
@@ -49,6 +52,8 @@ export default function Scan() {
   const server = isServer();
   const [permission, request] = useCameraPermissions();
   const unit = useApp((s) => s.unit);
+  const connected = useConnected();
+  const live = useSensors((st) => st.live);
   const camera = useRef<CameraView>(null);
   const [shots, setShots] = useState<Shot[]>([]);
   const [msgs, setMsgs] = useState<Msg[]>(() => [{
@@ -60,6 +65,9 @@ export default function Scan() {
   const capture = useRef<{ id: string; next: api.ViewSpec | null } | null>(null);
   const loc = useRef<Promise<api.Location | null> | null>(null);
   const count = useRef({ shots: 0, ok: 0 }); // shots can be added several at a time (library), so not from state
+  // Phone-only mode with the on-device model: every photo is checked on the phone, like the server would.
+  const onPhone = !server && !check && engine.available();
+  const views = useRef<engine.ViewResult[]>([]);
   const say = (text: string, tone?: Msg['tone']) => (setGuide(null), setMsgs((m) => [...m, { id: m.length, text, tone }]));
   // AI-guided scanning: the server's latest read of the evidence (replaces the chat once photos are checked)
   const [guide, setGuide] = useState<api.Guidance | null>(null);
@@ -104,7 +112,7 @@ export default function Scan() {
 
   const addShot = async (uri: string) => {
     const i = count.current.shots++;
-    setShots((s) => [...s, { uri, state: server ? 'checking' : 'ok' }]);
+    setShots((s) => [...s, { uri, state: server || onPhone ? 'checking' : 'ok' }]);
     const set = (patch: Partial<Shot>) => setShots((s) => s.map((x, j) => (j === i ? { ...x, ...patch } : x)));
     if (check) {
       say('Checking the species…');
@@ -117,6 +125,23 @@ export default function Scan() {
       } catch (e) {
         set({ state: 'rejected' });
         say((e as Error).message.replace('photo rejected before the model: ', "Can't check that photo: "), 'bad');
+      }
+      return;
+    }
+    if (onPhone) {
+      try {
+        const v = await engine.checkPhoto(uri, count.current.ok, views.current.filter((x) => x.accepted));
+        views.current.push(v);
+        const h = engine.hemlockProbability(v);
+        const f = feedback({ index: i, view_type: v.viewKey, accepted: v.accepted, problems: v.problems, warnings: v.warnings,
+          metrics: v.metrics, hemlock_probability: h, top_species: null });
+        set({ state: v.accepted ? 'ok' : 'rejected', hemlock: h });
+        if (!v.accepted) return say(f.text, f.tone);
+        const n = ++count.current.ok;
+        say(n >= MIN ? `${f.text} Tap Identify.` : `${f.text} ${n} of ${MIN}. Move a quarter turn around the trunk.`, f.tone);
+      } catch (e) {
+        set({ state: 'rejected' });
+        say((e as Error).message, 'bad');
       }
       return;
     }
@@ -156,19 +181,29 @@ export default function Scan() {
       mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: CAP - ok, quality: 0.8,
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
-    if (!r.canceled) for (const a of r.assets) await addShot(a.uri);
+    if (r.canceled) return;
+    setBusy(true); // no camera shot in between: each photo's view position comes from the photos before it
+    try {
+      for (const a of r.assets) await addShot(a.uri);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const identify = async () => {
     const good = shots.filter((s) => s.state === 'ok').map((s) => s.uri);
+    setBusy(true);
+    // With a sensor unit connected, a fresh reading goes with the photos; without one the scan is camera-only.
+    if (connected) say('Reading the sensors…');
+    const sensors = await readingForVisit();
     if (!server || !capture.current) {
-      useApp.getState().setScan({ photos: good, treeId: null, observationId: null, isNew: false, serverResult: null });
+      useApp.getState().setScan({ photos: good, treeId: null, observationId: null, isNew: false, serverResult: null, sensors, fingerprints: null,
+        views: onPhone ? views.current.filter((v) => v.accepted) : null });
       return router.replace('/result');
     }
-    setBusy(true);
     say(`Comparing with every tree${active ? ` (${active.name})` : ''}…`);
     try {
-      const r = await api.identifyCapture(capture.current.id, await (loc.current ?? Promise.resolve(null)));
+      const r = await api.identifyCapture(capture.current.id, await (loc.current ?? Promise.resolve(null)), false, sensors?.sensors ?? null);
       if (r.action === 'capture_another_view') {
         capture.current.next = r.next_view;
         setGuide({ state: 'ambiguous', title: 'Need one more view', detail: r.next_view?.title ?? 'Another side of the trunk.', candidates: (r.candidates ?? []).map((c) => ({ tree_id: c.tree_id, probability: c.probability ?? 0, global_score: c.global_score })), next_view: r.next_view, ready: false, needs_more: true });
@@ -178,7 +213,7 @@ export default function Scan() {
         say('Retake the photos marked with a red X.', 'bad');
         return setBusy(false);
       }
-      useApp.getState().setScan({ photos: good, treeId: null, observationId: null, isNew: false, serverResult: r });
+      useApp.getState().setScan({ photos: good, treeId: null, observationId: null, isNew: false, serverResult: r, sensors, fingerprints: null, views: null });
       router.replace('/result');
     } catch (e) {
       say((e as Error).message, 'bad');
@@ -258,6 +293,11 @@ export default function Scan() {
         ) : last ? (
           <Image source={{ uri: last.uri }} style={StyleSheet.absoluteFill} />
         ) : null}
+        {connected && !check && live && (
+          <View style={s.sensors} pointerEvents="none">
+            <SensorTiles sensors={live.sensors} dark />
+          </View>
+        )}
         <View style={s.frame} pointerEvents="none">
           {CORNERS.map((c, i) => <View key={i} style={[s.corner, c]} />)}
         </View>
@@ -388,6 +428,7 @@ const s = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: color.nightCard },
   viewport: { flex: 1, borderRadius: 24, overflow: 'hidden', backgroundColor: color.bark, alignItems: 'center', justifyContent: 'center' },
   frame: { width: 220, height: 220, marginBottom: 90 },
+  sensors: { position: 'absolute', top: space.md, left: space.md, right: space.md },
   corner: { width: C, height: C },
   chat: { position: 'absolute', left: space.md, right: space.md, bottom: space.md, gap: 6 },
   card: { gap: 6, padding: space.md, borderRadius: 16, backgroundColor: 'rgba(22, 32, 28, 0.88)' },

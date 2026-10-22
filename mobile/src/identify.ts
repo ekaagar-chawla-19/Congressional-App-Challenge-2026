@@ -1,22 +1,50 @@
 import * as Location from 'expo-location';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import * as api from './api';
+import { useApp } from './device';
+import * as engine from './engine';
+import type { OnDeviceResult } from './engine/ondevice';
 import { useModels } from './models';
 import type { TreeRow } from './data';
 import { isServer, useSession } from './session';
 
 export type Match = { tree: TreeRow; score: number };
-// `server` is set when hemlock-api ran the model: its decision, the stored visit and the species check.
-// offline: no model ran (offline demo); matches are the forest's trees, unscored, for a manual pick.
-export type Identification = { matches: Match[]; server?: api.IdentifyResult; offline?: boolean };
+// `server` is set when a model ran: hemlock-api's decision, or the on-device model's (onPhone; nothing stored yet).
+// offline: no model ran (Expo Go without a server); matches are the forest's trees, unscored, for a manual pick.
+export type Identification = { matches: Match[]; server?: api.IdentifyResult; offline?: boolean; onPhone?: boolean };
 
-export async function identify(photos: string[], trees: TreeRow[], done?: api.IdentifyResult | null): Promise<Identification> {
+export async function identify(photos: string[], trees: TreeRow[], done?: api.IdentifyResult | null, db?: SQLiteDatabase): Promise<Identification> {
   if (done) return { matches: matchesFrom(done, trees), server: done };
+  // Phone-only mode: the photos were checked by the on-device model while scanning; decide here, no computer.
+  const views = useApp.getState().views;
+  if (!isServer() && views && db && engine.available()) {
+    const gallery = await engine.phoneGallery(db, useSession.getState().forest?.id ?? -1);
+    const { result, fingerprints } = await engine.identifyOnPhone(views, gallery);
+    useApp.getState().setScan({ fingerprints: { model: engine.MODEL_VERSION, embeddings: fingerprints } });
+    const r = asResult(result);
+    return { matches: matchesFrom(r, trees), server: r, onPhone: true };
+  }
   if (isServer()) {
-    const r = await api.identify(photos, await quickFix(), useModels.getState().chosen ?? undefined);
+    const r = await api.identify(photos, await quickFix(), useModels.getState().chosen ?? undefined, useApp.getState().sensors?.sensors ?? null);
     return { matches: matchesFrom(r, trees), server: r };
   }
   // The model runs on the server. Offline there is no identification: never invent a match score.
   return { matches: trees.map((tree) => ({ tree, score: NaN })), offline: true };
+}
+
+// The on-device decision in the server's shape, so the result screen treats both alike (nothing stored yet:
+// the visit is saved on the phone after the health check).
+function asResult(r: OnDeviceResult): api.IdentifyResult {
+  const sp = r.species;
+  return {
+    status: r.status, action: r.status === 'recapture' ? 'retake' : 'done', message: r.message, tree_id: r.tree_id, observation_id: null,
+    model: 'delta', model_name: 'Model Delta (on this phone)', species_checked: true,
+    species: sp ? { label: sp.label, name: sp.label === 'tsuga_canadensis' ? 'Eastern hemlock' : sp.label.replace('_', ' '), confidence: sp.confidence,
+      hemlock_probability: sp.label === 'tsuga_canadensis' ? sp.confidence : null, top: [] } : null,
+    probability: r.probability, next_view: null,
+    candidates: r.candidates.map((c) => ({ tree_id: c.tree_id, probability: c.probability, global_score: c.global })),
+    best_guess: r.best_guess ? { ...r.best_guess, note: `Best guess ${r.best_guess.tree_id} (${Math.round(r.best_guess.probability * 100)}%)` } : null,
+  };
 }
 
 const matchesFrom = (r: api.IdentifyResult, trees: TreeRow[]) => {

@@ -1,12 +1,13 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useDb } from '@/db';
 import { useCallback, useState } from 'react';
-import { ArrowRight, Cpu, Droplets, MapPin, ScanLine, Sun, Thermometer, type LucideIcon } from '@/icons';
+import { ArrowRight, Cpu, MapPin, ScanLine } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ConditionKey, Finding } from '@/api';
 import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
 import { deleteTree, fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
-import { isServer } from '@/session';
+import { SensorTiles, sensorLine } from '@/SensorPanel';
+import { hasAny, useConnected } from '@/sensors';
 import { color, font, radius, space, status, type Status } from '@/theme';
 import { BackBar, Badge, Button, Card, ConfirmDelete, DeleteLink, Icon, Photo, Row, Screen, T } from '@/ui';
 
@@ -26,6 +27,7 @@ export default function TreeDetail() {
   useFocusEffect(useCallback(() => setRev((r) => r + 1), []));
   const data = useQuery((db) => getTree(db, id), `${id}:${rev}`);
   const [confirm, setConfirm] = useState(false);
+  const connected = useConnected();
   if (!data?.tree) return <Screen>{data ? <BackBar title="Tree not found" /> : null}</Screen>;
 
   const { tree, scans } = data;
@@ -106,7 +108,7 @@ export default function TreeDetail() {
       ) : null}
 
       <Button title="Scan this tree again" icon={ScanLine} onPress={() => router.push('/scan')} />
-      {isServer() && <Button title="Add ESP32 reading" icon={Cpu} secondary onPress={() => router.push({ pathname: '/reading', params: { id: tree.id } })} />}
+      {connected && <Button title="Add sensor reading" icon={Cpu} secondary onPress={() => router.push({ pathname: '/reading', params: { id: tree.id } })} />}
       <DeleteLink label="Delete this tree" onPress={() => setConfirm(true)} />
       <ConfirmDelete visible={confirm} what="tree" name={tree.id} onCancel={() => setConfirm(false)}
         onConfirm={async () => { await deleteTree(db, tree.id); setConfirm(false); router.back(); }}
@@ -115,18 +117,9 @@ export default function TreeDetail() {
   );
 }
 
-// What the server worked out from the observer's checklist, the photos and the ESP32 sensor node.
+// What the diagnosis (server, or the phone in phone-only mode) worked out from the checklist, photos and sensors.
 function ServerHealth({ conditions, sensors, history, readings, environment, changes, next, only }: TreeExtras & { only: 'causes' | 'twin' | 'details' }) {
   const [all, setAll] = useState(false); // sensor history: the latest 3, or every reading
-  const reading = (icon: LucideIcon, label: string, v: number | null | undefined, unit: string) => (
-    <View key={label} style={s.reading}>
-      <Icon as={icon} c={color.inkSoft} />
-      <View style={{ gap: 2 }}>
-        <T v="caption" style={{ fontSize: 12 }}>{label}</T>
-        <T v="label">{v == null ? 'N/A' : `${Math.round(v * 10) / 10}${unit}`}</T>
-      </View>
-    </View>
-  );
   const shown = [...conditions].sort((a: Finding, b: Finding) => (a.level === 'unknown' ? 1 : 0) - (b.level === 'unknown' ? 1 : 0));
   if (only === 'causes') {
     return shown.length > 0 ? (
@@ -172,7 +165,6 @@ function ServerHealth({ conditions, sensors, history, readings, environment, cha
     ) : null;
   }
   const shownReadings = all ? readings : readings.slice(0, 3);
-  const num = (v: number | null | undefined, unit: string) => (v == null ? 'N/A' : `${Math.round(v * 10) / 10}${unit}`);
   return (
     <>
       {history.length >= 2 && (
@@ -205,15 +197,11 @@ function ServerHealth({ conditions, sensors, history, readings, environment, cha
           <T v="caption" style={{ fontSize: 12 }}>Bar height is how likely the condition was on that visit.</T>
         </Card>
       )}
+      {/* Only for trees with sensor data, and only the sensors that were measured: the hardware is optional. */}
+      {hasAny(sensors) && (
       <View style={{ gap: space.md }}>
         <T v="overline">Latest sensor reading</T>
-        <View style={s.readings}>
-          {reading(Droplets, 'Soil moisture', sensors?.soil_moisture_pct, '%')}
-          {reading(Thermometer, 'Air temperature', sensors?.air_temp_c, ' °C')}
-          {reading(Droplets, 'Humidity', sensors?.humidity_pct, '%')}
-          {reading(Sun, 'Light', sensors?.light_lux, ' lx')}
-        </View>
-        {!sensors && <T v="caption">No ESP32 reading for this tree yet.</T>}
+        <SensorTiles sensors={sensors} />
         {environment && (
           <Card style={{ padding: space.lg, gap: space.xs }}>
             <T v="label">{environment.summary}</T>
@@ -221,13 +209,14 @@ function ServerHealth({ conditions, sensors, history, readings, environment, cha
           </Card>
         )}
       </View>
+      )}
       {readings.length > 0 && (
         <View style={{ gap: space.md }}>
           <T v="overline">Sensor history</T>
           <Card>
             {shownReadings.map((r, i) => (
               <Row key={r.observation_id} title={fmtDate(Date.parse(r.timestamp))}
-                sub={`Soil ${num(r.sensors.soil_moisture_pct, '%')} · ${num(r.sensors.air_temp_c, ' °C')} · RH ${num(r.sensors.humidity_pct, '%')}${r.vpd_kpa != null ? ` · VPD ${r.vpd_kpa.toFixed(1)} kPa` : ''}`}
+                sub={`${sensorLine(r.sensors)}${r.vpd_kpa != null ? ` · VPD ${r.vpd_kpa.toFixed(1)} kPa` : ''}`}
                 last={i === shownReadings.length - 1 && readings.length <= 3} />
             ))}
             {readings.length > 3 && (
@@ -247,8 +236,6 @@ const s = StyleSheet.create({
   next: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rule: { paddingTop: space.md, borderTopWidth: 1, borderTopColor: color.lineSoft },
   more: { padding: space.lg, alignItems: 'center' },
-  readings: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  reading: { flexBasis: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.sm, backgroundColor: color.card, borderWidth: 1, borderColor: color.line },
   level: { height: 28, paddingHorizontal: 10, borderRadius: radius.pill, justifyContent: 'center' },
   round: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: color.card, borderWidth: 1, borderColor: color.line, alignItems: 'center', justifyContent: 'center' },
   head: { flexDirection: 'row', alignItems: 'flex-end', gap: space.lg },

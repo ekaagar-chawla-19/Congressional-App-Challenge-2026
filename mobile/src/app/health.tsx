@@ -5,9 +5,9 @@ import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { LEVELS, NO_CHECKS, overall, saveScan, saveServerVisit, type Checks, type Levels } from '@/data';
 import { useDb } from '@/db';
 import { useApp } from '@/device';
-import { Esp32Readings, parseFields } from '@/Esp32Readings';
 import { Check } from '@/icons';
-import { isServer } from '@/session';
+import { VisitSensors } from '@/SensorPanel';
+import type { Live } from '@/sensors';
 import { color, font, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Icon, Screen, Segmented, T, notify } from '@/ui';
 
@@ -15,16 +15,15 @@ const OPTIONS = LEVELS.map((label, value) => ({ label, value }));
 
 export default function Health() {
   const db = useDb();
-  const { photos, treeId, observationId, isNew } = useApp();
+  const { photos, treeId, observationId, isNew, sensors, fingerprints } = useApp();
   const [levels, setLevels] = useState<Levels>({ wool: 0, needles: 0, crown: 0, dieback: 0 });
   const [checks, setChecks] = useState<Checks>(NO_CHECKS);
-  const [readings, setReadings] = useState<Record<string, string>>({});
+  const [reading, setReading] = useState<Live | null>(sensors); // taken with the photos, if a unit was connected
   const [note, setNote] = useState('');
   const [place, setPlace] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const st = status[overall(levels, checks)];
-  const server = isServer();
   const set = (patch: Partial<Checks>) => setChecks((c) => ({ ...c, ...patch }));
 
   // New trees get a location fix while the user fills in the form.
@@ -37,17 +36,14 @@ export default function Health() {
     })().catch(() => {});
   }, [treeId]);
 
-  const { sensors: parsed, bad } = parseFields(readings);
-
   const save = async () => {
-    if (bad.length) return notify('Check the sensor values', bad.map((r) => `${r.label}: ${r.min} to ${r.max} ${r.unit}`).join('\n'));
     setSaving(true);
     try {
       // Signed in, the visit already exists on the server (stored with the photos); add the health check.
       const id = observationId && treeId
-        ? (await saveServerVisit(observationId, levels, note, checks, parsed), treeId)
-        : await saveScan(db, { treeId: treeId ?? undefined, place, coords, photos, levels, note });
-      useApp.getState().setScan({ photos: [], treeId: null, observationId: null, isNew: false });
+        ? (await saveServerVisit(observationId, levels, note, checks, reading?.sensors ?? null, sensors != null), treeId)
+        : await saveScan(db, { treeId: treeId ?? undefined, place, coords, photos, levels, note, checks, sensors: reading, fingerprints });
+      useApp.getState().setScan({ photos: [], treeId: null, observationId: null, isNew: false, sensors: null, fingerprints: null });
       router.dismissAll();
       router.push(`/tree/${id}`);
     } catch (e) {
@@ -129,7 +125,7 @@ export default function Health() {
         </View>
       </Card>
 
-      {server && <Esp32Readings title="4. ESP32 readings" fields={readings} onChange={setReadings} />}
+      <VisitSensors title="4. Sensor reading" value={reading} onChange={setReading} />
 
       <View style={[s.overall, { backgroundColor: st.tint }]}>
         <View style={{ gap: 2 }}>

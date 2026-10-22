@@ -9,7 +9,14 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#F5F2EC",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "HemlockID reads soil, air and light sensors from your HemlockID sensor unit over its Wi-Fi.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      },
+      "bundleIdentifier": "org.hemlockid.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -44,7 +51,9 @@
           "photosPermission": "HemlockID lets you pick bark photos you already took."
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-asset",
+      "onnxruntime-react-native"
     ],
     "experiments": {
       "typedRoutes": true

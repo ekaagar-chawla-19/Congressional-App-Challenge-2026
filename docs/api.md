@@ -193,6 +193,9 @@ such as `ngrok http 8000` gives an HTTPS URL.
 
 ## ESP32 sensor node
 
+> **Wi-Fi unit (main path now):** the ESP32 runs its own Wi-Fi network and a JSON API that the phone
+> app reads directly, in Expo Go too. See [`esp32_wifi.md`](esp32_wifi.md). The Bluetooth sketch below still works.
+
 The ESP32 replaces the Raspberry Pi. It reads the field sensors; the phone takes the photos and the
 model runs on the computer with the backend. Firmware: [`firmware/esp32_sensors/esp32_sensors.ino`](../firmware/esp32_sensors/esp32_sensors.ino)
 (Arduino; checked to compile for "ESP32 Dev Module", esp32 core 3.0.7).

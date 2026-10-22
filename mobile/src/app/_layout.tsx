@@ -7,7 +7,11 @@ import { Stack } from 'expo-router';
 import { DbProvider } from '@/db';
 import { StatusBar } from 'expo-status-bar';
 import { migrate } from '@/data';
+import { startSensorLink } from '@/sensors';
 import { color } from '@/theme';
+
+// Watch for the ESP32 sensor unit for the whole session: sensor sections appear while it is connected.
+startSensorLink();
 
 export default function RootLayout() {
   const [loaded] = useFonts({ Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Fraunces_500Medium });

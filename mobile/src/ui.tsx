@@ -35,7 +35,8 @@ export function Screen({ children, scroll, tabbed, bg = color.paper }: PropsWith
     gap: space.xl,
   };
   return scroll ? (
-    <ScrollView style={{ flex: 1, backgroundColor: bg }} contentContainerStyle={pad} keyboardShouldPersistTaps="handled">
+    // automaticallyAdjustKeyboardInsets: a text box near the bottom scrolls above the keyboard instead of under it
+    <ScrollView style={{ flex: 1, backgroundColor: bg }} contentContainerStyle={pad} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       {children}
     </ScrollView>
   ) : (

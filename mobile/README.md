@@ -73,7 +73,11 @@ src/
   theme.ts        Forest Floor colors, status colors, spacing, fonts
   ui.tsx          shared components (Screen, Button, Card, Row, Badge, ...)
   icons.ts        the app's icon set (per-icon imports keep the bundle small)
-  device.ts       field-unit interface, mock link, scan in progress
+  device.ts       field-unit interface, Wi-Fi link to the ESP32 unit, scan in progress
+  sensors.ts      live link to the ESP32 sensor unit (auto-connect, fresh reading per scan, what a reading means)
+  SensorPanel.tsx sensor UI: shows only when a unit or a reading exists, and only the sensors it has
+  diagnosis.ts    the backend's diagnosis + digital-twin rules, for phone-only mode (identical answers, tested)
+  engine/         Model Delta on the phone (ONNX Runtime; needs the app build, not Expo Go)
 ```
 
 Scan flow: `scan` takes 3 to 5 bark photos (camera or photo library), `result` shows the server's
@@ -84,6 +88,5 @@ ESP32 sensor reading (N/A when there is none).
 
 ## Still placeholders
 
-- **`device.ts`**: `link` is a mock unit. The ESP32 sensor node in `firmware/esp32_sensors` speaks
-  BLE; connecting to it from the app needs a BLE library and a development build (not Expo Go).
-- **Offline demo matching** is a stand-in; real identification needs the backend.
+- **On-device identification** needs the app build (`npx expo run:ios`, Xcode 26). In Expo Go, phone-only mode
+  lets you pick the tree by hand. See [`../docs/phone_only.md`](../docs/phone_only.md).

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { defaultServer, login, type ApiError } from '@/api';
 import { seedDemo } from '@/data';
+import * as engine from '@/engine';
 import { Eye, EyeOff, Lock, Mail, Server, TreePine, type LucideIcon } from '@/icons';
 import { useSession } from '@/session';
 import { color, font, radius, space } from '@/theme';
@@ -91,10 +92,11 @@ export default function Login() {
             <T v="caption">or</T>
             <View style={s.rule} />
           </View>
-          <Button title="Explore the offline demo" secondary onPress={offlineDemo} disabled={!localDbAvailable} />
+          <Button title="Use on this phone only" secondary onPress={offlineDemo} disabled={!localDbAvailable} />
           <T v="caption" style={{ textAlign: 'center' }}>
-            {!localDbAvailable ? 'The offline demo needs the app (Expo Go) or this page opened as localhost. Here, sign in with the demo account above.'
-              : error?.offline ? 'The server is not running, so sign-in is not possible. The offline demo uses sample forests saved on this phone.' : 'Sample forests saved on this phone. No server needed.'}
+            {!localDbAvailable ? 'Phone-only mode needs the app (Expo Go) or this page opened as localhost. Here, sign in with the demo account above.'
+              : error?.offline ? 'The server is not running, so sign-in is not possible. Phone-only mode keeps everything on this phone, with sample forests to start.'
+              : `Everything stays on this phone, with sample forests to start. No computer needed${engine.available() ? ': trees are identified on the phone' : ''}.`}
           </T>
         </View>
 

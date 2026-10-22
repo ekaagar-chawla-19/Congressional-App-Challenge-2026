@@ -62,7 +62,7 @@ export default function Forests() {
     <Screen scroll>
       {current && router.canGoBack() ? <BackBar /> : <View style={{ height: space.lg }} />}
       <View style={{ gap: space.sm }}>
-        <T v="caption">{`Signed in as ${user?.name ?? ''}${mode === 'local' ? ' · offline demo' : ''}`}</T>
+        <T v="caption">{`Signed in as ${user?.name ?? ''}${mode === 'local' ? ' · on this phone only' : ''}`}</T>
         <T v="display">Your forests</T>
         <T c={color.inkSoft}>Pick the forest you are working in. You can switch any time from the home screen.</T>
       </View>
