@@ -12,6 +12,7 @@ import { BackBar, Button, Card, Clamp, ConfirmDelete, DeleteLink, Dot, Empty, Ic
 
 export type Scope = { kind: 'forest' } | { kind: 'section'; id: number } | { kind: 'area'; bbox: api.Bbox };
 
+const trees = (n: number) => `${n} ${n === 1 ? 'tree' : 'trees'}`;
 const sevLabel = (x: number | null) => (x == null ? 'N/A' : x < 0.5 ? 'Healthy' : x < 1.5 ? 'Light' : x < 2.5 ? 'Moderate' : 'Severe');
 const sevStatus = (x: number | null) => (x == null ? 'unrated' : x < 0.5 ? 'healthy' : x < 1.5 ? 'watch' : 'infested') as keyof typeof status;
 
@@ -110,7 +111,7 @@ function Diseases({ a }: { a: api.Analysis }) {
                   <T v="label">{CONDITIONS[k].short}</T>
                   {top && <View style={[s.pill, { backgroundColor: CONDITIONS[k].tint }]}><T v="caption" c={CONDITIONS[k].color} style={{ fontSize: 11, fontFamily: font.semibold }}>Most common</T></View>}
                 </View>
-                <T v="caption">{`${c.likely + c.possible} of ${n} trees`}</T>
+                <T v="caption">{`${c.likely + c.possible} of ${trees(n)}`}</T>
               </View>
               <View style={s.track}>
                 <View style={{ flex: c.likely, backgroundColor: CONDITIONS[k].color }} />
@@ -136,7 +137,7 @@ function Hotspots({ a }: { a: api.Analysis }) {
         {rows.map(([k, h], i) => (
           <Row key={k} left={<IconBox icon={Flame} bg={CONDITIONS[k].tint} fg={CONDITIONS[k].color} />}
             title={CONDITIONS[k].short}
-            sub={`${h!.affected} of ${h!.trees} trees in a 150 m patch (${h!.tree_ids.slice(0, 3).join(', ')}${h!.tree_ids.length > 3 ? '…' : ''})`}
+            sub={`${h!.affected} of ${trees(h!.trees)} in a 150 m patch (${h!.tree_ids.slice(0, 3).join(', ')}${h!.tree_ids.length > 3 ? '…' : ''})`}
             onPress={() => router.navigate(`/map?layer=${k}`)} last={i === rows.length - 1} />
         ))}
       </Card>
@@ -316,7 +317,7 @@ function Advice({ a }: { a: api.Analysis }) {
           <Card key={r.condition} style={{ padding: space.lg, gap: space.sm }}>
             <View style={s.inline}>
               <Icon as={Lightbulb} c={CONDITIONS[k]?.color ?? color.spruce} />
-              <T v="label" style={{ flex: 1 }}>{`${CONDITIONS[k]?.short ?? r.name} · ${r.trees_affected} trees`}</T>
+              <T v="label" style={{ flex: 1 }}>{`${CONDITIONS[k]?.short ?? r.name} · ${trees(r.trees_affected)}`}</T>
             </View>
             {r.steps.slice(0, 3).map((x) => <T key={x} v="caption" c={color.ink} style={{ fontSize: 13, lineHeight: 19 }}>{`• ${x}`}</T>)}
           </Card>

@@ -360,7 +360,7 @@ export default function Scan() {
               </View>
             );
           })}
-          <T v="caption" c={color.nightText} style={{ fontSize: 13 }}>{"Uses Model Delta's species check. Model Gamma has none."}</T>
+          <T v="caption" c={color.nightText} style={{ fontSize: 13 }}>{server ? "Uses Model Delta's species check. Model Gamma has none." : "Checked on this phone by Model Delta's species check."}</T>
         </ScrollView>
       )}
       {!check && (
