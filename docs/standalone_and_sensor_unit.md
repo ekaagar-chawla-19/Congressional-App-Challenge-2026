@@ -1,7 +1,7 @@
 # HemlockID standalone + the ESP32 sensor unit: what changed and how to use it offline
 
 Branch `combined`: everything from `final`, the `results/rtx3060-barknet` run artifacts, and the work below.
-Details live in [phone_only.md](phone_only.md) (the app with no computer) and [esp32_wifi.md](esp32_wifi.md)
+Everything done since the clone, step by step: [PROJECT_LOG.md](PROJECT_LOG.md). Details live in [phone_only.md](phone_only.md) (the app with no computer) and [esp32_wifi.md](esp32_wifi.md)
 (the sensor unit).
 
 ## What was done

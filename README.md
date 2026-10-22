@@ -119,7 +119,7 @@ by both, so either model recognises trees registered with the other: [`docs/mode
 The ESP32 sensor unit makes its own Wi-Fi network; once paired, the app reads it by itself and shows sensor
 sections only while a unit is connected. **Use on this phone only** runs everything on the phone with no computer
 or internet: recognition (the model runs on the phone), diagnosis, Insights and the map. Start here:
-[`docs/standalone_and_sensor_unit.md`](docs/standalone_and_sensor_unit.md) (what changed, offline instructions),
+[`docs/standalone_and_sensor_unit.md`](docs/standalone_and_sensor_unit.md) (what changed, offline instructions; full log: [`docs/PROJECT_LOG.md`](docs/PROJECT_LOG.md)),
 then [`docs/phone_only.md`](docs/phone_only.md), [`docs/esp32_wifi.md`](docs/esp32_wifi.md) and
 [`mobile/README.md`](mobile/README.md).
 
