@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HemlockID</title>
+<meta name="theme-color" content="#1E3B32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HemlockID">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="lib/base.css">
+</head>
+<body>
+<main>
+  <h1>HemlockID</h1>
+  <p class="soft">The offline version is being built. First step: check that both models run on your phone with no internet.</p>
+  <a class="button" href="speedtest/">Open the offline test</a>
+</main>
+<script>navigator.serviceWorker?.register('sw.js').catch(() => {});</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Offline Test</title>
+<meta name="theme-color" content="#1E3B32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HemlockID">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" href="../apple-touch-icon.png">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="stylesheet" href="../lib/base.css">
+</head>
+<body>
+<main>
+  <div>
+    <h1>Offline test</h1>
+    <p class="soft">Checks that Model Delta and Model Gamma run on this phone with no internet, how fast, and whether they give the same answer as the server.</p>
+  </div>
+
+  <section class="card" aria-labelledby="s1">
+    <div class="step" id="s1">Step 1 · Save the models</div>
+    <p>About 175 MB. Do this on Wi‑Fi.</p>
+    <div id="dl"></div>
+    <button id="download">Save models on this phone</button>
+  </section>
+
+  <section class="card" aria-labelledby="s2">
+    <div class="step" id="s2">Step 2 · Run the models</div>
+    <div class="seg" role="group" aria-label="Where the models run">
+      <button data-backend="auto" aria-pressed="true">Auto</button>
+      <button data-backend="gpu" aria-pressed="false">GPU</button>
+      <button data-backend="cpu" aria-pressed="false">CPU</button>
+    </div>
+    <p class="soft small">Runs each model on a test bark pattern, 1 warm-up and 3 timed runs.</p>
+    <div id="results"></div>
+    <button id="run" disabled>Run test</button>
+  </section>
+
+  <section class="card" aria-labelledby="s3">
+    <div class="step" id="s3">Step 3 · Airplane mode</div>
+    <div class="row"><span>Ready for offline</span><span id="offline">Checking…</span></div>
+    <p class="soft small">Turn on Airplane Mode, reload this page, and run Step 2 again. If it works, the models run with no internet.</p>
+  </section>
+
+  <section class="card" aria-labelledby="s4">
+    <div class="step" id="s4">Optional · Your own photo</div>
+    <p class="soft small">Take or pick a bark photo to time a real-size photo.</p>
+    <input id="photo" type="file" accept="image/*" hidden>
+    <div id="mine"></div>
+    <button id="pick" class="secondary" disabled>Choose a photo</button>
+  </section>
+
+  <section class="card" aria-labelledby="s5">
+    <div class="step" id="s5">This phone</div>
+    <div id="device"></div>
+    <button id="copy" class="secondary">Copy results</button>
+    <p class="soft small" id="copied" hidden>Copied. Paste it into the chat.</p>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
