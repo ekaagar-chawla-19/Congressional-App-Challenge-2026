@@ -120,5 +120,6 @@ hemlock-esp32 visit H-012 --wifi --forest 1 --email … --password …
 * `tests/integration/test_esp32_wifi.py`: the firmware's reading JSON compiled on a computer and parsed;
   firmware and simulator routes match; Python client and CLI (paging, `since`, 400/404, unreachable);
   the phone app's own `esp32.ts` / `device.ts` code under Node 22.6+ against the simulated node.
-* Not yet tested here: a phone joining the unit's network (do the steps above once and check
-  `http://192.168.4.1/api/v1/status` in the phone's browser).
+* A phone joining the unit's network and reading the sensors (Expo Go, real unit with the kit sensors).
+  The full sensor UI was checked in the iOS simulator against `hemlock-esp32 simulate`
+  ([phone_only.md](phone_only.md)).
