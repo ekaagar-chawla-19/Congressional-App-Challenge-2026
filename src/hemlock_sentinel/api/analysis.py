@@ -146,16 +146,21 @@ def trends(repo: TreeRepository, tree_ids: set[str] | None = None, period: str =
             if tree_ids is None or r[1] in tree_ids]
     sev = health.health_for(repo, [r[0] for r in rows])
     data = field.visit_data(repo, [r[0] for r in rows])
+    return trends_from([(tid, ts, sev.get(oid, (None, None))[0], data[oid]["findings"]) for oid, tid, ts in rows], period)
+
+
+def trends_from(rows: list[tuple[str, float, int | None, list[dict]]], period: str = "quarter") -> list[dict]:
+    """trends() over (tree_id, timestamp, severity, findings) rows, oldest first (also ported to the phone:
+    mobile/src/analysis.ts)."""
     buckets: dict[str, dict] = {}
-    for oid, tid, ts in rows:
+    for tid, ts, s, findings in rows:
         b = buckets.setdefault(_period(ts, period), {"visits": 0, "trees": set(), "sev": [],
                                                       "cond": {c: [0, 0] for c in CONDITION_KEYS}})
         b["visits"] += 1
         b["trees"].add(tid)
-        s = sev.get(oid, (None, None))[0]
         if s is not None:
             b["sev"].append(s)
-        for f in data[oid]["findings"]:
+        for f in findings:
             if f["level"] != "unknown" and f["condition"] in b["cond"]:
                 b["cond"][f["condition"]][1] += 1
                 b["cond"][f["condition"]][0] += f["level"] in ("likely", "possible")

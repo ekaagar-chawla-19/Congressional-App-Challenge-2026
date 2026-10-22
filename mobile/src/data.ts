@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import * as api from './api';
 import { PAIRED } from './device';
 import Storage from './kv';
+import { analyze, type SavedSection } from './analysis';
 import { assess, currentConditions, environment, nextAction, sensorHistory, sinceLastVisit, type Visit } from './diagnosis';
 import type { Live } from './sensors';
 import { isServer, useSession } from './session';
@@ -103,6 +104,14 @@ export async function migrate(db: SQLiteDatabase) {
       await db.runAsync('UPDATE scans SET signs = ?, severity = ? WHERE id = ?', JSON.stringify([...new Set(signs)]), severity, sc.id);
     }
     await db.execAsync('PRAGMA user_version = 3;');
+  }
+  if (v < 4) {
+    // v4: named sections of a forest (a rectangle on the map), analysed on the phone like the server's.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS sections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, forest_id INTEGER NOT NULL REFERENCES forests(id), name TEXT NOT NULL,
+        west REAL NOT NULL, south REAL NOT NULL, east REAL NOT NULL, north REAL NOT NULL, created_at INTEGER NOT NULL);
+      PRAGMA user_version = 4;`);
   }
 }
 
@@ -212,6 +221,45 @@ async function localVisits(db: SQLiteDatabase, where: string, arg: string | numb
   for (const r of readings) if (r.scan_id == null) push(r.tree_id, { id: `r${r.id}`, at: r.created_at, severity: null, signs: [], sensors: sensorsOf(r) }, false);
   for (const v of out.values()) v.sort((a, b) => a.at - b.at);
   return out;
+}
+
+// ------------------------------------------------------------------ insights (phone-only mode)
+// The server's forest analysis, computed on the phone from this forest's visits (analysis.ts).
+async function forestInput(db: SQLiteDatabase) {
+  const trees = await db.getAllAsync<Tree>('SELECT * FROM trees WHERE forest_id = ?', forestId());
+  const visits = await localVisits(db, 't.forest_id = ?', forestId());
+  return trees.map((t) => ({ id: t.id, lat: t.lat, lon: t.lng, visits: visits.get(t.id) ?? [] }));
+}
+async function localSections(db: SQLiteDatabase): Promise<SavedSection[]> {
+  const rows = await db.getAllAsync<{ id: number; name: string; west: number; south: number; east: number; north: number }>(
+    'SELECT * FROM sections WHERE forest_id = ? ORDER BY name', forestId());
+  return rows.map((r) => ({ section_id: r.id, name: r.name, bbox: [r.west, r.south, r.east, r.north] }));
+}
+
+/** Insights for the forest or a map area: from the server, or worked out on the phone in phone-only mode. */
+export async function forestAnalysis(db: SQLiteDatabase, bbox?: api.Bbox): Promise<api.Analysis> {
+  if (isServer()) return api.analysis(bbox);
+  return analyze(await forestInput(db), await localSections(db), bbox);
+}
+
+export async function sectionAnalysis(db: SQLiteDatabase, id: number): Promise<api.Analysis> {
+  if (isServer()) return api.sectionAnalysis(id);
+  const sec = (await localSections(db)).find((s) => s.section_id === id);
+  if (!sec) throw new Error('This section was deleted.');
+  return { ...analyze(await forestInput(db), [], sec.bbox), section: sec };
+}
+
+export async function createSection(db: SQLiteDatabase, name: string, b: api.Bbox): Promise<{ section_id: number }> {
+  if (isServer()) return api.createSection(name, b);
+  if ((await localSections(db)).some((s) => s.name.toLowerCase() === name.trim().toLowerCase())) throw new Error(`A section called "${name.trim()}" already exists.`);
+  const r = await db.runAsync('INSERT INTO sections (forest_id, name, west, south, east, north, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    forestId(), name.trim(), b[0], b[1], b[2], b[3], Date.now());
+  return { section_id: r.lastInsertRowId };
+}
+
+export async function deleteSection(db: SQLiteDatabase, id: number) {
+  if (isServer()) return api.deleteSection(id);
+  await db.runAsync('DELETE FROM sections WHERE id = ? AND forest_id = ?', id, forestId());
 }
 
 // Each tree with its latest scan.
@@ -349,6 +397,7 @@ export async function deleteForest(db: SQLiteDatabase, f: { id: number; name: st
   await db.withTransactionAsync(async () => {
     for (const t of ['readings', 'fingerprints', 'scans']) await db.runAsync(`DELETE FROM ${t} WHERE tree_id IN (SELECT id FROM trees WHERE forest_id = ?)`, f.id);
     await db.runAsync('DELETE FROM trees WHERE forest_id = ?', f.id);
+    await db.runAsync('DELETE FROM sections WHERE forest_id = ?', f.id);
     await db.runAsync('DELETE FROM forests WHERE id = ?', f.id);
   });
 }

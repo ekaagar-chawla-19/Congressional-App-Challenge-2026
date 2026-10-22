@@ -1,8 +1,10 @@
-import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as api from './api';
 import { CONDITIONS, CONDITION_KEYS } from './conditions';
+import { createSection, deleteSection, forestAnalysis, sectionAnalysis } from './data';
+import { useDb } from './db';
 import { BookmarkPlus, Droplets, Flame, Lightbulb, MapPin, Sun, Thermometer, TrendingDown, TrendingUp, TriangleAlert, type LucideIcon } from './icons';
 import { shortName, useSession } from './session';
 import { color, font, radius, space, status } from './theme';
@@ -17,15 +19,17 @@ const sevStatus = (x: number | null) => (x == null ? 'unrated' : x < 0.5 ? 'heal
 // condition is, where each is worst (hotspots), how things changed over time, and what to do.
 export default function Insights({ scope, tabbed }: { scope: Scope; tabbed?: boolean }) {
   const forest = useSession((s) => s.forest);
+  const db = useDb();
   const [a, setA] = useState<api.Analysis>();
   const [error, setError] = useState<string>();
   const key = JSON.stringify(scope) + forest?.id;
   const load = useCallback(() => {
-    const p = scope.kind === 'section' ? api.sectionAnalysis(scope.id) : api.analysis(scope.kind === 'area' ? scope.bbox : undefined);
+    const p = scope.kind === 'section' ? sectionAnalysis(db, scope.id) : forestAnalysis(db, scope.kind === 'area' ? scope.bbox : undefined);
     return p.then(setA, (e: Error) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
-  useEffect(() => void load(), [load]);
+  // Again each time the screen is shown: new scans change the numbers.
+  useFocusEffect(useCallback(() => void load(), [load]));
 
   const title = scope.kind === 'forest' ? shortName(forest?.name ?? 'Forest') : scope.kind === 'section' ? a?.section?.name ?? 'Section' : 'Selected area';
   const head = (
@@ -221,13 +225,14 @@ function Sections({ sections }: { sections: api.Section[]; reload: () => void })
 }
 
 function SaveSection({ bbox }: { bbox: api.Bbox }) {
+  const db = useDb();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      const sec = await api.createSection(name.trim(), bbox);
+      const sec = await createSection(db, name.trim(), bbox);
       router.replace(`/area?section=${sec.section_id}`);
     } catch (e) {
       notify('Could not save', (e as Error).message);
@@ -244,12 +249,13 @@ function SaveSection({ bbox }: { bbox: api.Bbox }) {
 }
 
 function DeleteSection({ id, name }: { id: number; name: string }) {
+  const db = useDb();
   const [confirm, setConfirm] = useState(false);
   return (
     <>
       <DeleteLink label="Delete this section" onPress={() => setConfirm(true)} />
       <ConfirmDelete visible={confirm} what="section" name={name} onCancel={() => setConfirm(false)}
-        onConfirm={async () => { await api.deleteSection(id); setConfirm(false); router.back(); }}
+        onConfirm={async () => { await deleteSection(db, id); setConfirm(false); router.back(); }}
         consequences="The section's outline will be removed. Its trees and their visits stay in the forest." />
     </>
   );

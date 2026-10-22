@@ -10,6 +10,7 @@ HemlockID has two modes, chosen at sign-in:
 | Diagnosis (HWA, scale, drought) | `api/diseases.py` | **`mobile/src/diagnosis.ts`**, the same rules, checked to give identical answers |
 | Digital twin (environment, "since last visit", next action) | `api/twin.py` | `mobile/src/diagnosis.ts` |
 | Map sensor layers, sensor history | yes | yes |
+| Insights: forest, sections, map areas (hotspots, trends, worst trees, advice) | `api/analysis.py` | **`mobile/src/analysis.ts`**, same numbers (checked on 300 random forests) |
 | Needs a computer or internet | yes | **no** |
 
 The ESP32 sensor unit is optional in both modes. The phone camera works the same with or without it.
@@ -89,6 +90,7 @@ picking the tree by hand.
 |---|---|
 | `tests/integration/test_phone_diagnosis.py` | 3000 random visits and 600 multi-visit trees: phone diagnosis and digital twin text identical to the Python |
 | `tests/integration/test_phone_engine.py` | the engine copy equals the shared port; on the server's recorded photo, decoded like the phone (no `Buffer`), fingerprint cosine 0.99999 and hemlock probability within 0.002 of the server; a 12 MP photo is decoded at the server's scale (756×1008, cosine 0.9998); fingerprint storage exact |
+| `tests/integration/test_phone_analysis.py` | 300 random forests: phone Insights (summary, hotspots, trends, sections, worst trees, advice text) identical to the Python |
 | `tests/integration/test_phone_data.py` | phone database: v2 → v3 upgrade, saving scans with checklist + reading + fingerprints, reading-only visits, diagnosis on the phone, camera-only trees without sensor data, delete |
 | `tests/integration/test_esp32_wifi.py` | the app's Wi-Fi client and live link against the simulated unit: fresh reading at Identify, none without a unit or after disconnecting, only present sensors shown; a visit's reading can be removed ("Don't save it"); one-shot identify stores the visit |
 | `npx tsc --noEmit`, `npx expo lint`, `npx expo export --platform ios` | app types, lint, and the iOS JavaScript bundle (with the model asset) |

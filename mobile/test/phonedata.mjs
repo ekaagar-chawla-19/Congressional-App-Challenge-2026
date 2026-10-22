@@ -42,6 +42,20 @@ const demo = await data.listTrees(db);
 out.demo = { trees: demo.length, with_sensors: demo.filter((t) => t.sensors).length, with_conditions: demo.filter((t) => Object.keys(t.conditions ?? {}).length).length,
   readings: raw.prepare("SELECT COUNT(*) n FROM readings").get().n };
 
+// Insights on the phone: the forest, a saved section, and the section gone again.
+const forestA = await data.forestAnalysis(db);
+const located = demo.filter((t) => t.lat != null);
+const box = [Math.min(...located.map((t) => t.lng)), Math.min(...located.map((t) => t.lat)), Math.max(...located.map((t) => t.lng)), Math.max(...located.map((t) => t.lat))];
+const sec = await data.createSection(db, "Whole stand", box);
+let dup = null;
+await data.createSection(db, "whole stand", box).catch((e) => (dup = e.message));
+const secA = await data.sectionAnalysis(db, sec.section_id);
+const secList = (await data.forestAnalysis(db)).sections.map((s) => [s.name, s.trees]);
+await data.deleteSection(db, sec.section_id);
+out.insights = { trees: forestA.summary.trees, trends: forestA.trends.length, worst: forestA.worst_trees.length, recs: forestA.summary.recommendations.length,
+  section_trees: secA.summary.trees, section_name: secA.section.name, located: located.length, listed: secList, dup,
+  after_delete: (await data.forestAnalysis(db)).sections.length };
+
 // 3. A scan saved on the phone: checklist + reading + fingerprints, then a reading on its own two weeks later.
 const f = await data.createForest(db, "Test stand", null);
 useSession.setState({ forest: { id: f.id, name: f.name, lat: null, lng: null } });
@@ -62,7 +76,8 @@ out.scan = {
   after: { conditions: after.extras.conditions.map((c) => [c.condition, c.level]), readings: after.extras.readings.length, sensors: after.extras.sensors,
     env: after.extras.environment, changes: after.extras.changes },
   camera_only: { sensors: cam.extras.sensors, readings: cam.extras.readings.length, conditions: cam.extras.conditions.map((c) => c.condition) },
-  listed: listed.map((t) => ({ id: t.id, sensors: t.sensors, conditions: t.conditions })),
+  // by ID: the two scans can share a millisecond, which leaves their "latest first" order open
+  listed: [...listed].sort((a, b) => (a.id < b.id ? -1 : 1)).map((t) => ({ id: t.id, sensors: t.sensors, conditions: t.conditions })),
 };
 await data.deleteTree(db, id);
 out.deleted = { readings: raw.prepare("SELECT COUNT(*) n FROM readings WHERE tree_id = ?").get(id).n, fingerprints: raw.prepare("SELECT COUNT(*) n FROM fingerprints WHERE tree_id = ?").get(id).n };

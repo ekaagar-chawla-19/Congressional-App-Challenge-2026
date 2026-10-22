@@ -3,9 +3,10 @@ import { ChartColumn, ChevronRight, MapPin, SquareDashed } from '@/icons';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import * as api from '@/api';
 import { CONDITIONS, isSensorLayer, likelihoodColor, NO_READING, SENSOR_LAYERS, type Layer, type SensorLayer } from '@/conditions';
-import { ago, listTrees, useQuery } from '@/data';
+import { ago, forestAnalysis, listTrees, useQuery } from '@/data';
 import MapCanvas from '@/MapCanvas';
 import { sensorLine } from '@/SensorPanel';
 import { isServer, useSession } from '@/session';
@@ -16,10 +17,9 @@ import { Badge, Dot, Empty, Icon, Screen, T } from '@/ui';
 const LAYERS: { key: Layer; label: string }[] = [{ key: 'health', label: 'Health' }, { key: 'hwa', label: 'Adelgid' }, { key: 'ehs', label: 'Scale' }, { key: 'drought_stress', label: 'Drought' }];
 const SENSOR_KEYS = Object.keys(SENSOR_LAYERS) as SensorLayer[];
 
-// Landmarks, sections and disease hotspots come from the server; the offline demo shows trees only.
-const extras = async () => {
-  if (!isServer()) return { landmarks: [], sections: [], hotspots: {} as api.Analysis['hotspots'] };
-  const [landmarks, a] = await Promise.all([api.landmarks(), api.analysis()]);
+// Sections and disease hotspots: from the server, or worked out on the phone. Landmarks come from the server only.
+const extras = async (db: SQLiteDatabase) => {
+  const [landmarks, a] = await Promise.all([isServer() ? api.landmarks() : Promise.resolve([]), forestAnalysis(db)]);
   return { landmarks, sections: a.sections, hotspots: a.hotspots };
 };
 
@@ -27,7 +27,7 @@ export default function TreeMap() {
   const { top } = useSafeAreaInsets();
   const trees = (useQuery(listTrees) ?? []).filter((t) => t.lat != null && t.lng != null);
   const more = useQuery(extras);
-  const server = useSession((s) => s.mode === 'server');
+  useSession((s) => s.mode); // re-render on sign-in changes
   const { sel, layer: layerParam } = useLocalSearchParams<{ sel?: string; layer?: Layer }>();
   const [chosen, setLayer] = useState<Layer>(layerParam ?? 'health');
   const [showSections, setShowSections] = useState(true);
@@ -93,7 +93,7 @@ export default function TreeMap() {
       </View>
 
       <View style={s.bottom}>
-        {server && (
+        {(
           <View style={s.actions}>
             <Pressable style={s.action} onPress={analyzeView} accessibilityRole="button">
               <Icon as={ChartColumn} c={color.paper} />

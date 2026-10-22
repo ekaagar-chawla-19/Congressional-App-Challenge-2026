@@ -1,12 +1,10 @@
 import { router } from 'expo-router';
-import Storage from '@/kv';
 import { useDb } from '@/db';
 import * as Sharing from 'expo-sharing';
-import { BatteryMedium, CloudUpload, Cpu, Download, HardDrive, Info, LogOut, RefreshCw, Server, Sparkles, Trees, Wifi, type LucideIcon } from '@/icons';
-import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { BatteryMedium, Cpu, Download, HardDrive, Info, LogOut, RefreshCw, Server, Sparkles, Trees, Wifi, type LucideIcon } from '@/icons';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { logout } from '@/api';
-import { exportCsv, pendingCount, useQuery } from '@/data';
+import { exportCsv } from '@/data';
 import { useApp } from '@/device';
 import * as engine from '@/engine';
 import { LiveSensorCard } from '@/SensorPanel';
@@ -17,8 +15,6 @@ import { BackBar, Button, Card, Dot, Empty, Icon, IconBox, Row, Screen, T, notif
 export default function Device() {
   const db = useDb();
   const unit = useApp((s) => s.unit);
-  const pending = useQuery(pendingCount) ?? 0;
-  const [sync, setSync] = useState(() => Storage.getItemSync('sync') === 'on');
   const { user, mode, server, forest } = useSession();
   const signOut = () => {
     if (mode === 'server') logout().catch(() => {});
@@ -26,10 +22,6 @@ export default function Device() {
     router.replace('/login');
   };
 
-  const toggleSync = (on: boolean) => {
-    Storage.setItemSync('sync', on ? 'on' : 'off');
-    setSync(on);
-  };
   const share = async () => {
     try {
       const uri = await exportCsv(db);
@@ -102,7 +94,6 @@ export default function Device() {
       <View style={{ gap: space.md }}>
         <T v="overline">Settings</T>
         <Card>
-          {mode === 'local' && <Row left={<IconBox icon={CloudUpload} />} title="Sync when online" sub={pending ? `${pending} waiting` : 'All scans synced'} right={<Switch value={sync} onValueChange={toggleSync} trackColor={{ true: color.spruce, false: color.line }} thumbColor={color.card} />} />}
           <Row left={<IconBox icon={Download} />} title="Export data" sub="CSV for forestry teams" onPress={share} />
           {engine.available() && <Row left={<IconBox icon={Cpu} />} title="On-device model" sub="Check that trees are recognised on this phone" onPress={() => router.push('/modelcheck')} />}
           <Row left={<IconBox icon={Sparkles} />} title="How HemlockID thinks" sub="Fingerprints and matching, in 3 steps" onPress={() => router.push('/fingerprint')} />

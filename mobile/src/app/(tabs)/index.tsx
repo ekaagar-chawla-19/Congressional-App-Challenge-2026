@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
-import { ChartColumn, ChevronDown, ChevronRight, CloudUpload, Leaf, ScanLine, TreePine } from '@/icons';
+import { ChartColumn, ChevronDown, ChevronRight, Leaf, ScanLine, TreePine } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ago, dueForRevisit, listTrees, pendingCount, useQuery } from '@/data';
+import { ago, dueForRevisit, listTrees, useQuery } from '@/data';
 import { useApp } from '@/device';
 import * as engine from '@/engine';
 import { LoadError } from '@/LoadError';
@@ -15,7 +15,6 @@ const today = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', da
 export default function Home() {
   const loadedTrees = useQuery(listTrees);
   const trees = loadedTrees ?? [];
-  const pending = useQuery(pendingCount) ?? 0;
   const unit = useApp((s) => s.unit);
   const forest = useSession((s) => s.forest);
   const user = useSession((s) => s.user);
@@ -107,11 +106,8 @@ export default function Home() {
             <SectionHead title="Recent scans" />
             <Card>
               {trees.slice(0, 2).map((t, i, shown) => (
-                <Row key={t.id} left={<StatusIcon s={t.status!} />} title={t.id} sub={`${status[t.status!].label} · ${ago(t.last_scan)}`} onPress={() => open(t.id)} last={i === shown.length - 1 && !pending} />
+                <Row key={t.id} left={<StatusIcon s={t.status!} />} title={t.id} sub={`${status[t.status!].label} · ${ago(t.last_scan)}`} onPress={() => open(t.id)} last={i === shown.length - 1} />
               ))}
-              {pending > 0 && (
-                <Row last left={<IconBox icon={CloudUpload} bg={color.lineSoft} fg={color.inkSoft} />} title={`${pending} ${pending === 1 ? 'scan' : 'scans'} waiting to sync`} sub="Saved on this phone. Syncs when online." />
-              )}
             </Card>
           </View>
         </>

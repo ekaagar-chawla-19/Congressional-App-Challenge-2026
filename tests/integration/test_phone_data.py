@@ -30,7 +30,11 @@ def test_phone_only_storage_and_diagnosis():
     assert res.returncode == 0, res.stderr
     o = json.loads(res.stdout)
     up = o["upgraded"]
-    assert up["version"] == 3 and up["trees"] == [["H-001", "watch", None]]
+    ins = o["insights"]
+    assert ins["trees"] == o["demo"]["trees"] and ins["trends"] >= 1 and 1 <= ins["worst"] <= 10 and ins["recs"] >= 1
+    assert ins["section_name"] == "Whole stand" and ins["section_trees"] == ins["located"] >= 1
+    assert ins["listed"] == [["Whole stand", ins["located"]]] and "already exists" in ins["dup"] and ins["after_delete"] == 0
+    assert up["version"] == 4 and up["trees"] == [["H-001", "watch", None]]
     # an old scan (graded signs only) gets its checklist back, so the tree keeps a diagnosis after the upgrade
     assert up["signs"] == ["twigs_checked_clean", "needle_loss"] and up["severity"] == 1
     assert ["hwa", "low"] in up["conditions"]
