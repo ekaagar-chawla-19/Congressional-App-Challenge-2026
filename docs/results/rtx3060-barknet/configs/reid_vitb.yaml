@@ -1,0 +1,43 @@
+# Individual-tree re-identification on BarkNet 1.0, with a ViT-B backbone.
+# Same recipe as reid.yaml at 224 px; only the backbone changes (768-d vs 384-d).
+# Train on non-hemlock trees, test on hemlocks (PRU) the model has never seen.
+
+data:
+  root: data/barknet
+  splits: data/splits.json
+  test_species: PRU          # Tsuga canadensis
+  val_species: [EPO]         # Norway spruce (72 trees): a held-out conifer, like the test
+  val_frac: 0.10             # fallback if val_species isn't downloaded
+  unseen_test_trees: 10      # hemlocks left out of the gallery ("new tree" check)
+  unseen_val_frac: 0.20      # same idea for the validation trees
+  seed: 0
+
+model:
+  backbone: vit_base_patch14_dinov2.lvd142m
+  pooling: cls_mean          # cls_mean | gem | mean | cls
+  embed_dim: 256
+  trainable_blocks: 4        # fine-tune only the last N transformer blocks
+
+loss:                        # Sub-center ArcFace with dynamic margins (MiewID / GLR2020)
+  subcenters: 3
+  scale: 30.0
+  margin_a: 0.45             # m_c = a * n_c^power + b
+  margin_b: 0.05
+  margin_power: -0.25
+
+train:
+  epochs: 20
+  batch_size: 64
+  lr_head: 0.0005
+  lr_backbone: 0.00005
+  weight_decay: 0.01
+  warmup_epochs: 1
+  num_workers: 4
+  amp: true                  # fp16 mixed precision, CUDA only
+  img_size: 224
+  out_dir: runs/reid_vitb
+
+eval:
+  resize: 320                # short side before five-crop
+  img_size: 224
+  multiview_k: [1, 3, 5]     # photos combined per query tree
