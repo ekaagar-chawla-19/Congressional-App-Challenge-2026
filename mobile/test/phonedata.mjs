@@ -79,6 +79,13 @@ out.scan = {
   // by ID: the two scans can share a millisecond, which leaves their "latest first" order open
   listed: [...listed].sort((a, b) => (a.id < b.id ? -1 : 1)).map((t) => ({ id: t.id, sensors: t.sensors, conditions: t.conditions })),
 };
+// another species (phone-only mode): its own ID series, drought only (no adelgid or scale), its own sensor log
+const maple = await data.saveScan(db, { place: "Backyard", photos: [], levels: { wool: 0, needles: 1, crown: 0, dieback: 0 }, note: "", checks: data.NO_CHECKS, sensors: dry, species: "acer_rubrum" });
+await data.addLocalReading(db, maple, { device: "HS-ESP32-1C49", at: Date.now() + 60000, sensors: { soil_moisture_pct: 9, air_temp_c: 33, humidity_pct: 22, light_lux: 7000 } });
+const m = await data.getTree(db, maple);
+out.other = { id: maple, again: await data.saveScan(db, { place: "Fence", photos: [], levels: { wool: 0, needles: 0, crown: 0, dieback: 0 }, note: "", checks: data.NO_CHECKS, species: "acer_rubrum" }),
+  next_hemlock: await data.saveScan(db, { place: "Ridge 2", photos: [], levels: { wool: 0, needles: 0, crown: 0, dieback: 0 }, note: "", checks: data.NO_CHECKS }),
+  species: m.tree.species, conditions: m.extras.conditions.map((c) => [c.condition, c.level]), readings: m.extras.readings.length };
 await data.deleteTree(db, id);
 out.deleted = { readings: raw.prepare("SELECT COUNT(*) n FROM readings WHERE tree_id = ?").get(id).n, fingerprints: raw.prepare("SELECT COUNT(*) n FROM fingerprints WHERE tree_id = ?").get(id).n };
 console.log(JSON.stringify(out));

@@ -7,6 +7,7 @@ import type { SpeciesCheck } from '../api';
 import calibration from '../../assets/models/calibration.json';
 import meta from '../../assets/models/hemlock.json';
 import reference from '../../assets/check/reference.json';
+import { speciesName } from '../species';
 import { bytesFromBase64, encodeEmbedding } from './codec';
 import { OnDeviceModel, type Calibration, type Gallery, type OnDeviceResult, type RgbImage, type ViewResult } from './ondevice';
 
@@ -69,11 +70,6 @@ export function hemlockProbability(v: ViewResult): number | null {
   return ex[meta.species_labels.indexOf('tsuga_canadensis')] / sum;
 }
 
-// Same names as the server (species/labels.py COMMON_NAMES).
-const COMMON_NAMES: Record<string, string> = {
-  tsuga_canadensis: 'Eastern hemlock', pinus_strobus: 'Eastern white pine', pinus_resinosa: 'Red pine', pinus_rigida: 'Pitch pine',
-  fagus_grandifolia: 'American beech', acer_rubrum: 'Red maple', acer_platanoides: 'Norway maple', populus_grandidentata: 'Bigtooth aspen',
-};
 
 const softmax = (logits: Float32Array) => {
   const l = Array.from(logits), mx = Math.max(...l);
@@ -88,7 +84,7 @@ export function speciesSummary(views: ViewResult[]): { hemlock: number; top: { l
   const wsum = vs.reduce((a, v) => a + (v.weight || 1), 0);
   const mean = meta.species_labels.map(() => 0);
   vs.forEach((v) => softmax(v.speciesLogits!).forEach((p, j) => { mean[j] += ((v.weight || 1) * p) / wsum; }));
-  const top = meta.species_labels.map((label, i) => ({ label, name: COMMON_NAMES[label] ?? label, probability: mean[i] }))
+  const top = meta.species_labels.map((label, i) => ({ label, name: speciesName(label), probability: mean[i] }))
     .sort((a, b) => b.probability - a.probability).slice(0, 3);
   return { hemlock: mean[meta.species_labels.indexOf('tsuga_canadensis')], top };
 }
@@ -99,7 +95,7 @@ export async function speciesCheck(uri: string): Promise<SpeciesCheck> {
   if (!v.speciesLogits) throw new Error(`Can't check that photo: ${v.problems.join('; ')}`);
   const l = Array.from(v.speciesLogits), mx = Math.max(...l);
   const ex = l.map((x) => Math.exp(x - mx)), sum = ex.reduce((a, b) => a + b, 0);
-  const top = meta.species_labels.map((label, i) => ({ label, name: COMMON_NAMES[label] ?? label, probability: ex[i] / sum }))
+  const top = meta.species_labels.map((label, i) => ({ label, name: speciesName(label), probability: ex[i] / sum }))
     .sort((a, b) => b.probability - a.probability).slice(0, 3);
   const hp = ex[meta.species_labels.indexOf('tsuga_canadensis')] / sum;
   const th = (calibration as unknown as Calibration).species_threshold;
@@ -118,10 +114,10 @@ export async function phoneGallery(db: SQLiteDatabase, forestId: number): Promis
   return { observations: rows };
 }
 
-/** Which tree these photos show, decided on the phone. fingerprints: to store with the tree it is saved to. */
+/** Which tree these photos show, decided on the phone (any species). fingerprints: to store with the tree it is saved to. */
 export async function identifyOnPhone(views: ViewResult[], gallery: Gallery): Promise<{ result: OnDeviceResult; fingerprints: string[] }> {
   const m = await model();
-  const result = m.identify(views, gallery);
+  const result = m.identify(views, gallery, { anySpecies: true });
   const fingerprints = views.filter((v) => v.accepted && v.embedding && VIEW_KEYS.includes(v.viewKey)).map((v) => encodeEmbedding(v.embedding!));
   return { result, fingerprints };
 }

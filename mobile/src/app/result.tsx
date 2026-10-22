@@ -8,6 +8,7 @@ import { fmtDate, listTrees } from '@/data';
 import { useApp } from '@/device';
 import { identify, type Identification } from '@/identify';
 import { isServer } from '@/session';
+import { speciesName } from '@/species';
 import { color, font, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Empty, Photo, Row, Screen, T, notify } from '@/ui';
 
@@ -119,7 +120,7 @@ export default function Result() {
         }
       }
     }
-    useApp.getState().setScan({ treeId: id, observationId: oid, isNew: treeId === null });
+    useApp.getState().setScan({ treeId: id, observationId: oid, isNew: treeId === null, species: res.onPhone ? srv?.species?.label ?? null : null });
     router.push('/health');
     setTimeout(() => (leaving.current = false), 800); // usable again after coming back
   };
@@ -143,6 +144,7 @@ export default function Result() {
           {srv?.model_name && <ModelTag name={srv.model_name} />}
         </View>
         <T v="hero" style={{ fontSize: 56, lineHeight: 60 }}>{isMatch ? chosen.tree.id : res.offline ? 'Not identified' : 'New tree'}</T>
+        {res.onPhone && srv?.species && <T v="title">{isMatch ? speciesName(chosen.tree.species) : srv.species.name}</T>}
         <T c={color.inkSoft}>
           {guess
             ? `Not certain. This is the closest tree, ${pct(chosen.score)} confident. Confirm it if it looks right, or register a new tree.`
@@ -187,7 +189,7 @@ export default function Result() {
           <ChevronRight size={18} color={color.spruce} />
         </Pressable>
       )}
-      {srv?.species && <HemlockCheck sp={srv.species} />}
+      {srv?.species && <HemlockCheck sp={srv.species} anySpecies={res.onPhone} />}
       {srv?.species_checked === false && <SpeciesNotChecked model={srv.model_name ?? 'This model'} />}
 
       {browsing && (
@@ -244,16 +246,17 @@ function SpeciesNotChecked({ model }: { model: string }) {
 }
 
 // The species model's verdict: is this an Eastern hemlock, and what else it might be.
-function HemlockCheck({ sp }: { sp: api.Species }) {
+// anySpecies: phone-only mode, where other species are tracked too.
+function HemlockCheck({ sp, anySpecies = false }: { sp: api.Species; anySpecies?: boolean }) {
   const h = sp.hemlock_probability ?? (sp.label === 'tsuga_canadensis' ? sp.confidence : 0);
   const yes = sp.label === 'tsuga_canadensis';
   return (
     <Card style={{ padding: space.lg, gap: space.md }}>
       <View style={s.between}>
-        <T v="label">Hemlock check</T>
+        <T v="label">{anySpecies ? 'Species' : 'Hemlock check'}</T>
         <View style={[s.badge, { backgroundColor: yes ? status.healthy.tint : status.watch.tint }]}>
           <Dot c={yes ? status.healthy.dot : status.watch.dot} />
-          <T v="caption" c={yes ? status.healthy.text : status.watch.text} style={{ fontFamily: font.semibold }}>{yes ? 'Eastern hemlock' : 'Not confirmed'}</T>
+          <T v="caption" c={yes ? status.healthy.text : status.watch.text} style={{ fontFamily: font.semibold }}>{yes ? 'Eastern hemlock' : anySpecies ? sp.name : 'Not confirmed'}</T>
         </View>
       </View>
       {(sp.top.length ? sp.top : [{ label: sp.label, name: sp.name, probability: h }]).map((t) => (
@@ -267,7 +270,10 @@ function HemlockCheck({ sp }: { sp: api.Species }) {
           </View>
         </View>
       ))}
-      <T v="caption" style={{ fontSize: 12 }}>From the species model, averaged over your photos. Only Eastern hemlocks get a tree ID.</T>
+      <T v="caption" style={{ fontSize: 12 }}>
+        {yes || !anySpecies ? `From the species model, averaged over your photos.${anySpecies ? '' : ' Only Eastern hemlocks get a tree ID.'}`
+          : "HemlockID is built for Eastern hemlocks. This tree still gets its own ID, health history and sensor log. Adelgid and hemlock scale aren't checked (they only attack hemlocks), and recognizing it again on a later visit is experimental."}
+      </T>
     </Card>
   );
 }

@@ -141,7 +141,7 @@ export default function Scan() {
         views.current.push(v);
         const h = engine.hemlockProbability(v);
         const f = feedback({ index: i, view_type: v.viewKey, accepted: v.accepted, problems: v.problems, warnings: v.warnings,
-          metrics: v.metrics, hemlock_probability: h, top_species: null });
+          metrics: v.metrics, hemlock_probability: h, top_species: engine.speciesSummary([v])?.top[0] ?? null });
         set({ state: v.accepted ? 'ok' : 'rejected', hemlock: h });
         if (!v.accepted) return say(f.text, f.tone);
         const n = ++count.current.ok;

@@ -34,7 +34,7 @@ def test_phone_only_storage_and_diagnosis():
     assert ins["trees"] == o["demo"]["trees"] and ins["trends"] >= 1 and 1 <= ins["worst"] <= 10 and ins["recs"] >= 1
     assert ins["section_name"] == "Whole stand" and ins["section_trees"] == ins["located"] >= 1
     assert ins["listed"] == [["Whole stand", ins["located"]]] and "already exists" in ins["dup"] and ins["after_delete"] == 0
-    assert up["version"] == 4 and up["trees"] == [["H-001", "watch", None]]
+    assert up["version"] == 5 and up["trees"] == [["H-001", "watch", None]]
     # an old scan (graded signs only) gets its checklist back, so the tree keeps a diagnosis after the upgrade
     assert up["signs"] == ["twigs_checked_clean", "needle_loss"] and up["severity"] == 1
     assert ["hwa", "low"] in up["conditions"]
@@ -55,3 +55,8 @@ def test_phone_only_storage_and_diagnosis():
     assert sc["camera_only"] == {"sensors": None, "readings": 0, "conditions": []}
     assert [t["sensors"] for t in sc["listed"]][1] is None and sc["listed"][0]["conditions"]["hwa"] == 0.95
     assert o["deleted"] == {"readings": 0, "fingerprints": 0}
+    # another species: RM-001, RM-002 (the hemlock series goes on separately), drought only, its own readings
+    oth = o["other"]
+    assert oth["id"] == "RM-001" and oth["again"] == "RM-002" and oth["species"] == "acer_rubrum"
+    assert oth["next_hemlock"].startswith("H-") and oth["readings"] == 2
+    assert [c for c, _ in oth["conditions"]] == ["drought_stress"] and oth["conditions"][0][1] in ("likely", "possible")

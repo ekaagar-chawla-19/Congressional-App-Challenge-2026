@@ -56,7 +56,9 @@ type App = {
   fingerprints: { model: string; embeddings: string[] } | null;
   // Phone-only mode: each photo as checked by the on-device model while scanning (null: not checked on the phone).
   views: ViewResult[] | null;
-  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew' | 'serverResult' | 'sensors' | 'fingerprints' | 'views'>>): void;
+  // Phone-only mode: the species the photos show (species.ts label), for a new tree's ID and its health check.
+  species: string | null;
+  setScan(s: Partial<Pick<App, 'photos' | 'treeId' | 'observationId' | 'isNew' | 'serverResult' | 'sensors' | 'fingerprints' | 'views' | 'species'>>): void;
 };
 
 export const useApp = create<App>((set) => ({
@@ -86,6 +88,7 @@ export const useApp = create<App>((set) => ({
   sensors: null,
   fingerprints: null,
   views: null,
+  species: null,
   setScan: (s) => set(s),
 }));
 

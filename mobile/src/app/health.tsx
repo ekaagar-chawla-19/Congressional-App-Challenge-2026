@@ -8,6 +8,8 @@ import { useApp } from '@/device';
 import { Check } from '@/icons';
 import { VisitSensors } from '@/SensorPanel';
 import type { Live } from '@/sensors';
+import { isServer } from '@/session';
+import { isHemlock, speciesName } from '@/species';
 import { color, font, radius, space, status } from '@/theme';
 import { BackBar, Button, Card, Dot, Icon, Screen, Segmented, T, notify } from '@/ui';
 
@@ -15,7 +17,13 @@ const OPTIONS = LEVELS.map((label, value) => ({ label, value }));
 
 export default function Health() {
   const db = useDb();
-  const { photos, treeId, observationId, isNew, sensors, fingerprints } = useApp();
+  const { photos, treeId, observationId, isNew, sensors, fingerprints, species: scanned } = useApp();
+  // The tree's species (phone-only mode): what the photos showed for a new tree, else what it was registered as.
+  const [species, setSpecies] = useState<string | null>(treeId ? null : scanned);
+  useEffect(() => {
+    if (treeId && !isServer()) db.getFirstAsync<{ species: string }>('SELECT species FROM trees WHERE id = ?', treeId).then((t) => setSpecies(t?.species ?? null), () => {});
+  }, [db, treeId]);
+  const hemlock = isHemlock(species);
   const [levels, setLevels] = useState<Levels>({ wool: 0, needles: 0, crown: 0, dieback: 0 });
   const [checks, setChecks] = useState<Checks>(NO_CHECKS);
   const [reading, setReading] = useState<Live | null>(sensors); // taken with the photos, if a unit was connected
@@ -44,8 +52,8 @@ export default function Health() {
       // Signed in, the visit already exists on the server (stored with the photos); add the health check.
       const id = observationId && treeId
         ? (await saveServerVisit(observationId, levels, note, checks, reading?.sensors ?? null, sensors != null), treeId)
-        : await saveScan(db, { treeId: treeId ?? undefined, place, coords, photos, levels, note, checks, sensors: reading, fingerprints });
-      useApp.getState().setScan({ photos: [], treeId: null, observationId: null, isNew: false, sensors: null, fingerprints: null });
+        : await saveScan(db, { treeId: treeId ?? undefined, place, coords, photos, levels, note, checks, sensors: reading, fingerprints, species });
+      useApp.getState().setScan({ photos: [], treeId: null, observationId: null, isNew: false, sensors: null, fingerprints: null, species: null });
       router.dismissAll();
       router.push(`/tree/${id}`);
     } catch (e) {
@@ -79,6 +87,7 @@ export default function Health() {
       <View style={{ gap: space.sm }}>
         <T v="display">How does it look?</T>
         <T c={color.inkSoft}>Only what you can see. Anything you skip is recorded as “not checked”, not as healthy.</T>
+        {!hemlock && <T v="caption">{`${speciesName(species)}: adelgid and hemlock scale only attack hemlocks, so this tree is checked for drought stress and decline.`}</T>}
       </View>
 
       {!treeId && (
@@ -89,7 +98,7 @@ export default function Health() {
         </View>
       )}
 
-      <Card style={s.card}>
+      {hemlock && <Card style={s.card}>
         <View style={s.between}>
           <View style={{ flex: 1, gap: 2 }}>
             <T v="title">1. Under the twigs</T>
@@ -108,18 +117,18 @@ export default function Health() {
         ) : (
           <T v="caption">Not checked: woolly adelgid and hemlock scale will show as “not assessed”.</T>
         )}
-      </Card>
+      </Card>}
 
       <Card style={s.card}>
-        <T v="title">2. The crown</T>
-        {grade('needles', 'Needle loss', 'You can see through the crown')}
-        {grade('crown', 'Dull, gray-green crown')}
+        <T v="title">{`${hemlock ? 2 : 1}. The crown`}</T>
+        {grade('needles', hemlock ? 'Needle loss' : 'Leaf or needle loss', 'You can see through the crown')}
+        {grade('crown', hemlock ? 'Dull, gray-green crown' : 'Dull or yellowing crown')}
         {grade('dieback', 'Twig and branch dieback')}
-        <View style={s.chips}>{chip('banding', 'Yellow bands on needle tops')}</View>
+        {hemlock && <View style={s.chips}>{chip('banding', 'Yellow bands on needle tops')}</View>}
       </Card>
 
       <Card style={s.card}>
-        <T v="title">3. Trunk and soil</T>
+        <T v="title">{`${hemlock ? 3 : 2}. Trunk and soil`}</T>
         <View style={s.chips}>
           {chip('browning', 'Browning in a dry spell')}
           {chip('borers', 'Small exit holes in bark')}
@@ -127,7 +136,7 @@ export default function Health() {
         </View>
       </Card>
 
-      <VisitSensors title="4. Sensor reading" value={reading} onChange={setReading} />
+      <VisitSensors title={`${hemlock ? 4 : 3}. Sensor reading`} value={reading} onChange={setReading} />
 
       <View style={[s.overall, { backgroundColor: st.tint }]}>
         <View style={{ gap: 2 }}>

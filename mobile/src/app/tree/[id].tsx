@@ -3,11 +3,13 @@ import { useDb } from '@/db';
 import { useCallback, useState } from 'react';
 import { ArrowRight, Cpu, MapPin, ScanLine } from '@/icons';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { ConditionKey, Finding } from '@/api';
+import type { ConditionKey, Finding, SensorPoint } from '@/api';
+import { READINGS } from '@/esp32';
+import { speciesName } from '@/species';
 import { CONDITIONS, CONDITION_KEYS } from '@/conditions';
 import { deleteTree, fmtDate, getTree, useQuery, type TreeExtras } from '@/data';
 import { LoadError } from '@/LoadError';
-import { SensorTiles, sensorLine } from '@/SensorPanel';
+import { fmt, SensorTiles, sensorLine } from '@/SensorPanel';
 import { hasAny, useConnected } from '@/sensors';
 import { color, font, radius, space, status, type Status } from '@/theme';
 import { BackBar, Badge, Button, Card, ConfirmDelete, DeleteLink, Icon, Photo, Row, Screen, T } from '@/ui';
@@ -56,7 +58,7 @@ export default function TreeDetail() {
       <View style={s.head}>
         <View style={{ gap: 6, flex: 1 }}>
           <T v="hero">{tree.id}</T>
-          <T c={color.inkSoft}>{tree.place}</T>
+          <T c={color.inkSoft}>{`${speciesName(tree.species)} · ${tree.place}`}</T>
         </View>
         {latest && <Badge s={latest.status} />}
       </View>
@@ -211,6 +213,7 @@ function ServerHealth({ conditions, sensors, history, readings, environment, cha
         )}
       </View>
       )}
+      <SensorTrends readings={readings} />
       {readings.length > 0 && (
         <View style={{ gap: space.md }}>
           <T v="overline">Sensor history</T>
@@ -229,6 +232,39 @@ function ServerHealth({ conditions, sensors, history, readings, environment, cha
         </View>
       )}
     </>
+  );
+}
+
+// Each sensor's readings at this tree over time (the latest 12, oldest first), scaled to that sensor's own range.
+function SensorTrends({ readings }: { readings: SensorPoint[] }) {
+  const pts = readings.slice(0, 12).reverse();
+  const rows = READINGS.map((r) => ({ ...r, vals: pts.map((p) => p.sensors[r.key]) })).filter((r) => r.vals.filter((v) => v != null).length >= 2);
+  if (!rows.length) return null;
+  return (
+    <Card style={{ padding: space.lg, gap: space.md }}>
+      <T v="label">Sensor trends</T>
+      {rows.map((r) => {
+        const known = r.vals.filter((v): v is number => v != null);
+        const lo = Math.min(...known), hi = Math.max(...known), first = known[0], last = known[known.length - 1];
+        const d = last - first, tol = Math.max(1, Math.abs(first) * 0.05);
+        return (
+          <View key={r.key} style={{ gap: 4 }}>
+            <View style={s.between}>
+              <T v="caption" c={color.ink} style={{ fontFamily: font.medium }}>{r.label}</T>
+              <T v="caption" style={{ fontSize: 12 }}>{`${fmt(r.key, first)} → ${fmt(r.key, last)} · ${d > tol ? 'Rising' : d < -tol ? 'Falling' : 'Steady'}`}</T>
+            </View>
+            <View style={s.spark}>
+              {r.vals.map((v, i) => (
+                <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: 28 }}>
+                  <View style={{ width: '60%', height: v == null ? 2 : 6 + (hi > lo ? ((v - lo) / (hi - lo)) * 22 : 11), borderRadius: 3, backgroundColor: v == null ? color.line : color.spruce }} />
+                </View>
+              ))}
+            </View>
+          </View>
+        );
+      })}
+      <T v="caption" style={{ fontSize: 12 }}>{`The last ${pts.length} readings at this tree, oldest on the left.`}</T>
+    </Card>
   );
 }
 

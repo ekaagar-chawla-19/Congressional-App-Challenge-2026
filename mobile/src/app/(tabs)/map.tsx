@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { isHemlock, speciesName } from '@/species';
 import { ChartColumn, ChevronRight, MapPin, SquareDashed } from '@/icons';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -112,7 +113,7 @@ export default function TreeMap() {
                 <T v="id" style={{ fontSize: 22 }}>{picked.id}</T>
                 {picked.status && <Badge s={picked.status} />}
               </View>
-              <T v="caption">{`${picked.place} · scanned ${ago(picked.last_scan).toLowerCase()}`}</T>
+              <T v="caption">{`${isHemlock(picked.species) ? '' : `${speciesName(picked.species)} · `}${picked.place} · scanned ${ago(picked.last_scan).toLowerCase()}`}</T>
               {isSensorLayer(layer) && <T v="caption" c={color.ink}>{sensorLine(picked.sensors) || 'No sensor reading yet'}</T>}
             </View>
             <View style={s.go}>

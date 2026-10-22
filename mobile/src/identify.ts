@@ -7,6 +7,7 @@ import type { OnDeviceResult } from './engine/ondevice';
 import { useModels } from './models';
 import type { TreeRow } from './data';
 import { isServer, useSession } from './session';
+import { speciesName } from './species';
 
 export type Match = { tree: TreeRow; score: number };
 // `server` is set when a model ran: hemlock-api's decision, or the on-device model's (onPhone; nothing stored yet).
@@ -41,7 +42,7 @@ function asResult(r: OnDeviceResult, scores: ReturnType<typeof engine.speciesSum
     status: r.status, action: r.status === 'recapture' ? 'retake' : 'done', message: r.message, tree_id: r.tree_id, observation_id: null,
     model: 'delta', model_name: 'Model Delta (on this phone)', species_checked: true,
     species: sp ? {
-      label: sp.label, name: sp.label === 'unknown' ? 'Not sure' : scores?.top.find((t) => t.label === sp.label)?.name ?? sp.label,
+      label: sp.label, name: speciesName(sp.label),
       confidence: sp.confidence, hemlock_probability: scores?.hemlock ?? (sp.label === 'tsuga_canadensis' ? sp.confidence : null), top: scores?.top ?? [],
     } : null,
     probability: r.probability, next_view: null,

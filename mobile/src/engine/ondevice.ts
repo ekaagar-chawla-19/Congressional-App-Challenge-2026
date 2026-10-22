@@ -259,8 +259,12 @@ export class OnDeviceModel {
     return res;
   }
 
-  /** The server's decision (species gate -> retrieval -> calibrated fusion), against a downloaded gallery. */
-  identify(views: ViewResult[], gallery: Gallery | null): OnDeviceResult {
+  /**
+   * The server's decision (species gate -> retrieval -> calibrated fusion), against a downloaded gallery.
+   * anySpecies (phone-only mode): track every species instead of only hemlocks; a species the model is not sure of
+   * is "unknown" instead of a rejection.
+   */
+  identify(views: ViewResult[], gallery: Gallery | null, { anySpecies = false } = {}): OnDeviceResult {
     const base = { candidates: [] as OnDeviceCandidate[], best_guess: null, contradicting_views: [] as number[],
       on_device: true as const, model_version: this.meta.version ?? null };
     const id = views.filter((v) => v.accepted && v.embedding && IDENTITY_VIEWS.includes(v.viewKey));
@@ -272,11 +276,11 @@ export class OnDeviceModel {
     const mean = new Array(labels.length).fill(0);
     id.forEach((v, k) => softmax(v.speciesLogits!).forEach((p, j) => { mean[j] += (w[k] || 1) * p / wsum; }));
     const si = mean.indexOf(Math.max(...mean)), conf = mean[si];
-    if (conf < this.cal.species_threshold)
+    if (conf < this.cal.species_threshold && !anySpecies)
       return { ...base, status: "rejected_species", tree_id: null, probability: null, species: { label: "unknown", confidence: conf },
         message: `species uncertain (${Math.round(conf * 100)}%); retake photos or species not supported` };
-    const species = { label: labels[si], confidence: conf };
-    if (!REID_SUPPORTED.includes(labels[si]))
+    const species = { label: conf < this.cal.species_threshold ? "unknown" : labels[si], confidence: conf };
+    if (!REID_SUPPORTED.includes(labels[si]) && !anySpecies)
       return { ...base, status: "unsupported_species", tree_id: null, probability: null, species,
         message: `${labels[si]}: individual tracking not supported yet` };
 

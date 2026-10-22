@@ -12,9 +12,11 @@ import { analyze, type SavedSection } from './analysis';
 import { assess, currentConditions, environment, nextAction, sensorHistory, sinceLastVisit, type Visit } from './diagnosis';
 import type { Live } from './sensors';
 import { isServer, useSession } from './session';
+import { HEMLOCK, HEMLOCK_ONLY, idPrefix, isHemlock } from './species';
 import type { Status } from './theme';
 
-export type Tree = { id: string; place: string; lat: number | null; lng: number | null; created_at: number };
+// species: the species.ts label (hemlock unless the phone tracked another species).
+export type Tree = { id: string; place: string; lat: number | null; lng: number | null; created_at: number; species: string };
 // conditions: likelihood 0-1 per condition. sensors: the latest sensor reading (null: none ever taken).
 export type TreeRow = Tree & { status: Status | null; last_scan: number | null; photo: string | null; conditions?: Record<string, number>; sensors?: api.Sensors | null };
 export type Scan = { id: number; tree_id: string; created_at: number; photos: string; status: Status; note: string; synced: number; signs?: string; severity?: number | null } & Levels;
@@ -113,6 +115,19 @@ export async function migrate(db: SQLiteDatabase) {
         west REAL NOT NULL, south REAL NOT NULL, east REAL NOT NULL, north REAL NOT NULL, created_at INTEGER NOT NULL);
       PRAGMA user_version = 4;`);
   }
+  if (v < 5) {
+    // v5: trees of any species (phone-only mode); everything before was a hemlock.
+    await db.execAsync(`ALTER TABLE trees ADD COLUMN species TEXT NOT NULL DEFAULT '${HEMLOCK}'; PRAGMA user_version = 5;`);
+  }
+}
+
+const INSERT_TREE = 'INSERT INTO trees (id, place, lat, lng, created_at, forest_id, species) VALUES (?, ?, ?, ?, ?, ?, ?)';
+
+/** The next free ID for a species: H-015, RM-003, ... */
+async function nextTreeId(db: SQLiteDatabase, species: string) {
+  const p = idPrefix(species);
+  const max = await db.getFirstAsync<{ n: number | null }>('SELECT MAX(CAST(SUBSTR(id, ?) AS INTEGER)) AS n FROM trees WHERE id LIKE ?', p.length + 2, `${p}-%`);
+  return `${p}-${String((max?.n ?? 0) + 1).padStart(3, '0')}`;
 }
 
 // Sample forests for the offline demo: hemlock stands along North Georgia streams.
@@ -128,7 +143,7 @@ export async function seedDemo(db: SQLiteDatabase) {
   const rnd = () => ((x = (x * 16807) % 2147483647) - 1) / 2147483646;
   const now = Date.now();
   const lvl = (base: number) => Math.max(0, Math.min(3, Math.round(base + (rnd() - 0.5) * 1.2)));
-  let n = ((await db.getFirstAsync<{ n: number | null }>('SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS n FROM trees'))?.n ?? 0);
+  let n = ((await db.getFirstAsync<{ n: number | null }>("SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS n FROM trees WHERE id LIKE 'H-%'"))?.n ?? 0);
   await db.withTransactionAsync(async () => {
     for (const f of DEMO_FORESTS) {
       const { lastInsertRowId: fid } = await db.runAsync('INSERT INTO forests (name, lat, lng) VALUES (?, ?, ?)', f.name, f.lat, f.lng);
@@ -142,7 +157,7 @@ export async function seedDemo(db: SQLiteDatabase) {
         const id = `H-${String(++n).padStart(3, '0')}`;
         const visits = 1 + Math.floor(rnd() * 3);
         const first = now - (200 + rnd() * 400) * DAY;
-        await db.runAsync('INSERT INTO trees VALUES (?, ?, ?, ?, ?, ?)', id, f.places[Math.floor(rnd() * f.places.length)], lat, lng, first, fid);
+        await db.runAsync(INSERT_TREE, id, f.places[Math.floor(rnd() * f.places.length)], lat, lng, first, fid, HEMLOCK);
         for (let v = 0; v < visits; v++) {
           const at = Math.min(first + v * (90 + rnd() * 100) * DAY, now - (2 + rnd() * 40) * DAY);
           const base = spread - (visits - 1 - v) * 0.7;
@@ -209,9 +224,11 @@ async function localVisits(db: SQLiteDatabase, where: string, arg: string | numb
   const scans = await db.getAllAsync<Scan>(`SELECT s.* FROM scans s JOIN trees t ON t.id = s.tree_id WHERE ${where}`, arg);
   const readings = await db.getAllAsync<ReadingRow>(`SELECT r.id, r.tree_id, r.scan_id, r.created_at, ${READING_COLS} FROM readings r JOIN trees t ON t.id = r.tree_id WHERE ${where}`, arg);
   const byScan = new Map(readings.filter((r) => r.scan_id != null).map((r) => [r.scan_id!, r]));
+  const species = new Map((await db.getAllAsync<{ id: string; species: string }>(`SELECT t.id, t.species FROM trees t WHERE ${where}`, arg)).map((t) => [t.id, t.species]));
   const out = new Map<string, Visit[]>();
   const push = (tree: string, v: Omit<Visit, 'findings'>, hasImages: boolean) => {
-    const findings = assess(v.signs, v.sensors, v.severity, v.at, hasImages);
+    // Adelgid and hemlock scale only attack hemlocks: other species are assessed for drought stress only.
+    const findings = assess(v.signs, v.sensors, v.severity, v.at, hasImages).filter((f) => isHemlock(species.get(tree)) || !HEMLOCK_ONLY.includes(f.condition));
     out.set(tree, [...(out.get(tree) ?? []), { ...v, findings }]);
   };
   for (const sc of scans) {
@@ -280,7 +297,7 @@ export async function listTrees(db: SQLiteDatabase): Promise<TreeRow[]> {
     });
   }
   return (await api.trees()).map((t) => ({
-    id: t.tree_id, place: conditionLabel(t), lat: t.location?.lat ?? null, lng: t.location?.lon ?? null, created_at: Date.parse(t.created_at),
+    id: t.tree_id, place: conditionLabel(t), lat: t.location?.lat ?? null, lng: t.location?.lon ?? null, created_at: Date.parse(t.created_at), species: t.species,
     status: statusOf(t.severity), last_scan: Date.parse(t.last_seen_at), photo: api.absolute(t.thumbnail_url),
     conditions: Object.fromEntries(Object.entries(t.conditions ?? {}).map(([k, f]) => [k, f.likelihood])),
     sensors: t.latest_sensors ?? null,
@@ -317,7 +334,7 @@ export async function getTree(db: SQLiteDatabase, id: string): Promise<{ tree: T
   const t = await api.tree(id).catch((e: api.ApiError) => (e.status === 404 ? null : Promise.reject(e)));
   if (!t) return { tree: null, scans: [] };
   return {
-    tree: { id: t.tree_id, place: conditionLabel(t), lat: t.location?.lat ?? null, lng: t.location?.lon ?? null, created_at: Date.parse(t.created_at) },
+    tree: { id: t.tree_id, place: conditionLabel(t), lat: t.location?.lat ?? null, lng: t.location?.lon ?? null, created_at: Date.parse(t.created_at), species: t.species },
     scans: t.observations.map((o, i) => ({
       id: i, tree_id: t.tree_id, created_at: Date.parse(o.timestamp), status: statusOf(o.severity), note: o.health_notes ?? '', synced: 1,
       photos: JSON.stringify(o.views.map((v) => api.absolute(v.image_url)).filter(Boolean)), ...levelsOf(o),
@@ -351,7 +368,7 @@ export const addLocalReading = (db: SQLiteDatabase, treeId: string, r: Live) => 
 
 export async function saveScan(db: SQLiteDatabase, o: {
   treeId?: string; place?: string; coords?: { lat: number; lng: number } | null; photos: string[]; levels: Levels; note: string;
-  checks?: Checks; sensors?: Live | null; fingerprints?: { model: string; embeddings: string[] } | null;
+  checks?: Checks; sensors?: Live | null; fingerprints?: { model: string; embeddings: string[] } | null; species?: string | null;
 }) {
   const now = Date.now();
   // Camera photos live in the cache, which the OS may clear; keep our own copies. (Web photos are data URLs.)
@@ -365,9 +382,9 @@ export async function saveScan(db: SQLiteDatabase, o: {
   let treeId = o.treeId;
   await db.withTransactionAsync(async () => {
     if (!treeId) {
-      const max = await db.getFirstAsync<{ n: number | null }>('SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS n FROM trees');
-      treeId = `H-${String((max?.n ?? 0) + 1).padStart(3, '0')}`;
-      await db.runAsync('INSERT INTO trees VALUES (?, ?, ?, ?, ?, ?)', treeId, o.place || 'Unnamed spot', o.coords?.lat ?? null, o.coords?.lng ?? null, now, forestId());
+      const species = o.species ?? HEMLOCK;
+      treeId = await nextTreeId(db, species);
+      await db.runAsync(INSERT_TREE, treeId, o.place || 'Unnamed spot', o.coords?.lat ?? null, o.coords?.lng ?? null, now, forestId(), species);
     }
     const { wool, needles, crown, dieback } = o.levels;
     const { signs, severity } = toServer(o.levels, o.checks);

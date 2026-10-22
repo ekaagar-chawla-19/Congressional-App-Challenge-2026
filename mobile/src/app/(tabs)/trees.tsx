@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { isHemlock, speciesName } from '@/species';
 import { MapIcon, Search, TreePine } from '@/icons';
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -16,7 +17,7 @@ export default function Trees() {
   const { filter } = useLocalSearchParams<{ filter?: Status }>();
   const [q, setQ] = useState('');
   const needle = q.trim().toLowerCase();
-  const shown = trees.filter((t) => (!filter || t.status === filter) && (!needle || `${t.id} ${t.place}`.toLowerCase().includes(needle)));
+  const shown = trees.filter((t) => (!filter || t.status === filter) && (!needle || `${t.id} ${t.place} ${speciesName(t.species)}`.toLowerCase().includes(needle)));
 
   return (
     <Screen tabbed>
@@ -51,7 +52,7 @@ export default function Trees() {
           data={shown}
           keyExtractor={(t) => t.id}
           renderItem={({ item: t, index }) => (
-            <Row title={<T v="id">{t.id}</T>} sub={`${t.place} · ${ago(t.last_scan)}`} right={t.status && <Badge s={t.status} />} onPress={() => router.push(`/tree/${t.id}`)} last={index === shown.length - 1} />
+            <Row title={<T v="id">{t.id}</T>} sub={`${isHemlock(t.species) ? '' : `${speciesName(t.species)} · `}${t.place} · ${ago(t.last_scan)}`} right={t.status && <Badge s={t.status} />} onPress={() => router.push(`/tree/${t.id}`)} last={index === shown.length - 1} />
           )}
           ListEmptyComponent={!loaded ? null : <Empty icon={TreePine} title={trees.length ? 'No matches' : 'No trees yet'} body={trees.length ? 'Try another search or filter.' : 'Trees appear here after your first scan.'} />}
         />
