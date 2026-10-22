@@ -21,7 +21,7 @@ export async function identify(photos: string[], trees: TreeRow[], done?: api.Id
     const gallery = await engine.phoneGallery(db, useSession.getState().forest?.id ?? -1);
     const { result, fingerprints } = await engine.identifyOnPhone(views, gallery);
     useApp.getState().setScan({ fingerprints: { model: engine.MODEL_VERSION, embeddings: fingerprints } });
-    const r = asResult(result);
+    const r = asResult(result, engine.speciesSummary(views));
     return { matches: matchesFrom(r, trees), server: r, onPhone: true };
   }
   if (isServer()) {
@@ -34,13 +34,16 @@ export async function identify(photos: string[], trees: TreeRow[], done?: api.Id
 
 // The on-device decision in the server's shape, so the result screen treats both alike (nothing stored yet:
 // the visit is saved on the phone after the health check).
-function asResult(r: OnDeviceResult): api.IdentifyResult {
+function asResult(r: OnDeviceResult, scores: ReturnType<typeof engine.speciesSummary>): api.IdentifyResult {
   const sp = r.species;
+  // Shown on the result: the photos' top species and hemlock % (also when the species is too uncertain to name).
   return {
     status: r.status, action: r.status === 'recapture' ? 'retake' : 'done', message: r.message, tree_id: r.tree_id, observation_id: null,
     model: 'delta', model_name: 'Model Delta (on this phone)', species_checked: true,
-    species: sp ? { label: sp.label, name: sp.label === 'tsuga_canadensis' ? 'Eastern hemlock' : sp.label.replace('_', ' '), confidence: sp.confidence,
-      hemlock_probability: sp.label === 'tsuga_canadensis' ? sp.confidence : null, top: [] } : null,
+    species: sp ? {
+      label: sp.label, name: sp.label === 'unknown' ? 'Not sure' : scores?.top.find((t) => t.label === sp.label)?.name ?? sp.label,
+      confidence: sp.confidence, hemlock_probability: scores?.hemlock ?? (sp.label === 'tsuga_canadensis' ? sp.confidence : null), top: scores?.top ?? [],
+    } : null,
     probability: r.probability, next_view: null,
     candidates: r.candidates.map((c) => ({ tree_id: c.tree_id, probability: c.probability, global_score: c.global })),
     best_guess: r.best_guess ? { ...r.best_guess, note: `Best guess ${r.best_guess.tree_id} (${Math.round(r.best_guess.probability * 100)}%)` } : null,

@@ -75,6 +75,24 @@ const COMMON_NAMES: Record<string, string> = {
   fagus_grandifolia: 'American beech', acer_rubrum: 'Red maple', acer_platanoides: 'Norway maple', populus_grandidentata: 'Bigtooth aspen',
 };
 
+const softmax = (logits: Float32Array) => {
+  const l = Array.from(logits), mx = Math.max(...l);
+  const ex = l.map((x) => Math.exp(x - mx)), sum = ex.reduce((a, b) => a + b, 0);
+  return ex.map((x) => x / sum);
+};
+
+/** Species scores averaged over a scan's photos (weighted by photo quality, like the decision): hemlock % and top 3. */
+export function speciesSummary(views: ViewResult[]): { hemlock: number; top: { label: string; name: string; probability: number }[] } | null {
+  const vs = views.filter((v) => v.accepted && v.speciesLogits);
+  if (!vs.length) return null;
+  const wsum = vs.reduce((a, v) => a + (v.weight || 1), 0);
+  const mean = meta.species_labels.map(() => 0);
+  vs.forEach((v) => softmax(v.speciesLogits!).forEach((p, j) => { mean[j] += ((v.weight || 1) * p) / wsum; }));
+  const top = meta.species_labels.map((label, i) => ({ label, name: COMMON_NAMES[label] ?? label, probability: mean[i] }))
+    .sort((a, b) => b.probability - a.probability).slice(0, 3);
+  return { hemlock: mean[meta.species_labels.indexOf('tsuga_canadensis')], top };
+}
+
 /** "Is this a hemlock?" for one photo, on the phone: the same verdict as the server's POST /species-check. */
 export async function speciesCheck(uri: string): Promise<SpeciesCheck> {
   const v = await checkPhoto(uri, 0, []);
